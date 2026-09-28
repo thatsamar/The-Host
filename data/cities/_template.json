@@ -1,0 +1,23 @@
+{
+  "name": "City Name",
+  "neighborhoods_notes": "One or two lines of city judgment in The Host's voice: which neighbourhoods hang together, where not to cross after 8, what the city is good at.",
+  "venues": [
+    {
+      "id": "city-short-slug",
+      "name": "Venue name",
+      "city": "City Name",
+      "neighborhood": "Neighbourhood",
+      "category": "restaurant",
+      "cuisine": "",
+      "price": 3,
+      "noise": "lively",
+      "dress": "",
+      "hours": "Tue-Sat 18:00-00:00",
+      "address": "",
+      "booking": "https://... | walk-in | call",
+      "taste_tags": ["good-solo-at-bar", "food-serious-room-warm"],
+      "host_note": "Sit at the counter. Go early; it gets precious after 9.",
+      "last_verified": "2026-09-28"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.venv/
+# Conversation logs and user taste memory are personal data; keep them out of git.
+data/log/
+data/users/
