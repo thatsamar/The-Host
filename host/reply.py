@@ -66,11 +66,11 @@ class HostReply:
             for q in self.questions:
                 parts.append(q.prompt if not q.choices else f"{q.prompt} ({' / '.join(q.choices)})")
             return "\n".join(parts)
-        parts.append(f"Do this: {self.do_this}")
+        parts.append(self.do_this)
         if self.backup:
-            parts.append(f"Backup: {self.backup}")
+            parts.append(f"Plan B: {self.backup}")
         if self.avoid:
-            parts.append(f"Avoid: {self.avoid}")
+            parts.append(f"I'd skip: {self.avoid}")
         if self.action:
             parts.append(self.action)
         return "\n\n".join(parts)

@@ -47,8 +47,8 @@ def test_template_is_valid():
 
 def test_plan_renders_as_text():
     sms = HostReply.from_dict(PLAN).to_sms()
-    assert sms.startswith("Do this: Drink first")
-    assert "Backup: " in sms and "Avoid: " in sms and sms.endswith("8:30?")
+    assert sms.startswith("Drink first")
+    assert "Plan B: " in sms and "I'd skip: " in sms and sms.endswith("8:30?")
 
 
 def test_ask_renders_choices():
@@ -71,7 +71,7 @@ def test_schema_requires_every_field():
 
 def test_system_prompt_includes_doctrine_and_venues():
     prompt = build_system_prompt([City("Testville", "Stay in Old Town.", [Venue(**VENUE)])])
-    assert "<taste_doctrine>" in prompt and "A place should have a pulse." in prompt
+    assert "<taste_doctrine>" in prompt and "Places with some life in them." in prompt
     assert "[test-counter] Test Counter (Old Town)" in prompt
     assert '"hidden gem"' in prompt
     assert "needs_curation" in build_system_prompt([City("Empty", "")])
