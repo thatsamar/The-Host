@@ -110,7 +110,7 @@ textarea::placeholder{color:var(--muted)}
       <textarea id="box" rows="1" aria-label="Message The Host" placeholder="" autocomplete="off"></textarea>
       <button class="send" id="send" type="submit">Ask</button>
     </form>
-    <p class="fine" id="fine">Early prototype. Check hours before you go; booking isn't live yet.</p>
+    <p class="fine" id="fine">Early prototype. The Host checks places on the web, so answers take a little while. Booking isn't live yet.</p>
   </div>
 </div>
 
@@ -131,10 +131,6 @@ BE SPECIFIC
 - In a plan, be specific about what you're sure of: the neighbourhood, a rough time, where to sit, the order of the night.
 
 VENUES
-- ACCURACY COMES FIRST. You have no internet access and your knowledge may be out of date. A wrong recommendation is much worse than a less specific one.
-- Only name a place if it's well known, has been open for years, and you're highly confident it's still operating under that name. Anything newer, smaller, or that you're less sure about: describe the kind of place and the area instead ("a counter-style taco spot on South 1st").
-- Don't state street addresses, opening hours, prices, reservation policies, chef names, or specific menu items unless you're certain. Don't claim anything about tonight (events, availability, what's on).
-- Fewer named places, all right, beats more named places with one wrong.
 - Booking isn't connected yet. If they say yes to booking, tell them simply how to get the table (how the place usually takes bookings, or when to walk in). Never say you booked or held anything.
 
 TASTE
@@ -155,6 +151,20 @@ Reply with only one JSON object, no other text:
 - Every other value is ONE plain string. For a whole night, write do_this as one short paragraph covering each stop in order; never an array or nested object.
 - lead: an optional friendly opening line, including any assumption worth mentioning, else "".
 - learned: durable taste signals about this user revealed in their latest message (e.g. "prefers counter seating", "hates rooms full of people filming dinner"). Not logistics like city or date. Usually [].`;
+
+const ACCURACY_OFFLINE = `ACCURACY COMES FIRST
+You have no internet access right now and your knowledge may be out of date. A wrong recommendation is much worse than a less specific one.
+- Only name a place if it's well known, has been open for years, and you're highly confident it's still operating under that name. Otherwise describe the kind of place and the area instead ("a counter-style taco spot on South 1st").
+- Don't state street addresses, opening hours, prices, reservation policies, chef names, or specific menu items unless you're certain. Don't claim anything about tonight.
+- Fewer named places, all right, beats more named places with one wrong.`;
+
+const ACCURACY_ONLINE = `ACCURACY COMES FIRST
+You have a web_search tool. Use it before you answer:
+- Decide on the places you'd suggest from your own taste first, then check them with web_search: that each is still open under that name, where it is, its hours, and how it takes bookings. Put several queries in one call; use at most 2 calls in total, then answer.
+- Only name places the search confirmed are operating. If a search shows a place closed, moved, or you can't confirm it, drop it and use another you can confirm, or describe the kind of place instead.
+- Details you confirmed (neighbourhood, street, hours, walk-ins or reservations) you can state plainly. Don't state anything the search didn't support. Don't claim anything about tonight's availability.
+- Don't mention the searching in your reply. After searching, your final message must be only the JSON object.
+- If the tool errors, carry on without it and follow this instead: only name long-established places you're highly confident about, and leave out addresses, hours and menu items.`;
 
 const BANNED = ["hidden gem","unforgettable experience","culinary journey","vibrant neighborhood","perfect for foodies","elevated yet approachable","must-visit","must-try","foodie","nestled","bustling","tucked away"];
 
@@ -239,9 +249,11 @@ const COPY = {
   prompt_too_large: "This chat got long. Start over to keep going.",
 };
 
-// Pull the first complete JSON object out of the reply, tolerating code fences or a stray sentence.
+// Pull the last complete top-level JSON object out of the reply, tolerating code fences,
+// a stray sentence, or narration from earlier tool rounds.
 function parseReply(text){
   const t = String(text || "");
+  let found = null;
   for (let start = t.indexOf("{"); start !== -1; start = t.indexOf("{", start + 1)) {
     let depth = 0, inStr = false, esc = false;
     for (let i = start; i < t.length; i++) {
@@ -250,11 +262,12 @@ function parseReply(text){
       if (c === '"') inStr = true;
       else if (c === "{") depth++;
       else if (c === "}" && --depth === 0) {
-        try { return JSON.parse(t.slice(start, i + 1)); } catch { break; }
+        try { found = JSON.parse(t.slice(start, i + 1)); start = i; } catch {}
+        break;
       }
     }
   }
-  return null;
+  return found;
 }
 
 const sentences = (xs) => xs.map(flat).filter(Boolean).map(x => /[.!?]$/.test(x) ? x : x + ".").join(" ");
@@ -283,6 +296,44 @@ function normalize(o){
   return r.kind ? r : null;
 }
 
+// Web search through the viewer's Parallel Search connector.
+const SEARCH_SERVER = "Parallel Search";
+const SEARCH_SESSION = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now()).replace(/-/g, "");
+let mcp = null, canUseTools = false;
+
+function searchTool(onProgress){
+  return {
+    name: "web_search",
+    description: "Search the web for current information about restaurants, bars and places: whether they're open, where they are, hours, how they take bookings. Returns a list of results with title, url and short excerpts.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        objective: {type: "string", description: "What you're trying to confirm, in one sentence."},
+        search_queries: {type: "array", items: {type: "string"}, description: "2-6 short keyword queries, 3-6 words each."},
+      },
+      required: ["objective", "search_queries"],
+    },
+    async execute(input, {signal}){
+      const queries = (Array.isArray(input.search_queries) ? input.search_queries : [input.search_queries]).map(String).filter(Boolean).slice(0, 6);
+      if (!queries.length) throw new Error("search_queries is empty");
+      onProgress(queries);
+      try {
+        const res = await mcp.callTool(SEARCH_SERVER, "web_search",
+          {objective: String(input.objective || queries[0]), search_queries: queries, session_id: SEARCH_SESSION},
+          {signal});
+        const results = (res.payload && Array.isArray(res.payload.results)) ? res.payload.results : [];
+        // Keep the tool result small: a few results, trimmed excerpts.
+        return results.slice(0, 8).map(r => ({
+          title: String(r.title || ""), url: String(r.url || ""), published: r.publish_date || null,
+          excerpt: (Array.isArray(r.excerpts) ? r.excerpts.join(" ") : String(r.excerpts || "")).replace(/\s+/g, " ").slice(0, 1200),
+        }));
+      } catch (e) {
+        throw new Error(`web search unavailable (${e?.code || "error"})`);
+      }
+    },
+  };
+}
+
 async function ask(text){
   text = text.trim();
   if (!text || busy) return;
@@ -297,11 +348,15 @@ async function ask(text){
   busy = true; send.disabled = true;
 
   const known = memory.length ? "What you already know about this user:\n- " + memory.join("\n- ") : "New user. Nothing known yet.";
-  const input = [{role:"user", content: RULES + "\n\n" + known + "\n\nThe conversation starts now."}, ...turns.slice(-16)];
+  const online = !!(mcp && canUseTools);
+  const input = [{role:"user", content: RULES + "\n\n" + (online ? ACCURACY_ONLINE : ACCURACY_OFFLINE) + "\n\n" + known + "\n\nThe conversation starts now."}, ...turns.slice(-16)];
+  const status = wrap.querySelector(".thinking");
+  const opts = {cache:false, signal: ctl.signal, modelTier: online ? "default" : "complex"};
+  if (online) opts.tools = [searchTool(qs => { if (status) status.textContent = "Checking " + qs[0]; })];
   ctl = new AbortController();
   let raw = "";
   try {
-    const res = await sample(input, {cache:false, signal: ctl.signal, modelTier:"complex"});
+    const res = await sample(input, opts);
     raw = res.text;
     const r = normalize(parseReply(raw));
     wrap.replaceChildren();
@@ -349,7 +404,13 @@ $("reset").onclick = () => {
 
 renderMemory();
 (async () => {
-  sample = await window.claude?.use?.("sample") ?? null;
+  [sample, mcp] = await Promise.all([
+    window.claude?.use?.("sample") ?? null,
+    window.claude?.use?.("mcp") ?? null,
+  ]);
+  if (sample) {
+    try { canUseTools = !!(await sample.limits()).tools; } catch { canUseTools = false; }
+  }
   if (!sample) {
     send.disabled = true; box.disabled = true;
     $("fine").textContent = "Open this page in Claude to talk to The Host.";
