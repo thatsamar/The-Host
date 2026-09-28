@@ -1,0 +1,331 @@
+<title>The Host</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@1,6..96,500&family=Instrument+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --ground:#ECEEF1; --surface:#FFFFFF; --ink:#16181D; --muted:#5E6470; --line:#D5D9DF;
+  --accent:#8A6424; --accent-soft:#F1E7D4; --user:#1F2B3A; --user-ink:#F2F0EA; --warn:#9A3B2E;
+  --display:"Bodoni Moda", "Didot", "Bodoni 72", Georgia, serif;
+  --body:"Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#111317; --surface:#1A1D22; --ink:#ECE8E0; --muted:#9AA0AA; --line:#2C3038;
+    --accent:#D2A861; --accent-soft:#2D2619; --user:#2A3647; --user-ink:#F2F0EA; --warn:#E08A7B;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#111317; --surface:#1A1D22; --ink:#ECE8E0; --muted:#9AA0AA; --line:#2C3038;
+  --accent:#D2A861; --accent-soft:#2D2619; --user:#2A3647; --user-ink:#F2F0EA; --warn:#E08A7B;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--ground);color:var(--ink);font:16px/1.5 var(--body);padding-inline:16px}
+.app{max-width:620px;margin:0 auto;min-height:100%;display:flex;flex-direction:column}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding-block:22px 10px;border-bottom:1px solid var(--line)}
+.mark{font:italic 500 30px/1 var(--display);letter-spacing:-.01em;margin:0}
+.tag{color:var(--muted);font-size:13px;margin:0}
+.tools{display:flex;gap:14px}
+.link{background:none;border:0;padding:0;color:var(--muted);font:inherit;font-size:13px;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.link:hover{color:var(--ink)}
+button:focus-visible,textarea:focus-visible,.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.memory{border-bottom:1px solid var(--line);padding-block:12px;font-size:14px}
+.memory h2{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 8px;font-weight:600}
+.memory ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.memory li{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:3px 6px 3px 11px;background:var(--surface)}
+.memory li button{border:0;background:none;color:var(--muted);cursor:pointer;font-size:15px;line-height:1;padding:0 4px}
+.memory p{margin:0;color:var(--muted)}
+
+main{flex:1;display:flex;flex-direction:column;gap:18px;padding-block:22px 18px}
+.intro h1{font:italic 500 clamp(34px,8vw,46px)/1.05 var(--display);margin:6px 0 10px;text-wrap:balance}
+.intro p{color:var(--muted);margin:0 0 16px;max-width:46ch}
+.starters{display:flex;flex-wrap:wrap;gap:8px}
+
+.msg{max-width:88%}
+.msg.user{align-self:flex-end;background:var(--user);color:var(--user-ink);padding:9px 14px;border-radius:18px 18px 4px 18px;white-space:pre-wrap}
+.msg.host{align-self:flex-start;display:flex;flex-direction:column;gap:10px;max-width:100%}
+.lead{margin:0;font-size:17px}
+.q{display:flex;flex-direction:column;gap:7px}
+.q p{margin:0;font-weight:500}
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chip{font:inherit;font-size:14px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:6px 13px;cursor:pointer}
+.chip:hover{border-color:var(--accent)}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.chip:disabled{cursor:default;opacity:.55}
+.chip.go{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+
+.plan{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.plan section{padding:14px 16px;display:grid;grid-template-columns:78px 1fr;gap:12px;border-top:1px solid var(--line)}
+.plan section:first-child{border-top:0}
+.plan h3{margin:2px 0 0;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.plan section.do h3{color:var(--accent)}
+.plan section.avoid h3{color:var(--warn)}
+.plan p{margin:0}
+.plan section.do p{font-size:17px}
+.action{margin:0;font-weight:500}
+.meta{display:flex;gap:14px;align-items:center}
+.thinking{color:var(--muted);font-style:italic}
+.thinking::after{content:"";animation:dots 1.4s steps(4) infinite}
+@keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
+@media (prefers-reduced-motion: reduce){.thinking::after{animation:none;content:"…"}}
+.error{color:var(--warn);font-size:14px;margin:0}
+
+.composer{position:sticky;bottom:0;background:var(--ground);padding-block:10px calc(14px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line)}
+.row{display:flex;gap:8px;align-items:flex-end}
+textarea{flex:1;resize:none;font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:11px 14px;min-height:46px;max-height:140px}
+textarea::placeholder{color:var(--muted)}
+.send{font:inherit;font-weight:600;background:var(--ink);color:var(--ground);border:0;border-radius:14px;padding:0 18px;height:46px;cursor:pointer}
+.send:disabled{opacity:.4;cursor:default}
+.fine{color:var(--muted);font-size:12px;margin:8px 2px 0}
+@media (max-width:420px){.plan section{grid-template-columns:1fr;gap:4px}}
+</style>
+
+<div class="app">
+  <header>
+    <div>
+      <p class="mark">The Host</p>
+    </div>
+    <div class="tools">
+      <button class="link" id="memToggle" type="button" aria-expanded="false">What I know about you</button>
+      <button class="link" id="reset" type="button">Start over</button>
+    </div>
+  </header>
+  <div class="memory" id="memory" hidden>
+    <h2>Taste memory</h2>
+    <ul id="memList"></ul>
+    <p id="memEmpty">Nothing yet. I learn from what you tell me, not from a survey.</p>
+  </div>
+
+  <main id="thread" aria-live="polite">
+    <div class="intro" id="intro">
+      <h1>Where are you tonight?</h1>
+      <p>Tell me the city and the occasion. I'll ask only what I need, then give you one plan, one backup, and the one thing not to do.</p>
+      <div class="starters" id="starters"></div>
+    </div>
+  </main>
+
+  <div class="composer">
+    <form class="row" id="form">
+      <textarea id="box" rows="1" aria-label="Message The Host" placeholder="Mexico City tonight." autocomplete="off"></textarea>
+      <button class="send" id="send" type="submit">Ask</button>
+    </form>
+    <p class="fine" id="fine">Early prototype. Check hours before you go; booking isn't live yet.</p>
+  </div>
+</div>
+
+<script>
+const RULES = `You are The Host. People text you when they are in a city and want the night to work. You are not a concierge, a search engine, or a list generator. You have taste and a point of view. Your job: turn vague intent into one good plan. The brand promise is "The Host knows."
+
+HOW YOU WORK
+- Ask only what you need, then decide. If the occasion is unclear, ask up to three short questions, each with 2-4 tappable choices, e.g. "Solo, date, friends, or work?" / "Dinner only or full night?" / "Easy, local, scene, or strange?". If you already know enough, skip straight to the plan. Never ask something already answered, in this chat or in what you know about the user.
+- Host Mode: when the user is responsible for other people (clients, family, a birthday, investors), ask three or four surgical questions instead: who matters most, what can't go wrong, impressive or intimate, any landmines (dietary, budget, exes, investors, children, sobriety).
+- A plan is: DO THIS (one plan, with rough timing, neighbourhood, where to sit), BACKUP (one alternative if booking or logistics fail), AVOID (the one mistake not to make), ACTION (one short question offering the next step, like "Want me to try for 8:30?").
+- Understand the occasion, not just the person. Solo after a brutal week is not solo and ready for trouble.
+- Push back when the ask conflicts with the user's known taste or your doctrine. One line, then the better plan. A servant obeys; a host knows better.
+- Keep geography sane. Stay near where they are. No cross-town heroics.
+
+VENUES
+- Name real places only when you are confident they exist and are still operating; prefer established places over new openings. Never invent a place, hours, prices, or availability. If unsure, describe the kind of place and the street or neighbourhood instead.
+- Booking is not connected yet. If the user accepts an offer to book, say plainly how to grab it (the venue's usual booking route, or walk in at a given time) and never claim you booked or held anything.
+
+TASTE DOCTRINE
+Values: a place should have a pulse. Local texture beats imported luxury. A great room is composed, not decorated. A bar seat can beat the best table in the room. The right plan has rhythm: a start, a centre of gravity, an exit. Service as memory. One surprise per night, not five.
+Rejects: famous as a proxy for good. Influencer gravity (a room full of people filming dinner is a warning sign). Stiff service. Tasting menus as a default. Private rooms for small groups. Crossing a city three times to prove research happened. Overplanning the life out of a night.
+Forgives: a little imperfection. Plain rooms with serious food. Good rooms with weak food, for a drink.
+Occasion defaults: just landed solo = stay close, bar seating, one stop after, back early. Early date = low pressure, easy second stop on foot. Anniversary = composed room, proper service, book the earlier time. Client dinner = energy with proper service, central, easy exit, no tasting menu, check dietary landmines. Old friends = loud is fine, shared plates, let it run long. Family or teenager = no death march; one walk, one thing they care about, one café, one surprise.
+
+VOICE
+Confident, spare, dry, useful. Short sentences. Manners, no grovelling, no gushing, no caveats, no lists of options. This is a text message; the whole reply reads in a few seconds. Sound like: "Go here." "Sit at the bar." "Too far for tonight." "Good room, weak food. Fine for a drink." "Book the earlier time." "Don't overthink it."
+Never use: unforgettable experience, hidden gem, culinary journey, vibrant neighborhood, perfect for foodies, elevated yet approachable, here are some great options, must-visit, must-try, foodie, nestled, bustling, tucked away, bucket list.
+
+OUTPUT
+Reply with only one JSON object, no other text:
+{"kind":"ask"|"plan","lead":string,"questions":[{"prompt":string,"choices":[string]}],"do_this":string,"backup":string,"avoid":string,"action":string,"learned":[string]}
+- kind "ask": fill questions (max 3); leave do_this, backup, avoid, action as "".
+- kind "plan": questions is []; do_this required; backup, avoid, action normally filled.
+- lead: optional one-line read of the situation or push-back, else "".
+- learned: durable taste signals about this user revealed in their latest message (e.g. "prefers counter seating", "hates rooms full of people filming dinner"). Not logistics like city or date. Usually [].
+Example: {"kind":"ask","lead":"","questions":[{"prompt":"Solo, date, friends, or work?","choices":["Solo","Date","Friends","Work"]}],"do_this":"","backup":"","avoid":"","action":"","learned":[]}`;
+
+const STARTERS = [
+  "Mexico City tonight.",
+  "London tomorrow. Work dinner, four people. Not boring.",
+  "I land in New York at 6. Fix tonight.",
+  "Paris with my daughter. One afternoon.",
+  "Austin tonight. Friends. No barbecue cliché.",
+];
+const BANNED = ["hidden gem","unforgettable experience","culinary journey","vibrant neighborhood","perfect for foodies","elevated yet approachable","must-visit","must-try","foodie","nestled","bustling","tucked away"];
+
+const $ = (id) => document.getElementById(id);
+const thread = $("thread"), box = $("box"), send = $("send"), form = $("form");
+let turns = [];            // [{role, content}] the page keeps; Claude keeps nothing
+let busy = false, ctl = null, sample = null;
+
+// Taste memory: per-viewer, in this browser only.
+const store = {
+  get(){ try { return JSON.parse(localStorage.getItem("host.memory") || "[]"); } catch { return []; } },
+  set(v){ try { localStorage.setItem("host.memory", JSON.stringify(v)); } catch {} },
+};
+let memory = store.get();
+
+function el(tag, attrs = {}, ...kids){
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") n.className = v; else if (k.startsWith("on")) n.addEventListener(k.slice(2), v); else n.setAttribute(k, v);
+  }
+  for (const k of kids) if (k != null) n.append(k);
+  return n;
+}
+
+function renderMemory(){
+  const list = $("memList"); list.replaceChildren();
+  memory.forEach((m, i) => list.append(el("li", {}, m,
+    el("button", {type:"button", "aria-label":`Forget: ${m}`, onclick(){ memory.splice(i,1); store.set(memory); renderMemory(); }}, "×"))));
+  $("memEmpty").hidden = memory.length > 0;
+}
+$("memToggle").onclick = () => {
+  const m = $("memory"); m.hidden = !m.hidden;
+  $("memToggle").setAttribute("aria-expanded", String(!m.hidden));
+};
+
+function remember(notes){
+  const seen = new Set(memory.map(m => m.toLowerCase()));
+  for (const n of notes || []) {
+    const t = String(n).trim();
+    if (t && !seen.has(t.toLowerCase())) { memory.push(t); seen.add(t.toLowerCase()); }
+  }
+  store.set(memory); renderMemory();
+}
+
+STARTERS.forEach(s => $("starters").append(el("button", {class:"chip", type:"button", onclick(){ ask(s); }}, s)));
+
+function scrollDown(){ window.scrollTo({top: document.body.scrollHeight, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"}); }
+
+function asText(r){
+  const parts = r.lead ? [r.lead] : [];
+  if (r.kind === "ask") r.questions.forEach(q => parts.push(q.choices?.length ? `${q.prompt} (${q.choices.join(" / ")})` : q.prompt));
+  else {
+    parts.push("Do this: " + r.do_this);
+    if (r.backup) parts.push("Backup: " + r.backup);
+    if (r.avoid) parts.push("Avoid: " + r.avoid);
+    if (r.action) parts.push(r.action);
+  }
+  return parts.join("\n\n");
+}
+
+function renderAsk(r, wrap){
+  const picks = r.questions.map(() => null);
+  const go = el("button", {class:"chip go", type:"button", disabled:""}, "Go");
+  r.questions.forEach((q, qi) => {
+    const chips = el("div", {class:"chips"});
+    (q.choices || []).forEach(c => {
+      const b = el("button", {class:"chip", type:"button", "aria-pressed":"false", onclick(){
+        if (busy) return;
+        picks[qi] = picks[qi] === c ? null : c;
+        chips.querySelectorAll(".chip").forEach(x => x.setAttribute("aria-pressed", String(x.textContent === picks[qi])));
+        if (picks.some(Boolean)) go.removeAttribute("disabled"); else go.setAttribute("disabled", "");
+        if (r.questions.length === 1 && picks[0]) submitPicks();
+      }}, c);
+      chips.append(b);
+    });
+    wrap.append(el("div", {class:"q"}, el("p", {}, q.prompt), chips));
+  });
+  function submitPicks(){
+    wrap.querySelectorAll(".chip").forEach(b => b.setAttribute("disabled", ""));
+    ask(picks.filter(Boolean).join(". ") + ".");
+  }
+  go.onclick = submitPicks;
+  if (r.questions.length > 1) wrap.append(el("div", {class:"chips"}, go));
+}
+
+function renderPlan(r, wrap){
+  const card = el("div", {class:"plan"});
+  const sec = (cls, label, text) => text && card.append(el("section", {class:cls}, el("h3", {}, label), el("p", {}, text)));
+  sec("do", "Do this", r.do_this); sec("backup", "Backup", r.backup); sec("avoid", "Avoid", r.avoid);
+  wrap.append(card);
+  if (r.action) {
+    wrap.append(el("p", {class:"action"}, r.action));
+    wrap.append(el("div", {class:"chips"},
+      el("button", {class:"chip", type:"button", onclick(){ ask("Yes."); }}, "Yes"),
+      el("button", {class:"chip", type:"button", onclick(){ box.focus(); box.placeholder = "Tell me what to change."; }}, "Adjust")));
+  }
+  const copyBtn = el("button", {class:"link", type:"button"}, "Copy plan");
+  copyBtn.onclick = async () => {
+    try { await navigator.clipboard.writeText(asText(r)); copyBtn.textContent = "Copied"; }
+    catch { copyBtn.textContent = "Select the text to copy"; }
+  };
+  wrap.append(el("div", {class:"meta"}, copyBtn));
+}
+
+const COPY = {
+  not_granted: "The Host needs your OK to use Claude on this page. Reload to be asked again.",
+  sampling_disabled: "Claude isn't available on this account.",
+  rate_limited: "Too many asks at once. Give it a minute, then send again.",
+  session_expired: "Your Claude session expired. Sign in again, then send.",
+  refused: "That one I can't help with. Try asking differently.",
+  empty_completion: "No answer came back. Try again, maybe with a bit more detail.",
+  invalid_json: "The answer came back garbled. Send it again.",
+  prompt_too_large: "This chat got long. Start over to keep going.",
+};
+
+async function ask(text){
+  text = text.trim();
+  if (!text || busy) return;
+  if (!sample) { thread.append(el("p", {class:"error"}, "Open this page in Claude to talk to The Host.")); return; }
+  $("intro").hidden = true;
+  thread.append(el("div", {class:"msg user"}, text));
+  box.value = ""; autosize();
+  turns.push({role:"user", content:text});
+
+  const wrap = el("div", {class:"msg host"}, el("p", {class:"thinking"}, "Thinking"));
+  thread.append(wrap); scrollDown();
+  busy = true; send.disabled = true;
+
+  const known = memory.length ? "What you already know about this user:\n- " + memory.join("\n- ") : "New user. Nothing known yet.";
+  const input = [{role:"user", content: RULES + "\n\n" + known + "\n\nThe conversation starts now."}, ...turns.slice(-16)];
+  ctl = new AbortController();
+  try {
+    const r = await sample.json(input, {cache:false, signal: ctl.signal});
+    if (!r || (r.kind !== "ask" && r.kind !== "plan")) throw {code:"invalid_json"};
+    r.questions = Array.isArray(r.questions) ? r.questions : [];
+    if (r.kind === "plan" && !r.do_this) throw {code:"invalid_json"};
+    wrap.replaceChildren();
+    if (r.lead) wrap.append(el("p", {class:"lead"}, r.lead));
+    if (r.kind === "ask") renderAsk(r, wrap); else renderPlan(r, wrap);
+    const said = asText(r);
+    const dead = BANNED.filter(b => said.toLowerCase().includes(b));
+    if (dead.length) console.warn("Dead language slipped through:", dead);
+    turns.push({role:"assistant", content: said});
+    remember(r.learned);
+  } catch (e) {
+    turns.pop();
+    wrap.replaceChildren(el("p", {class:"error"}, COPY[e?.code] || "Something went wrong on the way. Send it again."));
+    if (e?.code !== "cancelled") { box.value = text; autosize(); }
+  } finally {
+    busy = false; send.disabled = false; scrollDown();
+  }
+}
+
+function autosize(){ box.style.height = "auto"; box.style.height = Math.min(box.scrollHeight, 140) + "px"; }
+box.addEventListener("input", autosize);
+box.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(box.value); } });
+form.addEventListener("submit", e => { e.preventDefault(); ask(box.value); });
+
+$("reset").onclick = () => {
+  ctl?.abort(); turns = []; busy = false; send.disabled = false;
+  thread.querySelectorAll(".msg, .error").forEach(n => n.remove());
+  $("intro").hidden = false; box.placeholder = "Mexico City tonight."; box.value = ""; autosize();
+};
+
+renderMemory();
+(async () => {
+  sample = await window.claude?.use?.("sample") ?? null;
+  if (!sample) {
+    send.disabled = true; box.disabled = true;
+    $("fine").textContent = "Open this page in Claude to talk to The Host.";
+  }
+})();
+</script>
