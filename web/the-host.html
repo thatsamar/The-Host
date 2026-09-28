@@ -42,7 +42,6 @@ button:focus-visible,textarea:focus-visible,.chip:focus-visible{outline:2px soli
 main{flex:1;display:flex;flex-direction:column;gap:18px;padding-block:22px 18px}
 .intro h1{font:italic 500 clamp(34px,8vw,46px)/1.05 var(--display);margin:6px 0 10px;text-wrap:balance}
 .intro p{color:var(--muted);margin:0 0 16px;max-width:46ch}
-.starters{display:flex;flex-wrap:wrap;gap:8px}
 
 .msg{max-width:88%}
 .msg.user{align-self:flex-end;background:var(--user);color:var(--user-ink);padding:9px 14px;border-radius:18px 18px 4px 18px;white-space:pre-wrap}
@@ -102,15 +101,13 @@ textarea::placeholder{color:var(--muted)}
 
   <main id="thread" aria-live="polite">
     <div class="intro" id="intro">
-      <h1>Where are you tonight?</h1>
-      <p>Tell me where you are and what the night's for. I'll tell you what I'd do.</p>
-      <div class="starters" id="starters"></div>
+      <h1>How can I help you?</h1>
     </div>
   </main>
 
   <div class="composer">
     <form class="row" id="form">
-      <textarea id="box" rows="1" aria-label="Message The Host" placeholder="Mexico City tonight." autocomplete="off"></textarea>
+      <textarea id="box" rows="1" aria-label="Message The Host" placeholder="" autocomplete="off"></textarea>
       <button class="send" id="send" type="submit">Ask</button>
     </form>
     <p class="fine" id="fine">Early prototype. Check hours before you go; booking isn't live yet.</p>
@@ -157,13 +154,6 @@ Reply with only one JSON object, no other text:
 - lead: an optional friendly opening line, including any assumption worth mentioning, else "".
 - learned: durable taste signals about this user revealed in their latest message (e.g. "prefers counter seating", "hates rooms full of people filming dinner"). Not logistics like city or date. Usually [].`;
 
-const STARTERS = [
-  "Mexico City tonight",
-  "Work dinner in London",
-  "Just landed in New York",
-  "Paris with my daughter",
-  "Austin with friends",
-];
 const BANNED = ["hidden gem","unforgettable experience","culinary journey","vibrant neighborhood","perfect for foodies","elevated yet approachable","must-visit","must-try","foodie","nestled","bustling","tucked away"];
 
 const $ = (id) => document.getElementById(id);
@@ -207,7 +197,6 @@ function remember(notes){
   store.set(memory); renderMemory();
 }
 
-STARTERS.forEach(s => $("starters").append(el("button", {class:"chip", type:"button", onclick(){ ask(s); }}, s)));
 
 function scrollDown(){ window.scrollTo({top: document.body.scrollHeight, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"}); }
 
@@ -353,7 +342,7 @@ form.addEventListener("submit", e => { e.preventDefault(); ask(box.value); });
 $("reset").onclick = () => {
   ctl?.abort(); turns = []; busy = false; send.disabled = false;
   thread.querySelectorAll(".msg, .error").forEach(n => n.remove());
-  $("intro").hidden = false; box.placeholder = "Mexico City tonight."; box.value = ""; autosize();
+  $("intro").hidden = false; box.value = ""; autosize();
 };
 
 renderMemory();
