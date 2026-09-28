@@ -72,6 +72,7 @@ main{flex:1;display:flex;flex-direction:column;gap:18px;padding-block:22px 18px}
 @keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
 @media (prefers-reduced-motion: reduce){.thinking::after{animation:none;content:"…"}}
 .error{color:var(--warn);font-size:14px;margin:0}
+.detail{white-space:pre-wrap;word-break:break-word;font:12px/1.45 ui-monospace,Menlo,monospace;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0;max-height:260px;overflow:auto}
 
 .composer{position:sticky;bottom:0;background:var(--ground);padding-block:10px calc(14px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line)}
 .row{display:flex;gap:8px;align-items:flex-end}
@@ -147,6 +148,7 @@ Reply with only one JSON object, no other text:
 {"kind":"ask"|"plan","lead":string,"questions":[{"prompt":string,"choices":[string]}],"do_this":string,"backup":string,"avoid":string,"action":string,"learned":[string]}
 - kind "ask": fill questions (max 3); leave do_this, backup, avoid, action as "".
 - kind "plan": questions is []; do_this required; backup, avoid, action normally filled.
+- Every value except questions and learned is ONE plain string. For a whole night, write do_this as one short paragraph covering each stop in order; never an array or nested object.
 - lead: an optional friendly opening line, else "".
 - learned: durable taste signals about this user revealed in their latest message (e.g. "prefers counter seating", "hates rooms full of people filming dinner"). Not logistics like city or date. Usually [].
 Example: {"kind":"ask","lead":"","questions":[{"prompt":"Who's coming?","choices":["Just me","A date","Friends","Work"]}],"do_this":"","backup":"","avoid":"","action":"","learned":[]}`;
@@ -268,9 +270,53 @@ const COPY = {
   session_expired: "Your Claude session expired. Sign in again, then send.",
   refused: "I can't help with that one. Try asking a different way.",
   empty_completion: "No answer came back. Try again, maybe with a bit more detail.",
-  invalid_json: "The answer came back garbled. Send it again.",
+  invalid_json: "I couldn't read that answer. Send it again, or tap Show details and send me what it says.",
   prompt_too_large: "This chat got long. Start over to keep going.",
 };
+
+// Pull the first complete JSON object out of the reply, tolerating code fences or a stray sentence.
+function parseReply(text){
+  const t = String(text || "");
+  for (let start = t.indexOf("{"); start !== -1; start = t.indexOf("{", start + 1)) {
+    let depth = 0, inStr = false, esc = false;
+    for (let i = start; i < t.length; i++) {
+      const c = t[i];
+      if (inStr) { if (esc) esc = false; else if (c === "\\") esc = true; else if (c === '"') inStr = false; continue; }
+      if (c === '"') inStr = true;
+      else if (c === "{") depth++;
+      else if (c === "}" && --depth === 0) {
+        try { return JSON.parse(t.slice(start, i + 1)); } catch { break; }
+      }
+    }
+  }
+  return null;
+}
+
+const sentences = (xs) => xs.map(flat).filter(Boolean).map(x => /[.!?]$/.test(x) ? x : x + ".").join(" ");
+const flat = (v) => v == null ? "" : typeof v === "string" ? v.trim()
+  : Array.isArray(v) ? sentences(v)
+  : typeof v === "object" ? sentences(Object.values(v)) : String(v);
+const pick = (o, ...keys) => { for (const k of keys) if (o && o[k] != null && flat(o[k])) return flat(o[k]); return ""; };
+
+// Accept the reply even when the model nests or renames fields.
+function normalize(o){
+  if (!o || typeof o !== "object") return null;
+  const src = {...o, ...(o.plan && typeof o.plan === "object" && !Array.isArray(o.plan) ? o.plan : {})};
+  const r = {
+    lead: pick(src, "lead", "intro", "opening"),
+    do_this: pick(src, "do_this", "doThis", "the_plan", "plan", "steps", "itinerary"),
+    backup: pick(src, "backup", "plan_b", "planB"),
+    avoid: pick(src, "avoid", "skip"),
+    action: pick(src, "action", "next_step", "next"),
+    learned: Array.isArray(o.learned) ? o.learned : [],
+    questions: (Array.isArray(o.questions) ? o.questions : []).map(q =>
+      typeof q === "string" ? {prompt:q, choices:[]} : {prompt: flat(q && (q.prompt || q.question)), choices: (Array.isArray(q && q.choices) ? q.choices : []).map(flat).filter(Boolean)}
+    ).filter(q => q.prompt),
+  };
+  r.kind = r.do_this ? "plan" : r.questions.length ? "ask" : null;
+  if (o.kind === "ask" && r.questions.length) r.kind = "ask";
+  return r.kind ? r : null;
+}
 
 async function ask(text){
   text = text.trim();
@@ -288,23 +334,37 @@ async function ask(text){
   const known = memory.length ? "What you already know about this user:\n- " + memory.join("\n- ") : "New user. Nothing known yet.";
   const input = [{role:"user", content: RULES + "\n\n" + known + "\n\nThe conversation starts now."}, ...turns.slice(-16)];
   ctl = new AbortController();
+  let raw = "";
   try {
-    const r = await sample.json(input, {cache:false, signal: ctl.signal});
-    if (!r || (r.kind !== "ask" && r.kind !== "plan")) throw {code:"invalid_json"};
-    r.questions = Array.isArray(r.questions) ? r.questions : [];
-    if (r.kind === "plan" && !r.do_this) throw {code:"invalid_json"};
+    const res = await sample(input, {cache:false, signal: ctl.signal});
+    raw = res.text;
+    const r = normalize(parseReply(raw));
     wrap.replaceChildren();
+    if (!r) {
+      // Couldn't read it as a structured reply; show what The Host said as plain text.
+      const prose = raw.replace(/```[a-z]*|```/gi, "").trim();
+      if (!prose || /^[\[{]/.test(prose)) throw {code:"invalid_json", text: raw};
+      wrap.append(el("p", {class:"lead"}, prose));
+      turns.push({role:"assistant", content: prose});
+      return;
+    }
     if (r.lead) wrap.append(el("p", {class:"lead"}, r.lead));
     if (r.kind === "ask") renderAsk(r, wrap); else renderPlan(r, wrap);
     const said = asText(r);
     const dead = BANNED.filter(b => said.toLowerCase().includes(b));
-    if (dead.length) console.warn("Dead language slipped through:", dead);
+    if (dead.length) console.warn("Brochure language slipped through:", dead);
     turns.push({role:"assistant", content: said});
     remember(r.learned);
   } catch (e) {
     turns.pop();
     wrap.replaceChildren(el("p", {class:"error"}, COPY[e?.code] || "Something went wrong on the way. Send it again."));
-    if (e?.code !== "cancelled") { box.value = text; autosize(); }
+    if (e?.code !== "cancelled") {
+      box.value = text; autosize();
+      const detail = [`code: ${e?.code || "unknown"}`, e?.message, (e?.text || raw || "").slice(0, 1500)].filter(Boolean).join("\n\n");
+      const pre = el("pre", {class:"detail", hidden:""}, detail);
+      const t = el("button", {class:"link", type:"button", onclick(){ pre.hidden = !pre.hidden; t.textContent = pre.hidden ? "Show details" : "Hide details"; }}, "Show details");
+      wrap.append(el("div", {class:"meta"}, t), pre);
+    }
   } finally {
     busy = false; send.disabled = false; scrollDown();
   }
