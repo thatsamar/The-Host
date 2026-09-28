@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import {
   CheckIcon,
   ChevronsUpDownIcon,
-  FileTextIcon,
   LogOutIcon,
   MoreHorizontalIcon,
   PencilIcon,
@@ -15,6 +14,7 @@ import {
   Trash2Icon,
 } from "lucide-react";
 import { createProject, createRoom, deleteChat, renameChat, signOut } from "@/app/actions";
+import { LibrarySection } from "@/components/library/library-section";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
@@ -35,9 +35,10 @@ interface Props {
   workspace: Workspace;
   activeChatId: string | null;
   activeRoomId: string | null;
+  libraryNotice?: string | null;
 }
 
-export function LeftSidebar({ workspace, activeChatId, activeRoomId }: Props) {
+export function LeftSidebar({ workspace, activeChatId, activeRoomId, libraryNotice }: Props) {
   const { project, rooms, chats } = workspace;
   const base = `/p/${project.id}`;
   const newChatHref = activeRoomId ? `${base}?room=${activeRoomId}` : base;
@@ -94,12 +95,13 @@ export function LeftSidebar({ workspace, activeChatId, activeRoomId }: Props) {
           )}
         </Section>
 
-        <Section title="Library">
-          <p className="flex items-start gap-2 px-2 py-1.5 text-sm leading-snug text-ink-muted">
-            <FileTextIcon className="mt-0.5 size-4 shrink-0" />
-            File uploads and indexing arrive in the next phase.
-          </p>
-        </Section>
+        <LibrarySection
+          projectId={project.id}
+          rooms={rooms}
+          files={workspace.files}
+          activeRoomId={activeRoomId}
+          notice={libraryNotice}
+        />
       </nav>
 
       <div className="border-t border-stone p-3">

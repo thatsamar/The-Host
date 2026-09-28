@@ -29,6 +29,13 @@ export interface ChatRepository {
     metadata?: MessageMetadata;
   }): Promise<MessageRow>;
   setLastSpeaker(speaker: HumanSpeaker): Promise<void>;
+  /** Records chat photos as image assets; returns their ids in order. */
+  createImageAssets(input: {
+    projectId: string;
+    roomId: string | null;
+    images: { storagePath: string; mimeType: string; name?: string }[];
+  }): Promise<string[]>;
+  linkImageAssets(ids: string[], messageId: string): Promise<void>;
   /** Approved memories for the project plus household-wide ones. */
   listApprovedMemories(projectId: string): Promise<MemoryRow[]>;
   /** Approved-into-the-log decisions for the project. */

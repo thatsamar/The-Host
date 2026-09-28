@@ -15,4 +15,6 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - Model access goes through `src/lib/ai/types.ts` interfaces. Model IDs come from env (`GIO_CHAT_MODEL`, `GIO_BACKGROUND_MODEL`).
 - Assistant history is replayed as text only (no thinking blocks), because retrieved context changes every turn.
 - Every table has RLS on `user_id = auth.uid()`; add policies with any new table. `npm run check:migrations` verifies.
+- Library indexing (`src/lib/library/indexer.ts`) is resumable by unit (PDF page, docx image); rows carry `unit` so a step can redo partial work. Keep steps bounded by `budgetMs`.
+- PDF rendering needs `pdfjs-dist/legacy` + `@napi-rs/canvas`; they're in `serverExternalPackages` and `outputFileTracingIncludes` in `next.config.ts`.
 - Checks: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`.

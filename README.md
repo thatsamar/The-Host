@@ -2,9 +2,9 @@
 
 Courtney and Amar's private interior designer. Gio replaces the custom GPT of the same name and keeps its personality, design philosophy, project memory and reference library. It runs as a private web app that works on a phone.
 
-> **Build status: Phase 1 of 4 (foundation and chat).**
-> Working now: password login, projects and rooms, streaming chat with Gio, the speaker toggle, live web search for prices, the editable project brief, and the three-panel layout on desktop and phone.
-> Not built yet: file uploads and the reference library (Phase 2), memory proposals, decisions and command buttons (Phase 3), and the settings page, export/import and ChatGPT importer (Phase 4). The memory and decision tables already exist, and Gio reads approved rows from them on every turn. Nothing in the app writes to them yet.
+> **Build status: Phases 1 and 2 of 4.**
+> Working now: password login, projects and rooms, streaming chat with Gio, the speaker toggle, live web search for prices, the editable project brief, and the three-panel layout on desktop and phone. Phase 2 adds the reference library: uploads (PDF, images, .docx, .txt, .md), visual indexing of images and image-heavy PDF pages, retrieval before every reply, and photos attached in chat.
+> Not built yet: memory proposals, decisions and command buttons (Phase 3), and the settings page, export/import and ChatGPT importer (Phase 4). The memory and decision tables already exist, and Gio reads approved rows from them on every turn. Nothing in the app writes to them yet.
 
 ---
 
@@ -15,9 +15,10 @@ Gio is private to one household.
 - **Where your data lives.** Your own Supabase project stores the database and files. Every table has row-level security, so each row is visible only to its owner account. Storage buckets are private and serve files through signed URLs only.
 - **What leaves your Supabase project.**
   - **Anthropic** receives what Gio needs to answer each message: the system prompt, the project brief, approved memories, retrieved references, the conversation and any attached photos. When Gio searches the web for prices, the search query goes through Anthropic's server-side web search tool.
-  - **Voyage AI** (from Phase 2) receives text chunks and image descriptions from your library so it can make search embeddings. It does not receive chats.
+  - **Voyage AI** receives text passages and image descriptions from your library, plus each question you ask, so it can make search embeddings. It never receives images or files.
+  - Library images go to Anthropic when they are indexed (to write a description) and when they are retrieved as references for a reply.
   - Nothing else leaves. No other third-party service receives your data.
-- **No analytics, no telemetry.** The app has no analytics or tracking scripts and no error-reporting service. The npm scripts turn off Next.js build telemetry. Fonts are bundled at build time, so the browser never contacts Google. Leave Vercel Analytics and Speed Insights switched off.
+- **No analytics, no telemetry.** The app has no analytics or tracking scripts and no error-reporting service. The npm scripts turn off Next.js build telemetry. Fonts are bundled at build time, so the browser never contacts Google. Leave Vercel Analytics and Speed Insights switched off. The Supabase CLI, a developer tool you run on your own machine, sends usage telemetry by default; turn it off with `npx supabase telemetry disable`.
 - **Hosting.** Vercel serves the app. Requests pass through Vercel, which does not store your content.
 
 ---
@@ -28,7 +29,7 @@ Gio is private to one household.
 Browser ──► Next.js on Vercel ──► Supabase (Postgres + pgvector, Auth, Storage)
                  │
                  ├──► Anthropic: claude-opus-5-5 for Gio, claude-haiku-4-5-20251001 for background work
-                 └──► Voyage AI: embeddings (Phase 2)
+                 └──► Voyage AI: embeddings for library search
 ```
 
 Every Gio reply is assembled in one module, `src/lib/gio/prompt.ts`. Each part of the context carries its own label:
@@ -37,7 +38,7 @@ Every Gio reply is assembled in one module, `src/lib/gio/prompt.ts`. Each part o
 2. **App capabilities**: web search, speaker labels, and the instruction to prefer your own library
 3. **Project context**: project, place, brief, current room and its notes
 4. **Memories**: approved memories and the decision log
-5. **Retrieved references**: library excerpts, with file names (Phase 2)
+5. **Retrieved references**: library excerpts, with file names and pages. The best image matches come with the original image
 6. **Conversation**: prior turns, then the current one
 
 Every user message starts with a `Speaker: Courtney | Amar | Both` line, so Gio always knows who is speaking.
@@ -48,13 +49,30 @@ Every user message starts with a `Speaker: Courtney | Amar | Both` line, so Gio 
 | `src/lib/gio/` | System prompt, prompt assembly, speakers |
 | `src/lib/ai/` | Provider-neutral model interfaces and the Anthropic implementation |
 | `src/lib/chat/` | The chat turn pipeline, which has no framework code and is fully tested |
+| `src/lib/library/` | Parsing, chunking, visual descriptions, the resumable indexer, retrieval |
 | `src/lib/db/` | Supabase data access |
 | `src/app/api/chat/` | Streaming chat endpoint (newline-delimited JSON) |
+| `src/app/api/library/process/` | One indexing step for a library file |
 | `src/components/` | Shell, chat, and UI primitives (shadcn/ui style on Radix) |
 | `scripts/bootstrap.ts` | Creates the account and seeds the default project and prompt |
 | `tests/` | Vitest suites. All external APIs are mocked |
 
-To swap model providers, implement `ChatProvider` and `BackgroundModel` in `src/lib/ai/types.ts`. Nothing else changes.
+To swap model providers, implement `ChatProvider`, `BackgroundModel` or `EmbeddingProvider` in `src/lib/ai/types.ts`. Nothing else changes.
+
+### The reference library
+
+- **Uploads** go from the browser straight into the private `files` bucket, up to 50 MB each. Vercel's request size limit never applies.
+- **Text** from PDFs (via PDF.js), .docx (via mammoth), .txt and .md is split into passages of about 800 tokens that overlap by about 100.
+- **Images** are handled by the background model (`GIO_BACKGROUND_MODEL`), which writes a detailed visual description of:
+  - every uploaded image
+  - every PDF page that is mostly picture (less than 200 characters of text, or pictures with less than 1,500)
+  - every picture embedded in a .docx
+
+  Descriptions cover materials, palette, furniture and likely designers or periods, light, proportion, atmosphere, architecture and sense of place. They are stored as `visual_description` passages that link back to the image, and blank pages are skipped.
+- **Search.** Voyage embeds every passage into pgvector. Before each reply, Gio searches the current project plus the General Design Brain, gets up to 8 passages, and attaches the original image for the top 3 visual matches. Replies show a **From your library** list of what was used.
+- **Indexing runs in steps, from the open app.** Each step handles pages for up to about 200 seconds and saves its progress, so large image-heavy PDFs finish over several steps. Closing the app pauses indexing, and it picks up where it left off next time the app is open. The sidebar shows each file's status and page progress. Failed files have a Retry option.
+- **Photos attached in chat** are resized in the browser and sent to Gio with the message. They are saved as image assets under the project and room. After the reply, they are described and added to the library, so later questions can find them.
+- **Cost.** Each described image or picture page costs one background-model call when it is indexed.
 
 ---
 
@@ -114,7 +132,11 @@ npm run typecheck
 npm run check:migrations  # applies migrations to a throwaway local Postgres and checks RLS (needs postgresql-16 + pgvector)
 ```
 
-`scripts/dev/mock-anthropic.mjs` is an offline stand-in for the Anthropic API, so you can click through the UI without spending tokens. Start it with `node scripts/dev/mock-anthropic.mjs`, then run `ANTHROPIC_BASE_URL=http://127.0.0.1:4010 npm run dev`.
+`scripts/dev/mock-anthropic.mjs` is an offline stand-in for both the Anthropic and Voyage APIs, so you can click through the UI without spending tokens. Start it with `node scripts/dev/mock-anthropic.mjs`, then run:
+
+```bash
+ANTHROPIC_BASE_URL=http://127.0.0.1:4010 VOYAGE_BASE_URL=http://127.0.0.1:4010/v1 VOYAGE_API_KEY=mock npm run dev
+```
 
 ---
 
@@ -132,7 +154,9 @@ Every variable is documented in [`.env.example`](.env.example). In short:
 | `GIO_BACKGROUND_MODEL` | app + Vercel | Defaults to `claude-haiku-4-5-20251001` |
 | `GIO_CHAT_EFFORT` | app + Vercel | How much Gio thinks before answering. Defaults to `high` |
 | `GIO_WEB_SEARCH_MAX_USES` | app + Vercel | Web searches allowed per reply. Defaults to `5`; `0` turns search off |
-| `VOYAGE_API_KEY`, `EMBEDDING_MODEL`, `EMBEDDING_DIMENSION` | app + Vercel | Embeddings (Phase 2). The dimension must match the migration (1024) |
+| `VOYAGE_API_KEY` | app + Vercel | Library indexing and search. Without it, uploads wait in the queue and Gio answers without references |
+| `EMBEDDING_MODEL`, `EMBEDDING_DIMENSION` | app + Vercel | Default `voyage-4` at 1024. The dimension must match the migration |
+| `RETRIEVAL_TOP_K`, `RETRIEVAL_MIN_SIMILARITY`, `RETRIEVAL_MAX_IMAGES` | app + Vercel | Optional retrieval tuning. Defaults: 8, 0.25 and 3 |
 | `NEXT_TELEMETRY_DISABLED` | Vercel | Set to `1` |
 
 ---
@@ -144,7 +168,12 @@ Every variable is documented in [`.env.example`](.env.example). In short:
 3. Deploy. Open the URL on your phone and add it to the home screen.
 4. Optional: in Supabase → Authentication → URL Configuration, set **Site URL** to your Vercel URL.
 
-Chat responses stream. The chat route allows up to 300 seconds, which leaves room for long answers that include web searches. If your Vercel plan has a lower limit, lower `maxDuration` in `src/app/api/chat/route.ts`.
+Chat responses stream. The chat route and the library indexing route each allow up to 300 seconds. If your Vercel plan has a lower limit:
+
+- lower `maxDuration` in `src/app/api/chat/route.ts` and `src/app/api/library/process/route.ts`
+- keep `STEP_BUDGET_MS` in the indexing route about 60 seconds below its `maxDuration`
+
+PDF page rendering uses a native canvas package (`@napi-rs/canvas`). It ships prebuilt for Vercel's Linux runtime, and `next.config.ts` makes sure its files are deployed.
 
 Live prices come from web search, which must be enabled for your Anthropic organization. If Gio never searches, an admin can turn it on in the Claude Console under organization privacy settings.
 
@@ -157,6 +186,8 @@ Live prices come from web search, which must be enabled for your Anthropic organ
 - **The brief**, in the right-hand notebook, is the most useful thing to fill in. Gio reads it on every turn. Include the architecture, light, climate, who visits and any constraints.
 - **The speaker toggle** (Courtney / Amar / Both) sits beside the message box. It remembers the last choice, and each message in the history shows who sent it. Gio keeps Courtney's and Amar's preferences separate.
 - **Stop** ends a reply mid-stream. Whatever Gio had written so far is kept.
+- **The library** is in the left sidebar. Upload with the button or drag files onto it. Files go into the current room when one is selected, otherwise into the project as a whole. Put household-wide references (books, hotels, designers) in the **General Design Brain**, which is searched from every project.
+- **Photos** are attached with the picture button beside the speaker toggle, up to 6 per message. On a phone it offers the camera.
 - On a phone, the ☰ button opens projects, rooms and conversations, and the book icon opens the notebook.
 
 ---
@@ -167,7 +198,7 @@ Use these to check each phase. The column says what each one exercises and when 
 
 | # | Prompt | Tests | Phase |
 | --- | --- | --- | --- |
-| 1 | "Analyze this living room photo." | Photo analysis (needs attachments) | 2 |
+| 1 | "Analyze this living room photo." (attach one) | Photo analysis, highest-leverage move first | 2 |
 | 2 | "Should we buy this chair?" | Purchase judgement, and a willingness to say don't buy | 1 (text), 2 (with photo) |
 | 3 | "Compare these three sofas." | Ranking and naming a winner | 1, 3 (comparison mode) |
 | 4 | "What is the highest-leverage move in this room?" | Subtraction and light before buying | 1 |
@@ -187,5 +218,5 @@ The ChatGPT importer arrives in Phase 4. It will read ChatGPT's `conversations.j
 Until then:
 
 1. **System prompt.** Already seeded verbatim. You can edit it in the app in Phase 4.
-2. **Project knowledge.** Paste each home's key facts into its project brief. Phase 2 adds the upload for the GPT's reference files (PDFs, images, docs).
+2. **Reference files.** Upload the GPT's knowledge files to the General Design Brain library, or to a specific project if they are about one home. Put each home's key facts in its project brief.
 3. **Your ChatGPT export.** Request it now (ChatGPT → Settings → Data controls → Export data) so it's ready for the Phase 4 importer.

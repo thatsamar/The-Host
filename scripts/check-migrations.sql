@@ -86,3 +86,20 @@ begin
   end;
 end $$;
 reset role;
+
+-- match_chunks runs with the caller's rights: user b never sees user a's chunks.
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false) \gset
+do $$
+declare p uuid; n int;
+begin
+  select id into p from public.projects where is_default;
+  insert into public.chunks (project_id, source_type, content, embedding)
+    values (p, 'text', 'oak and linen', array_fill(0.1::real, array[1024])::extensions.vector);
+  select count(*) into n from public.match_chunks(array_fill(0.1::real, array[1024])::extensions.vector, array[p], 5, 0.0, null);
+  assert n = 1, 'owner can match own chunk';
+  perform set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
+  select count(*) into n from public.match_chunks(array_fill(0.1::real, array[1024])::extensions.vector, array[p], 5, 0.0, null);
+  assert n = 0, 'other user cannot match foreign chunks';
+end $$;
+reset role;

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, usePathname, useSearchParams } from "next/navigation";
 import { MenuIcon, PanelRightCloseIcon, PanelRightOpenIcon, BookOpenIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useLibraryProcessor } from "@/components/library/use-library-processor";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import type { Workspace } from "@/lib/db/workspace";
 import { LeftSidebar } from "./left-sidebar";
@@ -20,6 +21,7 @@ export function AppShell({ workspace, children }: { workspace: Workspace; childr
   const activeRoomId = activeChat ? activeChat.room_id : searchParams.get("room");
   const activeRoom = workspace.rooms.find((r) => r.id === activeRoomId) ?? null;
 
+  const { notice: libraryNotice } = useLibraryProcessor();
   const [leftOpen, setLeftOpen] = useState(false);
   const [rightOpen, setRightOpen] = useState(false);
   const [rightPinned, setRightPinned] = useState(true);
@@ -49,7 +51,12 @@ export function AppShell({ workspace, children }: { workspace: Workspace; childr
   };
 
   const sidebar = (
-    <LeftSidebar workspace={workspace} activeChatId={activeChatId} activeRoomId={activeRoom?.id ?? null} />
+    <LeftSidebar
+      workspace={workspace}
+      activeChatId={activeChatId}
+      activeRoomId={activeRoom?.id ?? null}
+      libraryNotice={libraryNotice}
+    />
   );
   const panel = <RightPanel workspace={workspace} activeRoom={activeRoom} />;
 

@@ -141,7 +141,9 @@ describe("runChatTurn", () => {
           repo,
           provider,
           background: new FakeBackground(),
-          retrieve: async () => [{ fileName: "ponti.pdf", content: "Lightness", sourceType: "text" }],
+          retrieve: async () => [
+            { chunkId: "c1", fileId: "f1", similarity: 0.61, fileName: "ponti.pdf", content: "Lightness", sourceType: "text" },
+          ],
         },
         { projectId: project.id, speaker: "Both", text: "Chairs" },
       ),
@@ -266,5 +268,144 @@ describe("interrupted answers", () => {
     );
     expect(events.at(-1)).toMatchObject({ type: "error" });
     expect(repo.messages[1]).toMatchObject({ role: "assistant", content: "Half an answer" });
+  });
+});
+
+describe("photos and references", () => {
+  const loadImage = async (path: string) => ({ mediaType: "image/jpeg", data: `b64:${path}` });
+
+  it("sends attached photos to the model, stores them as image assets under the project and room, and links them", async () => {
+    const { repo, project, room } = setup();
+    const provider = new ScriptedProvider(replyWith("THE CALL — Lower the pendant."));
+    const events = await collect(
+      runChatTurn(
+        { repo, provider, background: new FakeBackground(), loadImage },
+        {
+          projectId: project.id,
+          roomId: room.id,
+          speaker: "Courtney",
+          text: "",
+          attachments: [{ storagePath: "u/chat/a.jpg", mimeType: "image/jpeg", name: "IMG_1.jpg" }],
+        },
+      ),
+    );
+    const parts = provider.requests[0].messages.at(-1)!.content;
+    expect(parts[0]).toEqual({ type: "image", mediaType: "image/jpeg", data: "b64:u/chat/a.jpg" });
+    expect(parts[1]).toEqual({ type: "text", text: "Speaker: Courtney\n\n(Photo attached, no message.)" });
+
+    expect(repo.imageAssets).toHaveLength(1);
+    const asset = repo.imageAssets[0];
+    const userMessage = repo.messages[0];
+    expect(asset).toMatchObject({ projectId: project.id, roomId: room.id, messageId: userMessage.id });
+    expect(userMessage.attachments).toEqual([
+      { image_asset_id: asset.id, storage_path: "u/chat/a.jpg", mime_type: "image/jpeg", name: "IMG_1.jpg" },
+    ]);
+    expect((events[0] as Extract<ChatServerEvent, { type: "meta" }>).userMessage.attachments).toHaveLength(1);
+  });
+
+  it("re-sends recent earlier photos so follow-ups can see them", async () => {
+    const { repo, project } = setup();
+    const background = new FakeBackground();
+    const first = await collect(
+      runChatTurn(
+        { repo, provider: new ScriptedProvider(replyWith("Nice room.")), background, loadImage },
+        { projectId: project.id, speaker: "Amar", text: "Our hallway", attachments: [{ storagePath: "u/chat/h.jpg", mimeType: "image/jpeg" }] },
+      ),
+    );
+    const chatId = (first[0] as Extract<ChatServerEvent, { type: "meta" }>).chatId;
+    const provider = new ScriptedProvider(replyWith("Move the bench."));
+    await collect(
+      runChatTurn({ repo, provider, background, loadImage }, { chatId, projectId: project.id, speaker: "Amar", text: "And the bench?" }),
+    );
+    const firstTurn = provider.requests[0].messages[0].content;
+    expect(firstTurn[0]).toEqual({ type: "image", mediaType: "image/jpeg", data: "b64:u/chat/h.jpg" });
+  });
+
+  it("rejects attachments when photo loading isn't available, and too many photos", async () => {
+    const { repo, project } = setup();
+    const deps = { repo, provider: new ScriptedProvider(replyWith("x")), background: new FakeBackground() };
+    await expect(
+      collect(runChatTurn(deps, { projectId: project.id, speaker: "Both", text: "hi", attachments: [{ storagePath: "p", mimeType: "image/jpeg" }] })),
+    ).rejects.toThrow(ChatInputError);
+    const seven = Array.from({ length: 7 }, (_, i) => ({ storagePath: `p${i}`, mimeType: "image/jpeg" }));
+    await expect(
+      collect(runChatTurn({ ...deps, loadImage }, { projectId: project.id, speaker: "Both", text: "hi", attachments: seven })),
+    ).rejects.toThrow(/at most 6/);
+    expect(repo.messages).toHaveLength(0);
+  });
+
+  it("records which references were used on the assistant message", async () => {
+    const { repo, project } = setup();
+    await collect(
+      runChatTurn(
+        {
+          repo,
+          provider: new ScriptedProvider(replyWith("ok")),
+          background: new FakeBackground(),
+          retrieve: async () => [
+            { chunkId: "c1", fileId: "f1", similarity: 0.61234, fileName: "ponti.pdf", page: 4, content: "x", sourceType: "text" },
+            {
+              chunkId: "c2",
+              fileId: "f2",
+              similarity: 0.5,
+              fileName: "lounge.jpg",
+              content: "y",
+              sourceType: "visual_description",
+              image: { mediaType: "image/jpeg", data: "z" },
+            },
+          ],
+        },
+        { projectId: project.id, speaker: "Both", text: "Chairs please" },
+      ),
+    );
+    expect(repo.messages[1].metadata.references).toEqual([
+      { file_name: "ponti.pdf", file_id: "f1", page: 4, source_type: "text", similarity: 0.612, with_image: false },
+      { file_name: "lounge.jpg", file_id: "f2", page: null, source_type: "visual_description", similarity: 0.5, with_image: true },
+    ]);
+  });
+
+  it("still answers when retrieval fails, and notes the failure", async () => {
+    const { repo, project } = setup();
+    const provider = new ScriptedProvider(replyWith("ok"));
+    const events = await collect(
+      runChatTurn(
+        {
+          repo,
+          provider,
+          background: new FakeBackground(),
+          retrieve: async () => {
+            throw new Error("Voyage down");
+          },
+        },
+        { projectId: project.id, speaker: "Both", text: "Chairs please" },
+      ),
+    );
+    expect(events.map((e) => e.type)).toContain("done");
+    expect(repo.messages[1].metadata.retrieval_error).toBe("Voyage down");
+    expect(provider.requests[0].system.find((b) => b.label === "retrieved_references")!.body).toMatch(/No references/);
+  });
+
+  it("uses the previous message to retrieve for a short follow-up", async () => {
+    const { repo, project } = setup();
+    const queries: string[] = [];
+    const retrieve = async (q: string) => {
+      queries.push(q);
+      return [];
+    };
+    const background = new FakeBackground();
+    const first = await collect(
+      runChatTurn(
+        { repo, provider: new ScriptedProvider(replyWith("a")), background, retrieve },
+        { projectId: project.id, speaker: "Both", text: "Compare the Wegner and Juhl lounge chairs for the study" },
+      ),
+    );
+    const chatId = (first[0] as Extract<ChatServerEvent, { type: "meta" }>).chatId;
+    await collect(
+      runChatTurn(
+        { repo, provider: new ScriptedProvider(replyWith("b")), background, retrieve },
+        { chatId, projectId: project.id, speaker: "Both", text: "Which is warmer?" },
+      ),
+    );
+    expect(queries[1]).toBe("Compare the Wegner and Juhl lounge chairs for the study\n\nWhich is warmer?");
   });
 });

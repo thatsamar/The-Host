@@ -13,6 +13,8 @@ export default async function NewChatPage({ params, searchParams }: PageProps<"/
       roomId={roomId}
       chatId={null}
       initialMessages={[]}
+      imageUrls={{}}
+      userId={workspace.userId}
       initialSpeaker={workspace.lastSpeaker}
     />
   );

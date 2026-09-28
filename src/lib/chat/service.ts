@@ -1,13 +1,20 @@
 import type { BackgroundModel, ChatProvider, ChatStreamEvent, WebSourceRef } from "@/lib/ai/types";
-import type { MessageRow } from "@/lib/db/types";
+import type { MessageAttachment, MessageReference, MessageRow } from "@/lib/db/types";
 import {
   assemblePrompt,
   type PromptHistoryMessage,
   type PromptMemory,
-  type PromptReference,
 } from "@/lib/gio/prompt";
 import type { HumanSpeaker } from "@/lib/gio/speakers";
+import { buildRetrievalQuery, type RetrievedReference } from "@/lib/library/retrieval";
 import type { ChatRepository } from "./repository";
+
+export interface ChatAttachmentInput {
+  /** Path in the private `images` bucket, under "<user_id>/chat/". */
+  storagePath: string;
+  mimeType: string;
+  name?: string;
+}
 
 export interface ChatTurnInput {
   chatId?: string | null;
@@ -15,6 +22,7 @@ export interface ChatTurnInput {
   roomId?: string | null;
   speaker: HumanSpeaker;
   text: string;
+  attachments?: ChatAttachmentInput[];
 }
 
 /** Events streamed to the browser as newline-delimited JSON. */
@@ -31,12 +39,19 @@ export interface ChatTurnDeps {
   repo: ChatRepository;
   provider: ChatProvider;
   background: BackgroundModel;
-  /** Library retrieval. Arrives in Phase 2; defaults to no references. */
-  retrieve?: (query: string, scope: { projectId: string; roomId: string | null }) => Promise<PromptReference[]>;
+  /** Library retrieval for this turn. Without it, Gio gets no references. */
+  retrieve?: (query: string, scope: { projectId: string; roomId: string | null }) => Promise<RetrievedReference[]>;
+  /** Loads a stored photo, ready for the model. Required for attachments. */
+  loadImage?: (storagePath: string) => Promise<{ mediaType: string; data: string }>;
   signal?: AbortSignal;
 }
 
 export class ChatInputError extends Error {}
+
+export const MAX_ATTACHMENTS = 6;
+/** Photos from earlier turns that are re-sent so follow-ups can see them. */
+export const MAX_HISTORY_IMAGES = 4;
+const HISTORY_IMAGE_WINDOW = 8;
 
 export async function* runChatTurn(
   deps: ChatTurnDeps,
@@ -44,7 +59,10 @@ export async function* runChatTurn(
 ): AsyncGenerator<ChatServerEvent> {
   const { repo } = deps;
   const text = input.text.trim();
-  if (!text) throw new ChatInputError("Message is empty");
+  const attachments = input.attachments ?? [];
+  if (!text && !attachments.length) throw new ChatInputError("Message is empty");
+  if (attachments.length > MAX_ATTACHMENTS) throw new ChatInputError(`Attach at most ${MAX_ATTACHMENTS} photos`);
+  if (attachments.length && !deps.loadImage) throw new ChatInputError("Photo attachments aren't available");
 
   // Resolve chat scope. An existing chat keeps its own project and room.
   let chat = input.chatId ? await repo.getChat(input.chatId) : null;
@@ -57,6 +75,9 @@ export async function* runChatTurn(
   const room = roomId ? await repo.getRoom(roomId) : null;
   if (roomId && (!room || room.project_id !== projectId)) throw new ChatInputError("Room not found");
 
+  // Load the new photos before saving anything, so a bad upload fails cleanly.
+  const currentImages = await Promise.all(attachments.map((a) => deps.loadImage!(a.storagePath)));
+
   chat ??= await repo.createChat({ projectId, roomId });
   const isNewChat = !chat.title;
 
@@ -68,16 +89,46 @@ export async function* runChatTurn(
     repo.listDecisions(projectId),
   ]);
 
+  // Photos become image assets under the project and room.
+  const assetIds = attachments.length
+    ? await repo.createImageAssets({
+        projectId,
+        roomId,
+        images: attachments.map((a) => ({ storagePath: a.storagePath, mimeType: a.mimeType, name: a.name })),
+      })
+    : [];
+  const storedAttachments: MessageAttachment[] = attachments.map((a, i) => ({
+    image_asset_id: assetIds[i],
+    storage_path: a.storagePath,
+    mime_type: a.mimeType,
+    name: a.name,
+  }));
+
   const userMessage = await repo.insertMessage({
     chatId: chat.id,
     role: "user",
     speaker: input.speaker,
     content: text,
+    attachments: storedAttachments,
   });
+  if (assetIds.length) await repo.linkImageAssets(assetIds, userMessage.id);
   await repo.setLastSpeaker(input.speaker);
   yield { type: "meta", chatId: chat.id, projectId, roomId, userMessage };
 
-  const references = deps.retrieve ? await deps.retrieve(text, { projectId, roomId }) : [];
+  // Library retrieval. A failure here must not stop Gio from answering.
+  let references: RetrievedReference[] = [];
+  let retrievalError: string | undefined;
+  if (deps.retrieve && text) {
+    const previousUser = [...history].reverse().find((m) => m.role === "user")?.content;
+    try {
+      references = await deps.retrieve(buildRetrievalQuery(text, previousUser), { projectId, roomId });
+    } catch (err) {
+      retrievalError = err instanceof Error ? err.message : String(err);
+      console.warn("Library retrieval failed:", retrievalError);
+    }
+  }
+
+  const historyImages = deps.loadImage ? await loadHistoryImages(history, deps.loadImage) : new Map();
 
   const promptMemories: PromptMemory[] = [
     ...memories.map((m) => ({
@@ -107,11 +158,24 @@ export async function* runChatTurn(
     memories: promptMemories,
     references,
     history: history.map(
-      (m): PromptHistoryMessage => ({ role: m.role, speaker: m.speaker, content: m.content }),
+      (m): PromptHistoryMessage => ({
+        role: m.role,
+        speaker: m.speaker,
+        content: m.content,
+        images: historyImages.get(m.id),
+      }),
     ),
-    current: { speaker: input.speaker, text },
+    current: { speaker: input.speaker, text, images: currentImages },
     webSearch: true,
   });
+  const referenceSummary: MessageReference[] = references.map((r) => ({
+    file_name: r.fileName,
+    file_id: r.fileId,
+    page: r.page ?? null,
+    source_type: r.sourceType,
+    similarity: Math.round(r.similarity * 1000) / 1000,
+    with_image: Boolean(r.image),
+  }));
 
   // Text streamed so far, kept so a stopped or failed answer isn't lost.
   let partial = "";
@@ -148,6 +212,8 @@ export async function* runChatTurn(
         usage: final.usage,
         web_searches: final.webSearches,
         web_sources: dedupeSources(final.webSources),
+        references: referenceSummary,
+        ...(retrievalError ? { retrieval_error: retrievalError } : {}),
       },
     });
     yield { type: "done", message: assistant };
@@ -171,12 +237,37 @@ export async function* runChatTurn(
             stop_reason: "interrupted",
             web_searches: webSearches,
             web_sources: dedupeSources(webSources),
+            references: referenceSummary,
           },
         })
         .catch(() => undefined);
     }
     if (!titled) await repo.setChatTitle(chat.id, fallbackTitle(text)).catch(() => undefined);
   }
+}
+
+/** Re-sends the most recent earlier photos so follow-up questions can see them. */
+async function loadHistoryImages(
+  history: MessageRow[],
+  load: (storagePath: string) => Promise<{ mediaType: string; data: string }>,
+): Promise<Map<string, { mediaType: string; data: string }[]>> {
+  const wanted: { messageId: string; path: string }[] = [];
+  for (const m of history.slice(-HISTORY_IMAGE_WINDOW).reverse()) {
+    for (const a of m.attachments ?? []) {
+      if (wanted.length < MAX_HISTORY_IMAGES) wanted.push({ messageId: m.id, path: a.storage_path });
+    }
+  }
+  const byMessage = new Map<string, { mediaType: string; data: string }[]>();
+  // Restore chronological order within each message.
+  for (const w of wanted.reverse()) {
+    try {
+      const image = await load(w.path);
+      byMessage.set(w.messageId, [...(byMessage.get(w.messageId) ?? []), image]);
+    } catch {
+      // A missing old photo shouldn't block the reply.
+    }
+  }
+  return byMessage;
 }
 
 export function dedupeSources(sources: WebSourceRef[]): WebSourceRef[] {

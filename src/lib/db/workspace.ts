@@ -3,7 +3,7 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { isHumanSpeaker, type HumanSpeaker } from "@/lib/gio/speakers";
 import { createClient, getUserId } from "@/lib/supabase/server";
-import type { ChatRow, DecisionRow, MemoryRow, MessageRow, ProjectRow, RoomRow } from "./types";
+import type { ChatRow, DecisionRow, FileRow, MemoryRow, MessageRow, ProjectRow, RoomRow } from "./types";
 
 /** Signed-in Supabase client + user id, or a redirect to /login. */
 export const requireSession = cache(async () => {
@@ -20,12 +20,14 @@ export interface Workspace {
   chats: ChatRow[];
   memories: MemoryRow[];
   decisions: DecisionRow[];
+  files: FileRow[];
   lastSpeaker: HumanSpeaker;
+  userId: string;
 }
 
 export const loadWorkspace = cache(async (projectId: string): Promise<Workspace | null> => {
   const { supabase, userId } = await requireSession();
-  const [projects, rooms, chats, memories, decisions, profile] = await Promise.all([
+  const [projects, rooms, chats, memories, decisions, profile, files] = await Promise.all([
     supabase.from("projects").select("*").order("is_default", { ascending: false }).order("created_at"),
     supabase.from("rooms").select("*").eq("project_id", projectId).order("created_at"),
     supabase
@@ -47,8 +49,13 @@ export const loadWorkspace = cache(async (projectId: string): Promise<Workspace 
       .in("review_state", ["approved", "proposed"])
       .order("created_at", { ascending: false }),
     supabase.from("users").select("last_speaker").eq("id", userId).maybeSingle(),
+    supabase
+      .from("files")
+      .select("id,project_id,room_id,name,mime_type,size_bytes,status,error,progress,chunk_count,page_count,created_at,updated_at")
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: false }),
   ]);
-  for (const r of [projects, rooms, chats, memories, decisions, profile]) {
+  for (const r of [projects, rooms, chats, memories, decisions, profile, files]) {
     if (r.error) throw new Error(r.error.message);
   }
   const project = (projects.data as ProjectRow[]).find((p) => p.id === projectId);
@@ -61,11 +68,15 @@ export const loadWorkspace = cache(async (projectId: string): Promise<Workspace 
     chats: chats.data as ChatRow[],
     memories: memories.data as MemoryRow[],
     decisions: decisions.data as DecisionRow[],
+    files: files.data as FileRow[],
     lastSpeaker: isHumanSpeaker(last) ? last : "Both",
+    userId,
   };
 });
 
-export async function loadChat(chatId: string): Promise<{ chat: ChatRow; messages: MessageRow[] } | null> {
+export async function loadChat(
+  chatId: string,
+): Promise<{ chat: ChatRow; messages: MessageRow[]; imageUrls: Record<string, string> } | null> {
   const { supabase } = await requireSession();
   const [chat, messages] = await Promise.all([
     supabase.from("chats").select("*").eq("id", chatId).maybeSingle(),
@@ -74,7 +85,15 @@ export async function loadChat(chatId: string): Promise<{ chat: ChatRow; message
   if (chat.error) throw new Error(chat.error.message);
   if (messages.error) throw new Error(messages.error.message);
   if (!chat.data) return null;
-  return { chat: chat.data as ChatRow, messages: messages.data as MessageRow[] };
+  const rows = messages.data as MessageRow[];
+  // Signed URLs for attached photos (the bucket is private).
+  const paths = rows.flatMap((m) => (m.attachments ?? []).map((a) => a.storage_path));
+  const imageUrls: Record<string, string> = {};
+  if (paths.length) {
+    const { data } = await supabase.storage.from("images").createSignedUrls(paths, 60 * 60);
+    for (const item of data ?? []) if (item.path && item.signedUrl) imageUrls[item.path] = item.signedUrl;
+  }
+  return { chat: chat.data as ChatRow, messages: rows, imageUrls };
 }
 
 export async function defaultProjectId(): Promise<string | null> {

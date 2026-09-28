@@ -16,6 +16,8 @@ export default async function ChatPage({ params }: PageProps<"/p/[projectId]/c/[
       roomId={loaded.chat.room_id}
       chatId={chatId}
       initialMessages={loaded.messages}
+      imageUrls={loaded.imageUrls}
+      userId={workspace!.userId}
       initialSpeaker={workspace!.lastSpeaker}
     />
   );

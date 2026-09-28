@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowUpIcon, SquareIcon } from "lucide-react";
+import { ArrowUpIcon, ImagePlusIcon, LoaderIcon, SquareIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ChatServerEvent } from "@/lib/chat/service";
 import { readNdjson } from "@/lib/chat/ndjson";
 import type { MessageRow } from "@/lib/db/types";
 import type { HumanSpeaker } from "@/lib/gio/speakers";
+import { CHAT_PHOTO_ACCEPT, resizeForUpload } from "@/lib/library/client-image";
+import { createClient } from "@/lib/supabase/client";
 import { Message, type DisplayMessage } from "./message";
 import { SpeakerToggle } from "./speaker-toggle";
 
@@ -18,16 +20,29 @@ const STARTERS = [
   "Find us a vintage lounge chair under $2,000 for the reading corner.",
 ];
 
-function toDisplay(m: MessageRow): DisplayMessage {
+const MAX_PHOTOS = 6;
+
+function toDisplay(m: MessageRow, imageUrls: Record<string, string> = {}): DisplayMessage {
   return {
     id: m.id,
     role: m.role,
     speaker: m.speaker,
     content: m.content,
+    images: (m.attachments ?? []).map((a) => imageUrls[a.storage_path]).filter(Boolean),
     webSearches: m.metadata?.web_searches,
     webSources: m.metadata?.web_sources,
+    references: m.metadata?.references,
     error: m.metadata?.error,
   };
+}
+
+interface PendingPhoto {
+  key: string;
+  name: string;
+  previewUrl: string;
+  storagePath?: string;
+  status: "uploading" | "ready" | "error";
+  error?: string;
 }
 
 interface Props {
@@ -36,11 +51,26 @@ interface Props {
   chatId: string | null;
   initialMessages: MessageRow[];
   initialSpeaker: HumanSpeaker;
+  /** Signed URLs for attached photos, keyed by storage path. */
+  imageUrls: Record<string, string>;
+  userId: string;
 }
 
-export function ChatView({ projectId, roomId, chatId: initialChatId, initialMessages, initialSpeaker }: Props) {
+export function ChatView({
+  projectId,
+  roomId,
+  chatId: initialChatId,
+  initialMessages,
+  initialSpeaker,
+  imageUrls,
+  userId,
+}: Props) {
   const router = useRouter();
-  const [messages, setMessages] = useState<DisplayMessage[]>(() => initialMessages.map(toDisplay));
+  const [messages, setMessages] = useState<DisplayMessage[]>(() => initialMessages.map((m) => toDisplay(m, imageUrls)));
+  const [photos, setPhotos] = useState<PendingPhoto[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const photosUploading = photos.some((p) => p.status === "uploading");
+  const readyPhotos = photos.filter((p) => p.status === "ready");
   const [chatId, setChatId] = useState<string | null>(initialChatId);
   const [speaker, setSpeaker] = useState<HumanSpeaker>(initialSpeaker);
   const [input, setInput] = useState("");
@@ -62,17 +92,46 @@ export function ChatView({ projectId, roomId, chatId: initialChatId, initialMess
     setMessages((prev) => prev.map((m) => (m.id === id ? fn(m) : m)));
   }, []);
 
+  const addPhotos = useCallback(
+    async (files: FileList | File[]) => {
+      const room = MAX_PHOTOS - photos.length;
+      const chosen = Array.from(files).slice(0, Math.max(0, room));
+      const supabase = createClient();
+      await Promise.all(
+        chosen.map(async (file) => {
+          const key = crypto.randomUUID();
+          setPhotos((p) => [...p, { key, name: file.name, previewUrl: URL.createObjectURL(file), status: "uploading" }]);
+          try {
+            const blob = await resizeForUpload(file);
+            const storagePath = `${userId}/chat/${key}.jpg`;
+            const { error } = await supabase.storage
+              .from("images")
+              .upload(storagePath, blob, { contentType: "image/jpeg", upsert: false });
+            if (error) throw new Error(error.message);
+            setPhotos((p) => p.map((x) => (x.key === key ? { ...x, storagePath, status: "ready" } : x)));
+          } catch (err) {
+            const error = err instanceof Error ? err.message : "Upload failed";
+            setPhotos((p) => p.map((x) => (x.key === key ? { ...x, status: "error", error } : x)));
+          }
+        }),
+      );
+    },
+    [photos.length, userId],
+  );
+
   const send = useCallback(
     async (raw: string) => {
       const text = raw.trim();
-      if (!text || streaming) return;
+      const attached = photos.filter((p) => p.status === "ready");
+      if ((!text && !attached.length) || streaming || photosUploading) return;
       setInput("");
+      setPhotos([]);
       stickToBottom.current = true;
       const tempUserId = `local-user-${Date.now()}`;
       const tempAssistantId = `local-gio-${Date.now()}`;
       setMessages((prev) => [
         ...prev,
-        { id: tempUserId, role: "user", speaker, content: text },
+        { id: tempUserId, role: "user", speaker, content: text, images: attached.map((p) => p.previewUrl) },
         { id: tempAssistantId, role: "assistant", speaker: "Gio", content: "", pending: true, webSearches: [], webSources: [] },
       ]);
       setStreaming(true);
@@ -85,7 +144,14 @@ export function ChatView({ projectId, roomId, chatId: initialChatId, initialMess
         const response = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chatId, projectId, roomId, speaker, text }),
+          body: JSON.stringify({
+            chatId,
+            projectId,
+            roomId,
+            speaker,
+            text,
+            attachments: attached.map((p) => ({ storagePath: p.storagePath, mimeType: "image/jpeg", name: p.name })),
+          }),
           signal: controller.signal,
         });
         if (!response.ok || !response.body) {
@@ -138,7 +204,7 @@ export function ChatView({ projectId, roomId, chatId: initialChatId, initialMess
         router.refresh();
       }
     },
-    [chatId, initialChatId, projectId, roomId, router, speaker, streaming, updateAssistant],
+    [chatId, initialChatId, photos, photosUploading, projectId, roomId, router, speaker, streaming, updateAssistant],
   );
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -188,25 +254,92 @@ export function ChatView({ projectId, roomId, chatId: initialChatId, initialMess
             void send(input);
           }}
         >
-          <div className="rounded-lg border border-stone-strong bg-paper-raised focus-within:border-tobacco focus-within:ring-2 focus-within:ring-tobacco/15">
+          <div
+            className="rounded-lg border border-stone-strong bg-paper-raised focus-within:border-tobacco focus-within:ring-2 focus-within:ring-tobacco/15"
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (e.dataTransfer.files.length) void addPhotos(e.dataTransfer.files);
+            }}
+          >
+            {photos.length ? (
+              <div className="flex flex-wrap gap-2 px-3 pt-3">
+                {photos.map((p) => (
+                  <div key={p.key} className="relative" title={p.error ?? p.name}>
+                    {/* eslint-disable-next-line @next/next/no-img-element -- local preview */}
+                    <img
+                      src={p.previewUrl}
+                      alt={p.name}
+                      className={`size-16 rounded-md border border-stone object-cover ${p.status === "error" ? "opacity-40" : ""}`}
+                    />
+                    {p.status === "uploading" ? (
+                      <LoaderIcon className="absolute inset-0 m-auto size-5 animate-spin text-paper drop-shadow" />
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => setPhotos((all) => all.filter((x) => x.key !== p.key))}
+                      className="absolute -right-1.5 -top-1.5 rounded-full border border-stone bg-paper-raised p-0.5 text-ink-muted hover:text-ink"
+                      aria-label={`Remove ${p.name}`}
+                    >
+                      <XIcon className="size-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {photos.some((p) => p.status === "error") ? (
+              <p className="px-4 pt-2 text-xs text-oxblood">
+                {photos.find((p) => p.status === "error")?.error}
+              </p>
+            ) : null}
             <textarea
               ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onKeyDown}
               rows={1}
-              placeholder="Ask Gio…"
+              placeholder={photos.length ? "Add a note, or just send the photo…" : "Ask Gio…"}
               aria-label="Message Gio"
               className="block max-h-60 w-full resize-none bg-transparent px-4 pt-3 text-base leading-relaxed text-ink outline-none placeholder:text-ink-muted"
             />
             <div className="flex items-center justify-between gap-2 px-2 pb-2 pt-1">
-              <SpeakerToggle value={speaker} onChange={setSpeaker} disabled={streaming} />
+              <div className="flex items-center gap-1.5">
+                <SpeakerToggle value={speaker} onChange={setSpeaker} disabled={streaming} />
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={streaming || photos.length >= MAX_PHOTOS}
+                  aria-label="Attach photos"
+                  title="Attach photos"
+                >
+                  <ImagePlusIcon />
+                </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={CHAT_PHOTO_ACCEPT}
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files) void addPhotos(e.target.files);
+                    e.target.value = "";
+                  }}
+                />
+              </div>
               {streaming ? (
                 <Button type="button" size="icon-sm" variant="outline" onClick={() => abortRef.current?.abort()} aria-label="Stop">
                   <SquareIcon className="size-3.5 fill-current" />
                 </Button>
               ) : (
-                <Button type="submit" size="icon-sm" variant="accent" disabled={!input.trim()} aria-label="Send">
+                <Button
+                  type="submit"
+                  size="icon-sm"
+                  variant="accent"
+                  disabled={(!input.trim() && !readyPhotos.length) || photosUploading}
+                  aria-label="Send"
+                >
                   <ArrowUpIcon />
                 </Button>
               )}

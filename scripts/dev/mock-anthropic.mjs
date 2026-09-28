@@ -1,9 +1,12 @@
-// Offline stand-in for the Anthropic Messages API, for clicking through the UI
-// without spending tokens. NOT used in production.
+// Offline stand-in for the Anthropic Messages API and the Voyage embeddings
+// API, for clicking through the UI without spending tokens. NOT used in
+// production.
 //
 //   node scripts/dev/mock-anthropic.mjs            # listens on :4010
-//   ANTHROPIC_BASE_URL=http://127.0.0.1:4010 npm run dev
+//   ANTHROPIC_BASE_URL=http://127.0.0.1:4010 VOYAGE_BASE_URL=http://127.0.0.1:4010/v1 VOYAGE_API_KEY=mock npm run dev
 //
+// Embeddings are a deterministic bag-of-words hash, so retrieval behaves
+// plausibly: questions that share words with a document find it.
 // Streams a canned Gio-style answer that echoes the speaker line and the
 // labeled context blocks it received. Messages containing "find" or "buy"
 // also stream a web_search tool call and a result, like the real API.
@@ -21,16 +24,29 @@ function lastUserText(body) {
   return parts.filter((p) => p.type === "text").map((p) => p.text).join("\n");
 }
 
+function embed(text, dim) {
+  const v = new Array(dim).fill(0);
+  for (const word of text.toLowerCase().match(/[a-z]{3,}/g) ?? []) {
+    let h = 2166136261;
+    for (const ch of word) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
+    v[h % dim] += 1;
+  }
+  const norm = Math.hypot(...v) || 1;
+  return v.map((x) => x / norm);
+}
+
 function answerFor(body) {
   const text = lastUserText(body);
   const speaker = (text.match(/^Speaker: (.*)$/m) ?? [])[1] ?? "unknown";
   const system = Array.isArray(body.system) ? body.system : [{ text: body.system ?? "" }];
   const labels = system.slice(1).map((b) => (b.text.match(/^<([a-z_]+)>/) ?? [])[1]).filter(Boolean);
   const images = body.messages.at(-1).content.filter?.((p) => p.type === "image").length ?? 0;
+  const refs = system.find((b) => b.text.startsWith("<retrieved_references>"))?.text ?? "";
+  const files = [...refs.matchAll(/file: ([^·\n]+)/g)].map((m) => m[1].trim());
   return [
     "**THE CALL** — Mock Gio heard you.",
     "",
-    `**WHY** — Speaker was *${speaker}*. Context blocks: ${labels.join(" → ")}. Images this turn: ${images}.`,
+    `**WHY** — Speaker was *${speaker}*. Context blocks: ${labels.join(" → ")}. Images this turn: ${images}. References: ${files.length ? files.join(", ") : "none"}.`,
     "",
     "**THE MOVE** — This is the offline mock server; point ANTHROPIC_BASE_URL away from it for the real Gio.",
     "",
@@ -42,6 +58,12 @@ const server = http.createServer(async (req, res) => {
   let raw = "";
   for await (const chunk of req) raw += chunk;
   const body = raw ? JSON.parse(raw) : {};
+  if (req.method === "POST" && req.url.startsWith("/v1/embeddings")) {
+    const dim = body.output_dimension ?? 1024;
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ object: "list", data: body.input.map((t, index) => ({ object: "embedding", index, embedding: embed(t, dim) })), model: body.model, usage: { total_tokens: 1 } }));
+    return;
+  }
   if (req.method !== "POST" || !req.url.startsWith("/v1/messages")) {
     res.writeHead(404).end();
     return;
@@ -55,7 +77,14 @@ const server = http.createServer(async (req, res) => {
         type: "message",
         role: "assistant",
         model: body.model,
-        content: [{ type: "text", text: "Mock Conversation Title" }],
+        content: [
+          {
+            type: "text",
+            text: body.messages[0].content.some?.((p) => p.type === "image")
+              ? "Subject: mock description of a warm lounge. Materials: walnut, plaster, linen. Lighting: low lamplight at dusk. Sense of place: high desert."
+              : "Mock Conversation Title",
+          },
+        ],
         stop_reason: "end_turn",
         stop_sequence: null,
         usage: { input_tokens: 10, output_tokens: 4 },

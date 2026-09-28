@@ -12,8 +12,12 @@ const schema = z.object({
   GIO_CHAT_EFFORT: z.enum(["low", "medium", "high", "xhigh", "max"]).default("high"),
   GIO_WEB_SEARCH_MAX_USES: z.coerce.number().int().min(0).max(20).default(5),
   VOYAGE_API_KEY: z.string().optional(),
+  VOYAGE_BASE_URL: z.string().url().optional(),
   EMBEDDING_MODEL: z.string().default("voyage-4"),
   EMBEDDING_DIMENSION: z.coerce.number().int().positive().default(1024),
+  RETRIEVAL_TOP_K: z.coerce.number().int().min(0).max(30).default(8),
+  RETRIEVAL_MIN_SIMILARITY: z.coerce.number().min(-1).max(1).default(0.25),
+  RETRIEVAL_MAX_IMAGES: z.coerce.number().int().min(0).max(8).default(3),
 });
 
 export type ServerEnv = z.infer<typeof schema>;

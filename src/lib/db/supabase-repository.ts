@@ -118,6 +118,36 @@ export class SupabaseChatRepository implements ChatRepository {
     );
   }
 
+  async createImageAssets(input: Parameters<ChatRepository["createImageAssets"]>[0]) {
+    if (!input.images.length) return [];
+    const rows = check(
+      await this.supabase
+        .from("image_assets")
+        .insert(
+          input.images.map((img) => ({
+            user_id: this.userId,
+            project_id: input.projectId,
+            room_id: input.roomId,
+            storage_path: img.storagePath,
+            mime_type: img.mimeType,
+            source: "chat",
+            metadata: img.name ? { name: img.name } : {},
+          })),
+        )
+        .select("id, storage_path"),
+      "save photos",
+    ) as { id: string; storage_path: string }[];
+    // Return ids in the same order as the input.
+    return input.images.map((img) => rows.find((r) => r.storage_path === img.storagePath)!.id);
+  }
+
+  async linkImageAssets(ids: string[], messageId: string) {
+    check(
+      await this.supabase.from("image_assets").update({ message_id: messageId }).in("id", ids),
+      "link photos",
+    );
+  }
+
   async listApprovedMemories(projectId: string) {
     return check(
       await this.supabase

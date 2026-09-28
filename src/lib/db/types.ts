@@ -22,6 +22,22 @@ export interface RoomRow {
   created_at: string;
 }
 
+export interface FileRow {
+  id: string;
+  project_id: string;
+  room_id: string | null;
+  name: string;
+  mime_type: string;
+  size_bytes: number;
+  status: "uploading" | "pending" | "processing" | "indexed" | "failed";
+  error: string | null;
+  progress: { next_unit?: number; total_units?: number; warnings?: string[] };
+  chunk_count: number;
+  page_count: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ChatRow {
   id: string;
   project_id: string;
@@ -44,12 +60,23 @@ export interface WebSource {
   url: string;
 }
 
+export interface MessageReference {
+  file_name: string;
+  file_id: string | null;
+  page: number | null;
+  source_type: "text" | "visual_description";
+  similarity: number;
+  with_image: boolean;
+}
+
 export interface MessageMetadata {
   model?: string;
   stop_reason?: string | null;
   usage?: Record<string, unknown>;
   web_searches?: string[];
   web_sources?: WebSource[];
+  references?: MessageReference[];
+  retrieval_error?: string;
   error?: string;
 }
 

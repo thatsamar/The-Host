@@ -14,6 +14,7 @@ export class MemoryRepo implements ChatRepository {
   memories: MemoryRow[] = [];
   decisions: DecisionRow[] = [];
   lastSpeaker: string | null = null;
+  imageAssets: { id: string; projectId: string; roomId: string | null; storagePath: string; messageId: string | null }[] = [];
 
   addProject(p: Partial<ProjectRow> = {}): ProjectRow {
     const row: ProjectRow = {
@@ -89,6 +90,16 @@ export class MemoryRepo implements ChatRepository {
   }
   async setLastSpeaker(speaker: string) {
     this.lastSpeaker = speaker;
+  }
+  async createImageAssets(input: Parameters<ChatRepository["createImageAssets"]>[0]) {
+    return input.images.map((img) => {
+      const id = uid();
+      this.imageAssets.push({ id, projectId: input.projectId, roomId: input.roomId, storagePath: img.storagePath, messageId: null });
+      return id;
+    });
+  }
+  async linkImageAssets(ids: string[], messageId: string) {
+    for (const a of this.imageAssets) if (ids.includes(a.id)) a.messageId = messageId;
   }
   async listApprovedMemories(projectId: string) {
     return this.memories.filter(

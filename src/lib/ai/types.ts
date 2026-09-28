@@ -62,3 +62,11 @@ export interface BackgroundModel {
     maxTokens?: number;
   }): Promise<string>;
 }
+
+/** Text embeddings for the reference library and memory search. */
+export interface EmbeddingProvider {
+  readonly model: string;
+  readonly dimension: number;
+  /** "document" for library content, "query" for search queries. */
+  embed(texts: string[], inputType: "document" | "query"): Promise<number[][]>;
+}
