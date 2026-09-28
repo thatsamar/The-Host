@@ -1,0 +1,156 @@
+@import "tailwindcss";
+
+/* Gio: a private studio notebook. Warm white paper, soft black ink, tobacco,
+   stone, muted olive, with oxblood as the single accent. */
+:root {
+  --paper: #faf7f1;
+  --paper-raised: #fffdf9;
+  --paper-sunk: #f2ede4;
+  --ink: #1f1c19;
+  --ink-soft: #4a443d;
+  --ink-muted: #7a7166;
+  --stone: #e2dbcf;
+  --stone-strong: #c9bfb0;
+  --tobacco: #8a5a3b;
+  --tobacco-soft: #efe3d6;
+  --olive: #6b6d47;
+  --olive-soft: #e7e6d6;
+  --oxblood: #6e1f25;
+  --oxblood-soft: #f1e0de;
+  --radius: 0.625rem;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-raised: var(--paper-raised);
+  --color-paper-sunk: var(--paper-sunk);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-muted: var(--ink-muted);
+  --color-stone: var(--stone);
+  --color-stone-strong: var(--stone-strong);
+  --color-tobacco: var(--tobacco);
+  --color-tobacco-soft: var(--tobacco-soft);
+  --color-olive: var(--olive);
+  --color-olive-soft: var(--olive-soft);
+  --color-oxblood: var(--oxblood);
+  --color-oxblood-soft: var(--oxblood-soft);
+
+  /* shadcn/ui semantic names mapped onto the palette */
+  --color-background: var(--paper);
+  --color-foreground: var(--ink);
+  --color-muted: var(--paper-sunk);
+  --color-muted-foreground: var(--ink-muted);
+  --color-border: var(--stone);
+  --color-input: var(--stone-strong);
+  --color-ring: var(--tobacco);
+  --color-primary: var(--ink);
+  --color-primary-foreground: var(--paper);
+  --color-accent: var(--oxblood);
+  --color-accent-foreground: var(--paper);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+
+  --font-sans: var(--font-sans-face), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-serif-face), ui-serif, Georgia, serif;
+}
+
+html,
+body {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--tobacco-soft);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--stone-strong) transparent;
+}
+
+/* Gio's voice: editorial serif, generous leading. */
+.gio-prose {
+  font-family: var(--font-serif);
+  font-size: 1.0625rem;
+  line-height: 1.7;
+  color: var(--ink);
+}
+.gio-prose > * + * {
+  margin-top: 0.85em;
+}
+.gio-prose h1,
+.gio-prose h2,
+.gio-prose h3 {
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1.3;
+  margin-top: 1.4em;
+}
+.gio-prose h1 { font-size: 1.35rem; }
+.gio-prose h2 { font-size: 1.2rem; }
+.gio-prose h3 { font-size: 1.08rem; }
+.gio-prose strong {
+  font-weight: 600;
+  color: var(--ink);
+}
+.gio-prose ul,
+.gio-prose ol {
+  padding-left: 1.25em;
+}
+.gio-prose ul { list-style: disc; }
+.gio-prose ol { list-style: decimal; }
+.gio-prose li + li { margin-top: 0.3em; }
+.gio-prose li::marker { color: var(--tobacco); }
+.gio-prose a {
+  color: var(--oxblood);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.gio-prose blockquote {
+  border-left: 2px solid var(--stone-strong);
+  padding-left: 1em;
+  color: var(--ink-soft);
+  font-style: italic;
+}
+.gio-prose hr {
+  border: 0;
+  border-top: 1px solid var(--stone);
+  margin: 1.5em 0;
+}
+.gio-prose table {
+  width: 100%;
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  border-collapse: collapse;
+  display: block;
+  overflow-x: auto;
+}
+.gio-prose th,
+.gio-prose td {
+  border-bottom: 1px solid var(--stone);
+  padding: 0.45em 0.75em 0.45em 0;
+  text-align: left;
+  vertical-align: top;
+}
+.gio-prose th {
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.gio-prose code {
+  font-family: ui-monospace, monospace;
+  font-size: 0.85em;
+  background: var(--paper-sunk);
+  padding: 0.1em 0.3em;
+  border-radius: 4px;
+}
