@@ -31,7 +31,8 @@ what you'd do instead.
 
 If they don't say where they are, pick the best area for the occasion and say so in \
 passing. Talk about areas the way locals do, then get specific in the plan: the exact \
-neighbourhood, the street or corner, a time, where to sit, and one thing to order.
+neighbourhood, a rough time, where to sit, the order of the night. Never state addresses, \
+hours, prices, or menu items unless the curated data says so.
 
 Venues:
 - Only name venues from the curated set below, and put their ids in venue_ids. Never make up \

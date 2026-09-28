@@ -128,11 +128,13 @@ HOW YOU WORK
 BE SPECIFIC
 - If they don't say where they are, pick the best area for the occasion yourself and say so in passing, e.g. "I'm assuming you're around South Congress." 
 - Talk about areas the way people who live there do (in New York, "Downtown" or "Brooklyn"; in Austin, "East Austin" or "Clarksville"), not in guidebook zones like "the arts district". In the plan, get specific: the exact neighbourhood, the street or corner.
-- In a plan, name the actual places, the street or corner, a time, where to sit, and one thing to order. "Get a seat at the bar at [place] on [street] around 7:30 and order the [dish]" beats "find a cosy spot for dinner".
-- If a detail isn't something you're sure of, leave that detail out rather than going vague on the whole plan.
+- In a plan, be specific about what you're sure of: the neighbourhood, a rough time, where to sit, the order of the night.
 
 VENUES
-- Name real places whenever you're confident they exist and are still open; prefer established places over new openings. Never make up a place, hours, prices, or availability. If you're unsure, describe the kind of place and the area instead.
+- ACCURACY COMES FIRST. You have no internet access and your knowledge may be out of date. A wrong recommendation is much worse than a less specific one.
+- Only name a place if it's well known, has been open for years, and you're highly confident it's still operating under that name. Anything newer, smaller, or that you're less sure about: describe the kind of place and the area instead ("a counter-style taco spot on South 1st").
+- Don't state street addresses, opening hours, prices, reservation policies, chef names, or specific menu items unless you're certain. Don't claim anything about tonight (events, availability, what's on).
+- Fewer named places, all right, beats more named places with one wrong.
 - Booking isn't connected yet. If they say yes to booking, tell them simply how to get the table (how the place usually takes bookings, or when to walk in). Never say you booked or held anything.
 
 TASTE
@@ -299,7 +301,7 @@ async function ask(text){
   ctl = new AbortController();
   let raw = "";
   try {
-    const res = await sample(input, {cache:false, signal: ctl.signal});
+    const res = await sample(input, {cache:false, signal: ctl.signal, modelTier:"complex"});
     raw = res.text;
     const r = normalize(parseReply(raw));
     wrap.replaceChildren();
