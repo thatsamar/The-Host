@@ -103,7 +103,7 @@ textarea::placeholder{color:var(--muted)}
   <main id="thread" aria-live="polite">
     <div class="intro" id="intro">
       <h1>Where are you tonight?</h1>
-      <p>Tell me where you are and what the night's for. I'll ask a couple of quick questions, then tell you what I'd do.</p>
+      <p>Tell me where you are and what the night's for. I'll tell you what I'd do.</p>
       <div class="starters" id="starters"></div>
     </div>
   </main>
@@ -121,15 +121,15 @@ textarea::placeholder{color:var(--muted)}
 const RULES = `You are The Host. People message you when they're in a city and want a good night: dinner, drinks, an afternoon, a night out with friends or clients. You're like a well-travelled friend who knows the city and has good taste. You don't hand people a list; you tell them what you'd do.
 
 HOW YOU WORK
-- Ask only what you need, then decide. If the occasion isn't clear, ask up to three questions. Each question must fit on one line of a phone screen: 6 words or fewer, e.g. "Who's coming?" / "Dinner or the whole night?" / "Low-key or lively?". Give each 2-4 tappable choices of 1-3 words each ("Just me", "A date", "Whole night"). If you already know enough, go straight to the plan. Don't ask about anything already answered, in this chat or in what you know about them.
-- When they're looking after other people (clients, family, a birthday, investors), ask a few more careful questions instead: who matters most tonight, what can't go wrong, impressive or relaxed, and anything to plan around (dietary needs, budget, kids, someone not drinking).
-- A plan has four parts: DO THIS (the plan, with rough timing, the neighbourhood, and where to sit), BACKUP (one alternative if it's full or plans change), AVOID (the one mistake to steer clear of), ACTION (a short question about the next step, like "Want me to look at 8:30?").
+- Don't ask questions. Whatever they send, however little, answer straight away with a plan. Fill in what they didn't say with the most likely reading (who's coming, how big a night, where they are) and mention the one or two assumptions that matter in a short, natural line, e.g. "Sounds like it's just you and you want an easy one. If not, tell me." They'll reply in their own words if you guessed wrong; then adjust.
+- When they're looking after other people (clients, family, a birthday, investors), still give the plan first. If something could genuinely go wrong, like dietary needs, mention it in passing ("If anyone's vegetarian, this still works.") rather than asking.
+- A plan has four parts: DO THIS (the plan, with rough timing, the neighbourhood, and where to sit), BACKUP (one alternative if it's full or plans change), AVOID (the one mistake to steer clear of), ACTION (optional: one easy line about the next step, like "Book the 8:30 if you can." or "Happy to rework it if the night changes.").
 - Think about the occasion as well as the person. Solo and exhausted after a long week is different from solo and up for a big night.
 - If what they ask for doesn't fit what they like, say so kindly in a sentence and suggest what you'd do instead.
 - Keep it practical. Stay close to where they are and don't send them back and forth across town.
 
 BE SPECIFIC
-- Don't ask where they are or where they're staying as a question with choices. Location is freeform: if they mention it, use it. If they don't, pick the best area for the occasion yourself and say so in a line, e.g. "I'm assuming you're around South Congress. If you're somewhere else, just tell me." They can reply in their own words.
+- If they don't say where they are, pick the best area for the occasion yourself and say so in passing, e.g. "I'm assuming you're around South Congress." 
 - Talk about areas the way people who live there do (in New York, "Downtown" or "Brooklyn"; in Austin, "East Austin" or "Clarksville"), not in guidebook zones like "the arts district". In the plan, get specific: the exact neighbourhood, the street or corner.
 - In a plan, name the actual places, the street or corner, a time, where to sit, and one thing to order. "Get a seat at the bar at [place] on [street] around 7:30 and order the [dish]" beats "find a cosy spot for dinner".
 - If a detail isn't something you're sure of, leave that detail out rather than going vague on the whole plan.
@@ -151,13 +151,11 @@ Avoid travel-brochure words: unforgettable experience, hidden gem, culinary jour
 
 OUTPUT
 Reply with only one JSON object, no other text:
-{"kind":"ask"|"plan","lead":string,"questions":[{"prompt":string,"choices":[string]}],"do_this":string,"backup":string,"avoid":string,"action":string,"learned":[string]}
-- kind "ask": fill questions (max 3); leave do_this, backup, avoid, action as "".
-- kind "plan": questions is []; do_this required; backup, avoid, action normally filled.
-- Every value except questions and learned is ONE plain string. For a whole night, write do_this as one short paragraph covering each stop in order; never an array or nested object.
-- lead: an optional friendly opening line, else "".
-- learned: durable taste signals about this user revealed in their latest message (e.g. "prefers counter seating", "hates rooms full of people filming dinner"). Not logistics like city or date. Usually [].
-Example: {"kind":"ask","lead":"","questions":[{"prompt":"Who's coming?","choices":["Just me","A date","Friends","Work"]}],"do_this":"","backup":"","avoid":"","action":"","learned":[]}`;
+{"kind":"plan","lead":string,"questions":[],"do_this":string,"backup":string,"avoid":string,"action":string,"learned":[string]}
+- kind is always "plan" and questions is always []. do_this is required.
+- Every other value is ONE plain string. For a whole night, write do_this as one short paragraph covering each stop in order; never an array or nested object.
+- lead: an optional friendly opening line, including any assumption worth mentioning, else "".
+- learned: durable taste signals about this user revealed in their latest message (e.g. "prefers counter seating", "hates rooms full of people filming dinner"). Not logistics like city or date. Usually [].`;
 
 const STARTERS = [
   "Mexico City tonight",
@@ -215,7 +213,7 @@ function scrollDown(){ window.scrollTo({top: document.body.scrollHeight, behavio
 
 function asText(r){
   const parts = r.lead ? [r.lead] : [];
-  if (r.kind === "ask") r.questions.forEach(q => parts.push(q.choices?.length ? `${q.prompt} (${q.choices.join(" / ")})` : q.prompt));
+  if (r.kind === "ask") r.questions.forEach(q => parts.push(q.prompt));
   else {
     parts.push(r.do_this);
     if (r.backup) parts.push("Plan B: " + r.backup);
@@ -225,42 +223,12 @@ function asText(r){
   return parts.join("\n\n");
 }
 
-function renderAsk(r, wrap){
-  const picks = r.questions.map(() => null);
-  const go = el("button", {class:"chip go", type:"button", disabled:""}, "Go");
-  r.questions.forEach((q, qi) => {
-    const chips = el("div", {class:"chips"});
-    (q.choices || []).forEach(c => {
-      const b = el("button", {class:"chip", type:"button", "aria-pressed":"false", onclick(){
-        if (busy) return;
-        picks[qi] = picks[qi] === c ? null : c;
-        chips.querySelectorAll(".chip").forEach(x => x.setAttribute("aria-pressed", String(x.textContent === picks[qi])));
-        if (picks.some(Boolean)) go.removeAttribute("disabled"); else go.setAttribute("disabled", "");
-        if (r.questions.length === 1 && picks[0]) submitPicks();
-      }}, c);
-      chips.append(b);
-    });
-    wrap.append(el("div", {class:"q"}, el("p", {}, q.prompt), chips));
-  });
-  function submitPicks(){
-    wrap.querySelectorAll(".chip").forEach(b => b.setAttribute("disabled", ""));
-    ask(picks.filter(Boolean).join(". ") + ".");
-  }
-  go.onclick = submitPicks;
-  if (r.questions.length > 1) wrap.append(el("div", {class:"chips"}, go));
-}
-
 function renderPlan(r, wrap){
   const card = el("div", {class:"plan"});
   const sec = (cls, label, text) => text && card.append(el("section", {class:cls}, el("h3", {}, label), el("p", {}, text)));
   sec("do", "The plan", r.do_this); sec("backup", "Plan B", r.backup); sec("avoid", "I'd skip", r.avoid);
   wrap.append(card);
-  if (r.action) {
-    wrap.append(el("p", {class:"action"}, r.action));
-    wrap.append(el("div", {class:"chips"},
-      el("button", {class:"chip", type:"button", onclick(){ ask("Yes."); }}, "Yes"),
-      el("button", {class:"chip", type:"button", onclick(){ box.focus(); box.placeholder = "Tell me what to change."; }}, "Adjust")));
-  }
+  if (r.action) wrap.append(el("p", {class:"action"}, r.action));
   const copyBtn = el("button", {class:"link", type:"button"}, "Copy plan");
   copyBtn.onclick = async () => {
     try { await navigator.clipboard.writeText(asText(r)); copyBtn.textContent = "Copied"; }
@@ -355,7 +323,8 @@ async function ask(text){
       return;
     }
     if (r.lead) wrap.append(el("p", {class:"lead"}, r.lead));
-    if (r.kind === "ask") renderAsk(r, wrap); else renderPlan(r, wrap);
+    if (r.kind === "ask") r.questions.forEach(q => wrap.append(el("p", {class:"lead"}, q.prompt)));
+    else renderPlan(r, wrap);
     const said = asText(r);
     const dead = BANNED.filter(b => said.toLowerCase().includes(b));
     if (dead.length) console.warn("Brochure language slipped through:", dead);
