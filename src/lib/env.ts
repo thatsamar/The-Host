@@ -26,7 +26,12 @@ let cached: ServerEnv | undefined;
 
 export function serverEnv(): ServerEnv {
   if (cached) return cached;
-  const parsed = schema.safeParse(process.env);
+  const parsed = schema.safeParse({
+    ...process.env,
+    // The Vercel Supabase integration may provide the legacy anon key instead.
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  });
   if (!parsed.success) {
     const missing = parsed.error.issues.map((i) => i.path.join(".")).join(", ");
     throw new Error(`Invalid or missing environment variables: ${missing}. See .env.example.`);

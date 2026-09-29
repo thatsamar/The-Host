@@ -17,5 +17,9 @@ export function signInErrorMessage(error: { code?: string; status?: number; mess
 
 /** Names the Supabase settings that are missing from the environment. */
 export function missingSupabaseConfig(env: Record<string, string | undefined> = process.env): string[] {
-  return ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"].filter((k) => !env[k]?.trim());
+  const missing: string[] = [];
+  if (!env.NEXT_PUBLIC_SUPABASE_URL?.trim()) missing.push("NEXT_PUBLIC_SUPABASE_URL");
+  if (!env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() && !env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim())
+    missing.push("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY");
+  return missing;
 }

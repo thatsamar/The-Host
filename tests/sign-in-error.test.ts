@@ -14,5 +14,6 @@ describe("signInErrorMessage", () => {
   it("lists missing Supabase settings", () => {
     expect(missingSupabaseConfig({})).toEqual(["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"]);
     expect(missingSupabaseConfig({ NEXT_PUBLIC_SUPABASE_URL: "https://x.supabase.co", NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "k" })).toEqual([]);
+    expect(missingSupabaseConfig({ NEXT_PUBLIC_SUPABASE_URL: "https://x.supabase.co", NEXT_PUBLIC_SUPABASE_ANON_KEY: "k" })).toEqual([]);
   });
 });
