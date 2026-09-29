@@ -10,6 +10,7 @@ import {
   MoreHorizontalIcon,
   PencilIcon,
   PlusIcon,
+  SettingsIcon,
   SquarePenIcon,
   Trash2Icon,
 } from "lucide-react";
@@ -104,9 +105,15 @@ export function LeftSidebar({ workspace, activeChatId, activeRoomId, libraryNoti
         />
       </nav>
 
-      <div className="border-t border-stone p-3">
+      <div className="flex items-center gap-1 border-t border-stone p-3">
+        <Button asChild variant="ghost" size="sm" className="flex-1 justify-start text-ink-muted">
+          <Link href="/settings">
+            <SettingsIcon />
+            Settings
+          </Link>
+        </Button>
         <form action={signOut}>
-          <Button type="submit" variant="ghost" size="sm" className="w-full justify-start text-ink-muted">
+          <Button type="submit" variant="ghost" size="sm" className="text-ink-muted">
             <LogOutIcon />
             Sign out
           </Button>

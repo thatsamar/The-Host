@@ -13,7 +13,7 @@ import {
   Trash2Icon,
   UploadIcon,
 } from "lucide-react";
-import { deleteFile, fileViewUrl, finishUploads, reindexFile, startUploads } from "@/app/library-actions";
+import { deleteFile, fileViewUrl, reindexFile } from "@/app/library-actions";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,11 +22,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { FileRow, RoomRow } from "@/lib/db/types";
 import { detectFileKind, LIBRARY_ACCEPT } from "@/lib/library/file-types";
-import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { useLibraryUpload } from "./use-library-upload";
 import { notifyLibraryChanged } from "./use-library-processor";
 
-const UPLOAD_CONCURRENCY = 3;
 const STALE_UPLOAD_MS = 30 * 60 * 1000;
 
 interface Props {
@@ -38,56 +37,14 @@ interface Props {
 }
 
 export function LibrarySection({ projectId, rooms, files, activeRoomId, notice }: Props) {
-  const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState<string[]>([]);
-  const [problems, setProblems] = useState<string[]>([]);
+  const { upload: uploadTo, uploading, problems } = useLibraryUpload();
   const [dragging, setDragging] = useState(false);
   const roomName = new Map(rooms.map((r) => [r.id, r.name]));
   const visible = activeRoomId ? files.filter((f) => f.room_id === activeRoomId) : files;
   const target = activeRoomId ? roomName.get(activeRoomId) : null;
 
-  async function upload(list: FileList | File[]) {
-    const chosen = Array.from(list);
-    if (!chosen.length) return;
-    setProblems([]);
-    const started = await startUploads({
-      projectId,
-      roomId: activeRoomId,
-      files: chosen.map((f) => ({ name: f.name, size: f.size, type: f.type || detectFileKind(f.name)?.mime || "" })),
-    });
-    if (!started.ok) {
-      setProblems([started.error]);
-      return;
-    }
-    const issues = started.rejected.map((r) => `${r.name}: ${r.reason}`);
-    setUploading(started.slots.map((s) => s.name));
-    const supabase = createClient();
-    const uploaded: string[] = [];
-    const failed: string[] = [];
-    const queue = [...started.slots];
-    await Promise.all(
-      Array.from({ length: UPLOAD_CONCURRENCY }, async () => {
-        for (let slot = queue.shift(); slot; slot = queue.shift()) {
-          const file = chosen[slot.index];
-          const { error } = await supabase.storage
-            .from("files")
-            .upload(slot.storagePath, file, { contentType: slot.contentType, upsert: false });
-          if (error) {
-            failed.push(slot.fileId);
-            issues.push(`${slot.name}: ${error.message}`);
-          } else {
-            uploaded.push(slot.fileId);
-          }
-          setUploading((u) => u.filter((n) => n !== slot.name));
-        }
-      }),
-    );
-    await finishUploads({ uploaded, failed });
-    setProblems(issues);
-    router.refresh();
-    notifyLibraryChanged();
-  }
+  const upload = (list: FileList | File[]) => uploadTo(list, { projectId, roomId: activeRoomId });
 
   return (
     <section
@@ -190,7 +147,7 @@ export function statusLabel(file: FileRow, now = Date.now()): { text: string; to
   }
 }
 
-function FileItem({ file, roomName }: { file: FileRow; roomName?: string }) {
+export function FileItem({ file, roomName }: { file: FileRow; roomName?: string }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const status = statusLabel(file);

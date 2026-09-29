@@ -123,3 +123,22 @@ begin
   assert n = 0, 'other user cannot match foreign memories';
 end $$;
 reset role;
+
+-- Prompt history is private, and imported chats can't be duplicated.
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false) \gset
+do $$
+declare p uuid;
+begin
+  insert into public.system_prompt_versions (content, label) values ('v1', 'original');
+  select id into p from public.projects where is_default;
+  insert into public.chats (project_id, title, source, external_id, extraction_status) values (p, 'x', 'chatgpt', 'chatgpt:1', 'pending');
+  begin
+    insert into public.chats (project_id, title, source, external_id) values (p, 'y', 'chatgpt', 'chatgpt:1');
+    raise exception 'duplicate external id allowed';
+  exception when unique_violation then null;
+  end;
+  perform set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
+  assert (select count(*) from public.system_prompt_versions) = 0, 'other user cannot see prompt history';
+end $$;
+reset role;

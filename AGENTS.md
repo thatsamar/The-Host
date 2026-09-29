@@ -19,4 +19,5 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - PDF rendering needs `pdfjs-dist/legacy` + `@napi-rs/canvas`; they're in `serverExternalPackages` and `outputFileTracingIncludes` in `next.config.ts`.
 - Memory is proposed, never silently written: extraction output passes through `src/lib/memory/attribution.ts` (evidence must quote the user's own words; speaker attribution; dedupe). Keep those rules in code and tested.
 - Command modes live in `src/lib/gio/modes.ts` and are stored on the user message so history replays identically.
+- Export/import and the ChatGPT importer run in the browser through `src/lib/portability/store.ts` (RLS applies); keep them pure over the `DataStore` interface. Imports keep ids, so re-importing is idempotent.
 - Checks: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`.

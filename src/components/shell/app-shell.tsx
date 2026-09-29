@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, usePathname, useSearchParams } from "next/navigation";
 import { MenuIcon, PanelRightCloseIcon, PanelRightOpenIcon, BookOpenIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useExtractionProcessor } from "@/components/library/use-extraction-processor";
 import { useLibraryProcessor } from "@/components/library/use-library-processor";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import type { Workspace } from "@/lib/db/workspace";
@@ -22,6 +23,8 @@ export function AppShell({ workspace, children }: { workspace: Workspace; childr
   const activeRoom = workspace.rooms.find((r) => r.id === activeRoomId) ?? null;
 
   const { notice: libraryNotice } = useLibraryProcessor();
+  // Keeps proposing memories from imported ChatGPT history in the background.
+  useExtractionProcessor();
   const [leftOpen, setLeftOpen] = useState(false);
   const [rightOpen, setRightOpen] = useState(false);
   const [rightPinned, setRightPinned] = useState(true);

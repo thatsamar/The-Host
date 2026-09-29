@@ -40,6 +40,25 @@ function embed(text, dim) {
 function structuredFor(body) {
   const props = body.output_config.format.schema?.properties ?? {};
   const prompt = body.messages[0].content.map?.((p) => p.text ?? "").join("\n") ?? String(body.messages[0].content);
+  if (props.memories && props.decisions && /Message \d+ from /.test(prompt)) {
+    // Imported conversation: numbered messages.
+    const memories = [];
+    const decisions = [];
+    for (const m of prompt.matchAll(/Message (\d+) from ([^:]+):\n"""([\s\S]*?)"""/g)) {
+      const index = Number(m[1]);
+      const holder = m[2].includes(" and ") ? "Both" : m[2];
+      for (const sentence of m[3].split(/(?<=[.!?])\s+/)) {
+        const s = sentence.replace(/[.!?]+$/, "").trim();
+        if (/\b(love|hate|prefer)\b/i.test(s)) {
+          memories.push({ message: index, type: "shared_preference", content: `${holder === "Both" ? "Courtney and Amar" : holder}: ${s}.`, holder, scope: "household", evidence: s });
+        }
+        if (/\blet's (do|go with)\b/i.test(s)) {
+          decisions.push({ message: index, title: s.replace(/^.*let's (do|go with)\s*/i, "Go with "), detail: "From an imported conversation.", status: "approved", evidence: s });
+        }
+      }
+    }
+    return { memories, decisions };
+  }
   if (props.memories && props.decisions) {
     const m = prompt.match(/Message from ([^:]+):\n"""([\s\S]*?)"""/);
     const speaker = m?.[1].startsWith("Both") ? "Both" : (m?.[1] ?? "Both");

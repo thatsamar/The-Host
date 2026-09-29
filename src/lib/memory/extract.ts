@@ -146,3 +146,83 @@ export async function proposeFromTurn(
   });
   return normalizeProposals(raw, ctx);
 }
+
+// ---------------------------------------------------------------------------
+// Imported conversations: several exchanges per model call.
+// ---------------------------------------------------------------------------
+
+export const MAX_BATCH_MEMORIES = 6;
+export const MAX_BATCH_DECISIONS = 4;
+
+export const ConversationExtractionSchema = z.object({
+  memories: z.array(ExtractionSchema.shape.memories.element.extend({ message: z.number().int() })),
+  decisions: z.array(ExtractionSchema.shape.decisions.element.extend({ message: z.number().int() })),
+});
+
+export interface Exchange {
+  /** Position of the user message within the conversation. */
+  index: number;
+  userText: string;
+  assistantText: string;
+}
+
+export const CONVERSATION_EXTRACTION_NOTE = `This is an earlier conversation imported from the old Gio. Messages from Courtney and Amar are numbered. For every proposal, set "message" to the number of the message its evidence is quoted from. Prefer what they said over what the old Gio said. At most ${MAX_BATCH_MEMORIES} memories and ${MAX_BATCH_DECISIONS} decisions in total.`;
+
+export function conversationPrompt(ctx: Omit<TurnContext, "userText" | "assistantText">, exchanges: Exchange[]): string {
+  const existing = [...ctx.existingMemories, ...ctx.existingDecisions.map((d) => `Decision: ${d}`)];
+  const speaker = ctx.speaker === "Both" ? "Courtney and Amar" : ctx.speaker;
+  return [
+    `Project: ${ctx.projectName}`,
+    "",
+    "Already remembered (don't repeat these):",
+    existing.length ? existing.slice(0, 80).map((m) => `- ${m}`).join("\n") : "(nothing yet)",
+    "",
+    ...exchanges.flatMap((e) => [
+      `Message ${e.index} from ${speaker}:`,
+      `"""${e.userText.slice(0, 4000)}"""`,
+      `Old Gio's reply (context only):`,
+      `"""${e.assistantText.slice(0, 1500)}"""`,
+      "",
+    ]),
+  ].join("\n");
+}
+
+export async function proposeFromConversation(
+  model: BackgroundModel,
+  ctx: Omit<TurnContext, "userText" | "assistantText">,
+  exchanges: Exchange[],
+): Promise<{ index: number; memories: MemoryProposal[]; decisions: DecisionProposal[] }[]> {
+  const useful = exchanges.filter((e) => e.userText.trim().length >= 3);
+  if (!useful.length) return [];
+  const raw = await model.extract({
+    system: `${EXTRACTION_SYSTEM}\n\n${CONVERSATION_EXTRACTION_NOTE}`,
+    content: [{ type: "text", text: conversationPrompt(ctx, useful) }],
+    schema: ConversationExtractionSchema,
+    maxTokens: 3000,
+  });
+
+  const seenMemories = [...ctx.existingMemories];
+  const seenDecisions = [...ctx.existingDecisions];
+  const out: { index: number; memories: MemoryProposal[]; decisions: DecisionProposal[] }[] = [];
+  let memoryCount = 0;
+  let decisionCount = 0;
+  for (const e of useful) {
+    const turn: TurnContext = { ...ctx, userText: e.userText, assistantText: e.assistantText, existingMemories: seenMemories, existingDecisions: seenDecisions };
+    // Evidence and attribution are checked against this exchange's own text.
+    const normalized = normalizeProposals(
+      {
+        memories: raw.memories.filter((m) => m.message === e.index),
+        decisions: raw.decisions.filter((d) => d.message === e.index),
+      },
+      turn,
+    );
+    const memories = normalized.memories.slice(0, Math.max(0, MAX_BATCH_MEMORIES - memoryCount));
+    const decisions = normalized.decisions.slice(0, Math.max(0, MAX_BATCH_DECISIONS - decisionCount));
+    memoryCount += memories.length;
+    decisionCount += decisions.length;
+    seenMemories.push(...memories.map((m) => m.content));
+    seenDecisions.push(...decisions.map((d) => d.title));
+    if (memories.length || decisions.length) out.push({ index: e.index, memories, decisions });
+  }
+  return out;
+}
