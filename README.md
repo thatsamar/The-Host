@@ -2,9 +2,10 @@
 
 Courtney and Amar's private interior designer. Gio replaces the custom GPT of the same name and keeps its personality, design philosophy, project memory and reference library. It runs as a private web app that works on a phone.
 
-> **Build status: Phases 1 and 2 of 4.**
+> **Build status: Phases 1–3 of 4.**
 > Working now: password login, projects and rooms, streaming chat with Gio, the speaker toggle, live web search for prices, the editable project brief, and the three-panel layout on desktop and phone. Phase 2 adds the reference library: uploads (PDF, images, .docx, .txt, .md), visual indexing of images and image-heavy PDF pages, retrieval before every reply, and photos attached in chat.
-> Not built yet: memory proposals, decisions and command buttons (Phase 3), and the settings page, export/import and ChatGPT importer (Phase 4). The memory and decision tables already exist, and Gio reads approved rows from them on every turn. Nothing in the app writes to them yet.
+> Phase 3 adds memory and decisions: proposals after every reply (Approve, Edit, Dismiss), speaker-attributed preferences, the decision log, pieces under consideration, and command buttons.
+> Not built yet: the settings page (system prompt history, memory search, re-index all), export/import and the ChatGPT importer (Phase 4).
 
 ---
 
@@ -50,6 +51,7 @@ Every user message starts with a `Speaker: Courtney | Amar | Both` line, so Gio 
 | `src/lib/ai/` | Provider-neutral model interfaces and the Anthropic implementation |
 | `src/lib/chat/` | The chat turn pipeline, which has no framework code and is fully tested |
 | `src/lib/library/` | Parsing, chunking, visual descriptions, the resumable indexer, retrieval |
+| `src/lib/memory/` | Memory extraction, attribution rules, drafts for command buttons |
 | `src/lib/db/` | Supabase data access |
 | `src/app/api/chat/` | Streaming chat endpoint (newline-delimited JSON) |
 | `src/app/api/library/process/` | One indexing step for a library file |
@@ -58,6 +60,28 @@ Every user message starts with a `Speaker: Courtney | Amar | Both` line, so Gio 
 | `tests/` | Vitest suites. All external APIs are mocked |
 
 To swap model providers, implement `ChatProvider`, `BackgroundModel` or `EmbeddingProvider` in `src/lib/ai/types.ts`. Nothing else changes.
+
+### Memory and decisions
+
+- **Proposals, not silent writes.** After each reply, the background model reads what Courtney or Amar just said, with Gio's reply as context, and proposes durable memories and decisions. They appear under **Proposals** in the notebook with **Approve**, **Edit** and **Dismiss**. Only approved items reach Gio. Dismissed ones are kept hidden, so the same thing isn't proposed again.
+- **Conservative by construction.** Code, not the model, enforces three rules after extraction (`src/lib/memory/attribution.ts`):
+  - Every proposal must quote words that really appear in the user's own message. Anything that rests only on Gio's reply is dropped, so Gio's advice is never saved as your preference.
+  - A preference belongs to the person who said it. It becomes shared only when the message was sent as **Both** or says so ("we love…"). It is attributed to the other person only when the message names them ("Courtney wants the linen").
+  - Near-duplicates of anything already known, proposed or dismissed are dropped, and each turn is capped at 4 memories and 3 decisions.
+- **Memory types:** design, Courtney, Amar and shared preferences; rejected ideas; approved decisions; project constraints; budget philosophy; materials; vendors; dimensions; paint colors; furniture under consideration.
+- **Scope.** Memories are either for this project or **household-wide**, meaning they apply in every project.
+- **What Gio sees.** Every approved memory is included in each reply, up to 40 of them. Beyond that, Gio gets the most relevant ones (by Voyage embeddings) plus the most recent.
+- **Decision log.** Each decision has a status (approved, keep looking, rejected, pending), who decided it, and a link to the message it came from. Change the status from the notebook.
+- **Pieces under consideration.** These are saved from a recommendation with the purchase format: dimensions, material/color, vintage vs. new, price (sourced or estimated, with the listing), placement, why it belongs, and invest/save/skip.
+- **Command buttons**
+  - Under each Gio reply:
+    - **Save as decision** and **Keep looking** open a form the background model has already drafted from the message, including the piece's details. You edit it, then save.
+    - **Add to memory** drafts one memory from the message the same way.
+    - The **⋯** menu has **Compare options** and **Create shopping brief**.
+  - Above the message box:
+    - **Analyze photo**, **Compare options**, **Create shopping brief** and **Keep looking** set the mode for your next message. Each mode gives Gio a specific instruction; for example, comparisons rank the options and name a winner unless all are wrong.
+    - **Add to memory** and **Save as decision** save what you've typed without sending it.
+- **"Don't buy anything"** is written into Gio's instructions as a legitimate answer, alongside the purchase format.
 
 ### The reference library
 
@@ -200,20 +224,20 @@ Use these to check each phase. The column says what each one exercises and when 
 | --- | --- | --- | --- |
 | 1 | "Analyze this living room photo." (attach one) | Photo analysis, highest-leverage move first | 2 |
 | 2 | "Should we buy this chair?" | Purchase judgement, and a willingness to say don't buy | 1 (text), 2 (with photo) |
-| 3 | "Compare these three sofas." | Ranking and naming a winner | 1, 3 (comparison mode) |
+| 3 | "Compare these three sofas." (use **Compare options**) | Ranking and naming a winner | 3 |
 | 4 | "What is the highest-leverage move in this room?" | Subtraction and light before buying | 1 |
 | 5 | "Create a lighting plan for the dining room." | THE CALL / WHY / THE MOVE format, room scoping | 1 |
-| 6 | "What have we learned about Courtney and Amar's taste?" | Memory recall | 3 |
-| 7 | "Amar wants the green velvet, Courtney wants the linen. Where do we land?" | Speaker attribution and synthesis | 1 |
+| 6 | "What have we learned about Courtney and Amar's taste?" | Memory recall (approve a few proposals first) | 3 |
+| 7 | "Amar wants the green velvet, Courtney wants the linen. Where do we land?" | Speaker attribution and synthesis; proposals are attributed to the right person | 1, 3 |
 | 8 | "Find us a vintage lounge chair under $2,000 for the reading corner." | Web search, sourced vs. estimated prices, purchase format | 1 |
 
-For #7, send one message as **Amar** ("I want the green velvet"), one as **Courtney** ("I want the linen"), then ask the question as **Both**.
+For #7, send one message as **Amar** ("I want the green velvet"), one as **Courtney** ("I want the linen"), then ask the question as **Both**. The notebook should propose an Amar preference and a Courtney preference, each attributed correctly.
 
 ---
 
 ## Migrating from the old GPT
 
-The ChatGPT importer arrives in Phase 4. It will read ChatGPT's `conversations.json`, let you pick Gio's conversations, import them into a project, and send the extracted memories to the proposal queue for your review.
+The ChatGPT importer arrives in Phase 4. It will read ChatGPT's `conversations.json`, let you pick Gio's conversations, import them into a project, and run the same memory extraction over them. The results go to the Proposals queue for review.
 
 Until then:
 

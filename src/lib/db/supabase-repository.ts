@@ -2,7 +2,7 @@ import "server-only";
 import type { ChatRepository } from "@/lib/chat/repository";
 import { DEFAULT_SYSTEM_PROMPT } from "@/lib/gio/default-system-prompt";
 import type { ServerSupabase } from "@/lib/supabase/server";
-import type { ChatRow, DecisionRow, MemoryRow, MessageRow, ProjectRow, RoomRow } from "./types";
+import type { ChatRow, DecisionRow, MemoryRow, MessageMetadata, MessageRow, ProjectRow, RoomRow } from "./types";
 
 function check<T>(result: { data: T | null; error: { message: string } | null }, what: string): T {
   if (result.error) throw new Error(`${what}: ${result.error.message}`);
@@ -118,6 +118,10 @@ export class SupabaseChatRepository implements ChatRepository {
     );
   }
 
+  async updateMessageMetadata(messageId: string, metadata: MessageMetadata) {
+    check(await this.supabase.from("messages").update({ metadata }).eq("id", messageId), "update message");
+  }
+
   async createImageAssets(input: Parameters<ChatRepository["createImageAssets"]>[0]) {
     if (!input.images.length) return [];
     const rows = check(
@@ -146,6 +150,58 @@ export class SupabaseChatRepository implements ChatRepository {
       await this.supabase.from("image_assets").update({ message_id: messageId }).in("id", ids),
       "link photos",
     );
+  }
+
+  async listKnownMemory(projectId: string) {
+    const [memories, decisions] = await Promise.all([
+      this.supabase.from("memories").select("content").or(`project_id.eq.${projectId},project_id.is.null`),
+      this.supabase.from("decisions").select("title").eq("project_id", projectId),
+    ]);
+    const m = check(memories, "list memories") as { content: string }[];
+    const d = check(decisions, "list decisions") as { title: string }[];
+    return { memories: m.map((r) => r.content), decisions: d.map((r) => r.title) };
+  }
+
+  async insertProposals(input: Parameters<ChatRepository["insertProposals"]>[0]) {
+    if (input.memories.length) {
+      check(
+        await this.supabase.from("memories").insert(
+          input.memories.map((m) => ({
+            user_id: this.userId,
+            project_id: m.scope === "household" ? null : input.projectId,
+            room_id: m.scope === "household" ? null : input.roomId,
+            type: m.type,
+            content: m.content,
+            attributed_to: m.attributedTo,
+            evidence: m.evidence,
+            review_state: "proposed",
+            source: "extracted",
+            source_message_id: input.sourceMessageId,
+          })),
+        ),
+        "save memory proposals",
+      );
+    }
+    if (input.decisions.length) {
+      check(
+        await this.supabase.from("decisions").insert(
+          input.decisions.map((d) => ({
+            user_id: this.userId,
+            project_id: input.projectId,
+            room_id: input.roomId,
+            title: d.title,
+            detail: d.detail || null,
+            status: d.status,
+            decided_by: d.decidedBy,
+            evidence: d.evidence,
+            review_state: "proposed",
+            source: "extracted",
+            source_message_id: input.sourceMessageId,
+          })),
+        ),
+        "save decision proposals",
+      );
+    }
   }
 
   async listApprovedMemories(projectId: string) {

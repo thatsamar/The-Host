@@ -2,15 +2,30 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowUpIcon, ImagePlusIcon, LoaderIcon, SquareIcon, XIcon } from "lucide-react";
+import {
+  ArrowUpIcon,
+  BookmarkPlusIcon,
+  CameraIcon,
+  ImagePlusIcon,
+  ListChecksIcon,
+  LoaderIcon,
+  RotateCcwIcon,
+  ScaleIcon,
+  ShoppingBagIcon,
+  SquareIcon,
+  XIcon,
+} from "lucide-react";
+import { CommandDialogs, type CommandRequest } from "@/components/notebook/command-dialogs";
 import { Button } from "@/components/ui/button";
 import type { ChatServerEvent } from "@/lib/chat/service";
 import { readNdjson } from "@/lib/chat/ndjson";
 import type { MessageRow } from "@/lib/db/types";
+import { MODE_LABELS, type ChatMode } from "@/lib/gio/modes";
 import type { HumanSpeaker } from "@/lib/gio/speakers";
+import { cn } from "@/lib/utils";
 import { CHAT_PHOTO_ACCEPT, resizeForUpload } from "@/lib/library/client-image";
 import { createClient } from "@/lib/supabase/client";
-import { Message, type DisplayMessage } from "./message";
+import { Message, type DisplayMessage, type MessageCommand } from "./message";
 import { SpeakerToggle } from "./speaker-toggle";
 
 const STARTERS = [
@@ -21,6 +36,7 @@ const STARTERS = [
 ];
 
 const MAX_PHOTOS = 6;
+const DRAFT_KEY = "gio.carryDraft";
 
 function toDisplay(m: MessageRow, imageUrls: Record<string, string> = {}): DisplayMessage {
   return {
@@ -32,6 +48,8 @@ function toDisplay(m: MessageRow, imageUrls: Record<string, string> = {}): Displ
     webSearches: m.metadata?.web_searches,
     webSources: m.metadata?.web_sources,
     references: m.metadata?.references,
+    mode: m.metadata?.mode ?? null,
+    proposals: m.metadata?.proposals,
     error: m.metadata?.error,
   };
 }
@@ -71,9 +89,46 @@ export function ChatView({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const photosUploading = photos.some((p) => p.status === "uploading");
   const readyPhotos = photos.filter((p) => p.status === "ready");
+  const [mode, setMode] = useState<ChatMode | null>(null);
+  const [command, setCommand] = useState<CommandRequest | null>(null);
+  const [highlight, setHighlight] = useState<string | null>(null);
+
+  // Links from the notebook land on the source message (#msg-<id>).
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (!hash.startsWith("#msg-")) return;
+    const id = hash.slice(5);
+    const el = document.getElementById(`msg-${id}`);
+    if (!el) return;
+    stickToBottom.current = false;
+    el.scrollIntoView({ block: "center" });
+    const on = setTimeout(() => setHighlight(id), 50);
+    const off = setTimeout(() => setHighlight(null), 2500);
+    return () => {
+      clearTimeout(on);
+      clearTimeout(off);
+    };
+  }, []);
   const [chatId, setChatId] = useState<string | null>(initialChatId);
   const [speaker, setSpeaker] = useState<HumanSpeaker>(initialSpeaker);
   const [input, setInput] = useState("");
+  // The latest draft, readable from async callbacks.
+  const draftRef = useRef("");
+  useEffect(() => {
+    draftRef.current = input;
+  }, [input]);
+  // A new chat moves to its own URL after the first reply, which remounts this
+  // view; pick up anything typed in the meantime.
+  useEffect(() => {
+    if (!initialChatId) return;
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(DRAFT_KEY) ?? "null") as { chatId: string; text: string } | null;
+      if (saved?.chatId === initialChatId) {
+        sessionStorage.removeItem(DRAFT_KEY);
+        setInput(saved.text);
+      }
+    } catch {}
+  }, [initialChatId]);
   const [streaming, setStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -120,10 +175,13 @@ export function ChatView({
   );
 
   const send = useCallback(
-    async (raw: string) => {
+    async (raw: string, override?: { mode?: ChatMode | null }) => {
       const text = raw.trim();
       const attached = photos.filter((p) => p.status === "ready");
+      const sendMode = override?.mode !== undefined ? override.mode : mode;
       if ((!text && !attached.length) || streaming || photosUploading) return;
+      if (sendMode === "analyze_photo" && !attached.length) return;
+      setMode(null);
       setInput("");
       setPhotos([]);
       stickToBottom.current = true;
@@ -131,7 +189,7 @@ export function ChatView({
       const tempAssistantId = `local-gio-${Date.now()}`;
       setMessages((prev) => [
         ...prev,
-        { id: tempUserId, role: "user", speaker, content: text, images: attached.map((p) => p.previewUrl) },
+        { id: tempUserId, role: "user", speaker, content: text, images: attached.map((p) => p.previewUrl), mode: sendMode },
         { id: tempAssistantId, role: "assistant", speaker: "Gio", content: "", pending: true, webSearches: [], webSources: [] },
       ]);
       setStreaming(true);
@@ -151,6 +209,7 @@ export function ChatView({
             speaker,
             text,
             attachments: attached.map((p) => ({ storagePath: p.storagePath, mimeType: "image/jpeg", name: p.name })),
+            mode: sendMode,
           }),
           signal: controller.signal,
         });
@@ -183,6 +242,9 @@ export function ChatView({
             case "error":
               updateAssistant(assistantId, (m) => ({ ...m, pending: false, error: event.message }));
               break;
+            case "proposals":
+              updateAssistant(assistantId, (m) => ({ ...m, proposals: { memories: event.memories, decisions: event.decisions } }));
+              break;
             case "title":
               break;
           }
@@ -200,12 +262,38 @@ export function ChatView({
         abortRef.current = null;
         // Move a new chat to its own URL, then re-render the shell so the
         // sidebar and header pick up the new conversation and its title.
-        if (!initialChatId && resolvedChatId) router.replace(`/p/${projectId}/c/${resolvedChatId}`);
+        if (!initialChatId && resolvedChatId) {
+          try {
+            if (draftRef.current.trim()) {
+              sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ chatId: resolvedChatId, text: draftRef.current }));
+            }
+          } catch {}
+          router.replace(`/p/${projectId}/c/${resolvedChatId}`);
+        }
         router.refresh();
       }
     },
-    [chatId, initialChatId, photos, photosUploading, projectId, roomId, router, speaker, streaming, updateAssistant],
+    [chatId, initialChatId, mode, photos, photosUploading, projectId, roomId, router, speaker, streaming, updateAssistant],
   );
+
+  const onMessageCommand = useCallback(
+    (cmd: MessageCommand, message: DisplayMessage) => {
+      const nonce = Date.now();
+      if (cmd === "decision") setCommand({ kind: "decision", messageId: message.id, nonce });
+      else if (cmd === "keep_looking") setCommand({ kind: "decision", messageId: message.id, nonce, presetStatus: "keep_looking" });
+      else if (cmd === "memory") setCommand({ kind: "memory", messageId: message.id, nonce });
+      else if (cmd === "compare") void send("Compare the options above.", { mode: "compare" });
+      else if (cmd === "shopping_brief") void send("Turn this into a shopping brief.", { mode: "shopping_brief" });
+    },
+    [send],
+  );
+
+  const chooseMode = (next: ChatMode) => {
+    setMode((current) => (current === next ? null : next));
+    if (next === "analyze_photo" && !photos.length) fileInputRef.current?.click();
+    textareaRef.current?.focus();
+  };
+  const needsPhoto = mode === "analyze_photo" && !readyPhotos.length;
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const finePointer = typeof window !== "undefined" && window.matchMedia("(pointer: fine)").matches;
@@ -239,7 +327,7 @@ export function ChatView({
           ) : (
             <div className="space-y-9">
               {messages.map((m) => (
-                <Message key={m.id} message={m} />
+                <Message key={m.id} message={m} onCommand={onMessageCommand} highlighted={highlight === m.id} />
               ))}
             </div>
           )}
@@ -254,6 +342,14 @@ export function ChatView({
             void send(input);
           }}
         >
+          <CommandBar
+            mode={mode}
+            onMode={chooseMode}
+            hasText={Boolean(input.trim())}
+            disabled={streaming}
+            onRemember={() => setCommand({ kind: "memory", text: input.trim(), nonce: Date.now() })}
+            onDecision={() => setCommand({ kind: "decision", text: input.trim(), nonce: Date.now() })}
+          />
           <div
             className="rounded-lg border border-stone-strong bg-paper-raised focus-within:border-tobacco focus-within:ring-2 focus-within:ring-tobacco/15"
             onDragOver={(e) => e.preventDefault()}
@@ -298,7 +394,13 @@ export function ChatView({
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onKeyDown}
               rows={1}
-              placeholder={photos.length ? "Add a note, or just send the photo…" : "Ask Gio…"}
+              placeholder={
+                mode
+                  ? `${MODE_LABELS[mode]}${mode === "analyze_photo" ? ": attach a photo, add a note if you like" : ": add the details"}…`
+                  : photos.length
+                    ? "Add a note, or just send the photo…"
+                    : "Ask Gio…"
+              }
               aria-label="Message Gio"
               className="block max-h-60 w-full resize-none bg-transparent px-4 pt-3 text-base leading-relaxed text-ink outline-none placeholder:text-ink-muted"
             />
@@ -337,7 +439,7 @@ export function ChatView({
                   type="submit"
                   size="icon-sm"
                   variant="accent"
-                  disabled={(!input.trim() && !readyPhotos.length) || photosUploading}
+                  disabled={(!input.trim() && !readyPhotos.length) || photosUploading || needsPhoto}
                   aria-label="Send"
                 >
                   <ArrowUpIcon />
@@ -347,6 +449,79 @@ export function ChatView({
           </div>
         </form>
       </div>
+      <CommandDialogs
+        request={command}
+        onClose={() => setCommand(null)}
+        onSaved={(req) => {
+          if (!req.messageId) setInput("");
+        }}
+        scope={{ projectId, roomId, speaker }}
+      />
+    </div>
+  );
+}
+
+const chip =
+  "inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors disabled:opacity-40 [&_svg]:size-3.5";
+
+function CommandBar({
+  mode,
+  onMode,
+  hasText,
+  disabled,
+  onRemember,
+  onDecision,
+}: {
+  mode: ChatMode | null;
+  onMode: (m: ChatMode) => void;
+  hasText: boolean;
+  disabled: boolean;
+  onRemember: () => void;
+  onDecision: () => void;
+}) {
+  const modes: { mode: ChatMode; icon: React.ReactNode }[] = [
+    { mode: "analyze_photo", icon: <CameraIcon /> },
+    { mode: "compare", icon: <ScaleIcon /> },
+    { mode: "shopping_brief", icon: <ShoppingBagIcon /> },
+    { mode: "keep_looking", icon: <RotateCcwIcon /> },
+  ];
+  return (
+    <div className="-mx-1 mb-2 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none]" role="toolbar" aria-label="Commands">
+      {modes.map((m) => (
+        <button
+          key={m.mode}
+          type="button"
+          disabled={disabled}
+          aria-pressed={mode === m.mode}
+          onClick={() => onMode(m.mode)}
+          className={cn(
+            chip,
+            mode === m.mode ? "border-oxblood bg-oxblood text-paper" : "border-stone text-ink-muted hover:border-stone-strong hover:text-ink",
+          )}
+        >
+          {m.icon}
+          {MODE_LABELS[m.mode]}
+        </button>
+      ))}
+      <span className="mx-0.5 w-px shrink-0 bg-stone" aria-hidden />
+      <button
+        type="button"
+        disabled={disabled || !hasText}
+        onClick={onRemember}
+        title="Save what you've typed as a memory, without sending it"
+        className={cn(chip, "border-stone text-ink-muted hover:border-stone-strong hover:text-ink")}
+      >
+        <BookmarkPlusIcon /> Add to memory
+      </button>
+      <button
+        type="button"
+        disabled={disabled || !hasText}
+        onClick={onDecision}
+        title="Log what you've typed as a decision, without sending it"
+        className={cn(chip, "border-stone text-ink-muted hover:border-stone-strong hover:text-ink")}
+      >
+        <ListChecksIcon /> Save as decision
+      </button>
     </div>
   );
 }

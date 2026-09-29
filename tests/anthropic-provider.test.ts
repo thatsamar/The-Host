@@ -49,6 +49,11 @@ function fakeClient(turns: ScriptedTurn[]) {
       },
     },
     messages: {
+      parse: async (params: Record<string, unknown>) => {
+        calls.push(params);
+        const text = '{"title":"Pendant","n":2}';
+        return { stop_reason: "end_turn", content: [{ type: "text", text }], parsed_output: JSON.parse(text) };
+      },
       create: async (params: Record<string, unknown>) => {
         calls.push(params);
         return { content: [{ type: "text", text: "  Dining Room Lighting Plan \n" }] };
@@ -167,6 +172,18 @@ describe("toAnthropicSystem", () => {
 });
 
 describe("AnthropicBackgroundModel", () => {
+  it("extracts structured JSON with the schema as the output format", async () => {
+    const { z } = await import("zod");
+    const { client, calls } = fakeClient([]);
+    const model = new AnthropicBackgroundModel(client, "claude-haiku-4-5-20251001");
+    const out = await model.extract({ content: [{ type: "text", text: "x" }], schema: z.object({ title: z.string(), n: z.number() }) });
+    expect(out).toEqual({ title: "Pendant", n: 2 });
+    const format = (calls[0].output_config as { format: { type: string; schema: { properties: object } } }).format;
+    expect(format.type).toBe("json_schema");
+    expect(Object.keys(format.schema.properties)).toEqual(["title", "n"]);
+    expect(calls[0].model).toBe("claude-haiku-4-5-20251001");
+  });
+
   it("uses the background model and returns trimmed text", async () => {
     const { client, calls } = fakeClient([]);
     const model = new AnthropicBackgroundModel(client, "claude-haiku-4-5-20251001");

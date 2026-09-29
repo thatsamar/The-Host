@@ -222,3 +222,35 @@ describe("context blocks", () => {
     expect(block.body).toContain("[2] file: ett-hem.jpg · visual description of an image");
   });
 });
+
+describe("purchase format and modes", () => {
+  it("states the purchase recommendation format and that not buying is a legitimate answer", () => {
+    const { system } = assemblePrompt(base);
+    const caps = system.find((b) => b.label === "app_capabilities")!.body;
+    for (const field of ["Dimensions", "Material/color", "Vintage vs. new", "Approximate price", "Placement", "Why it belongs", "Invest / save / skip"]) {
+      expect(caps).toContain(field);
+    }
+    expect(caps).toContain("Don't buy anything");
+  });
+
+  it("adds the mode instruction under the speaker line, for current and past turns", () => {
+    const { messages } = assemblePrompt({
+      ...base,
+      history: [
+        { role: "user", speaker: "Amar", content: "Photo", mode: "analyze_photo" },
+        { role: "assistant", speaker: "Gio", content: "Lower the lamp." },
+      ],
+      current: { speaker: "Courtney", text: "Options: A, B, C", mode: "compare" },
+    });
+    expect(textOf(messages[0].content)).toMatch(/^Speaker: Amar\nRequest: Analyze photo\. Photo analysis\./);
+    expect(textOf(messages[2].content)).toMatch(/^Speaker: Courtney\nRequest: Compare options\. .*name the winner/);
+    expect(textOf(messages[2].content)).toContain("None of these. Keep looking.");
+  });
+
+  it("shopping briefs ask for sourced prices and allow not buying", async () => {
+    const { MODE_INSTRUCTIONS } = await import("@/lib/gio/modes");
+    expect(MODE_INSTRUCTIONS.shopping_brief).toMatch(/sourced prices/);
+    expect(MODE_INSTRUCTIONS.shopping_brief).toMatch(/not buying/);
+    expect(MODE_INSTRUCTIONS.analyze_photo).toMatch(/highest-leverage move/);
+  });
+});

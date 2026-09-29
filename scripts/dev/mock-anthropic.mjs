@@ -35,6 +35,66 @@ function embed(text, dim) {
   return v.map((x) => x / norm);
 }
 
+// Structured-output requests (memory extraction, command-button drafts):
+// deterministic JSON shaped by the requested schema.
+function structuredFor(body) {
+  const props = body.output_config.format.schema?.properties ?? {};
+  const prompt = body.messages[0].content.map?.((p) => p.text ?? "").join("\n") ?? String(body.messages[0].content);
+  if (props.memories && props.decisions) {
+    const m = prompt.match(/Message from ([^:]+):\n"""([\s\S]*?)"""/);
+    const speaker = m?.[1].startsWith("Both") ? "Both" : (m?.[1] ?? "Both");
+    const text = m?.[2] ?? "";
+    const memories = [];
+    const decisions = [];
+    for (const sentence of text.split(/(?<=[.!?])\s+/)) {
+      const s = sentence.replace(/[.!?]+$/, "").trim();
+      if (/\b(love|hate|prefer|can't stand)\b/i.test(s)) {
+        const holder = speaker === "Both" ? "Both" : speaker;
+        memories.push({
+          type: holder === "Courtney" ? "courtney_preference" : holder === "Amar" ? "amar_preference" : "shared_preference",
+          content: `${holder === "Both" ? "Courtney and Amar" : holder}: ${s}.`,
+          holder,
+          scope: "household",
+          evidence: s,
+        });
+      }
+      if (/\blet's (do|go with)\b/i.test(s)) {
+        decisions.push({ title: s.replace(/^.*let's (do|go with)\s*/i, "Go with "), detail: "Agreed in conversation.", status: "approved", evidence: s });
+      }
+    }
+    return { memories, decisions };
+  }
+  if (props.product) {
+    return {
+      title: "Reading corner lounge chair",
+      detail: "Mock draft from the message.",
+      status: "approved",
+      product: {
+        name: "Danish teak lounge chair",
+        designer: "Possibly Grete Jalk",
+        vendor: null,
+        url: "https://example.com/listing",
+        dimensions: '28"W x 30"D x 29"H',
+        material_color: "Teak, oatmeal wool",
+        provenance: "vintage",
+        price_amount: 1800,
+        price_currency: "USD",
+        price_basis: "sourced",
+        price_source_url: "https://example.com/listing",
+        placement: "Reading corner, angled to the window",
+        rationale: "Low, warm, and light enough to move.",
+        verdict: "invest",
+      },
+    };
+  }
+  if (props.holder && props.type) {
+    const who = (prompt.match(/The person saving this is ([A-Za-z]+)/) ?? [])[1] ?? "Courtney";
+    const holder = who === "Courtney" || who === "Amar" ? who : "Both";
+    return { type: "shared_preference", content: "Pools of warm lamplight over overhead light.", holder, scope: "household" };
+  }
+  return {};
+}
+
 function answerFor(body) {
   const text = lastUserText(body);
   const speaker = (text.match(/^Speaker: (.*)$/m) ?? [])[1] ?? "unknown";
@@ -66,6 +126,23 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method !== "POST" || !req.url.startsWith("/v1/messages")) {
     res.writeHead(404).end();
+    return;
+  }
+
+  if (!body.stream && body.output_config?.format) {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(
+      JSON.stringify({
+        id: "msg_mock",
+        type: "message",
+        role: "assistant",
+        model: body.model,
+        content: [{ type: "text", text: JSON.stringify(structuredFor(body)) }],
+        stop_reason: "end_turn",
+        stop_sequence: null,
+        usage: { input_tokens: 10, output_tokens: 20 },
+      }),
+    );
     return;
   }
 

@@ -1,5 +1,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import type { z } from "zod";
 import type {
   BetaContentBlock,
   BetaContentBlockParam,
@@ -197,5 +199,24 @@ export class AnthropicBackgroundModel implements BackgroundModel {
       .map((b) => b.text)
       .join("")
       .trim();
+  }
+
+  async extract<T>(input: { system?: string; content: ChatContentPart[]; schema: z.ZodType<T>; maxTokens?: number }) {
+    const response = await this.client.messages.parse({
+      model: this.model,
+      max_tokens: input.maxTokens ?? 2048,
+      ...(input.system ? { system: input.system } : {}),
+      messages: [
+        {
+          role: "user",
+          content: toAnthropicContent(input.content) as Anthropic.ContentBlockParam[],
+        },
+      ],
+      output_config: { format: zodOutputFormat(input.schema) },
+    });
+    if (response.stop_reason === "refusal") throw new Error("The background model declined this request");
+    if (response.stop_reason === "max_tokens") throw new Error("The background model ran out of room");
+    if (response.parsed_output == null) throw new Error("The background model returned unreadable output");
+    return response.parsed_output as T;
   }
 }

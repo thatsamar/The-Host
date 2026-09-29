@@ -7,18 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import type { DecisionRow, MemoryRow, RoomRow } from "@/lib/db/types";
+import { DecisionsSection, MemorySection, PanelSection, ProductsSection, ProposalsSection } from "@/components/notebook/sections";
+import type { RoomRow } from "@/lib/db/types";
 import type { Workspace } from "@/lib/db/workspace";
-import { cn } from "@/lib/utils";
 
 export function RightPanel({ workspace, activeRoom }: { workspace: Workspace; activeRoom: RoomRow | null }) {
-  const { project, memories, decisions } = workspace;
-  const approvedMemories = memories.filter((m) => m.review_state === "approved");
-  const proposals = [
-    ...memories.filter((m) => m.review_state === "proposed"),
-    ...decisions.filter((d) => d.review_state === "proposed"),
-  ];
-  const approvedDecisions = decisions.filter((d) => d.review_state === "approved");
+  const { project, memories, decisions, products } = workspace;
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto px-5 pb-8 pt-5">
@@ -28,52 +22,15 @@ export function RightPanel({ workspace, activeRoom }: { workspace: Workspace; ac
 
       {activeRoom ? <RoomForm key={activeRoom.id} room={activeRoom} projectId={project.id} /> : null}
 
-      <PanelSection title="Proposals" count={proposals.length}>
-        <p className="text-sm leading-relaxed text-ink-muted">
-          After each answer, Gio will propose memories and decisions here for you to approve, edit or dismiss.
-          Nothing is saved without approval.
-        </p>
-      </PanelSection>
-
-      <PanelSection title="Memory" count={approvedMemories.length}>
-        {approvedMemories.length ? (
-          <ul className="space-y-2.5">
-            {approvedMemories.map((m) => (
-              <MemoryItem key={m.id} memory={m} />
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm leading-relaxed text-ink-muted">
-            Nothing remembered yet. Approved preferences, constraints and past calls will live here and shape every
-            answer.
-          </p>
-        )}
-      </PanelSection>
-
-      <PanelSection title="Decisions" count={approvedDecisions.length}>
-        {approvedDecisions.length ? (
-          <ul className="space-y-2.5">
-            {approvedDecisions.map((d) => (
-              <DecisionItem key={d.id} decision={d} />
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm leading-relaxed text-ink-muted">No decisions logged for this project.</p>
-        )}
-      </PanelSection>
+      <ProposalsSection
+        projectId={project.id}
+        memories={memories.filter((m) => m.review_state === "proposed")}
+        decisions={decisions.filter((d) => d.review_state === "proposed")}
+      />
+      <MemorySection projectId={project.id} memories={memories.filter((m) => m.review_state === "approved")} />
+      <DecisionsSection projectId={project.id} decisions={decisions.filter((d) => d.review_state === "approved")} />
+      <ProductsSection projectId={project.id} products={products} />
     </div>
-  );
-}
-
-function PanelSection({ title, count, children }: { title: string; count?: number; children: React.ReactNode }) {
-  return (
-    <section className="mt-8 border-t border-stone pt-5">
-      <h3 className="mb-3 flex items-baseline justify-between font-serif text-lg text-ink">
-        {title}
-        {count ? <span className="font-sans text-xs text-ink-muted">{count}</span> : null}
-      </h3>
-      {children}
-    </section>
   );
 }
 
@@ -219,57 +176,5 @@ function RoomForm({ room, projectId }: { room: RoomRow; projectId: string }) {
         </div>
       </form>
     </PanelSection>
-  );
-}
-
-const MEMORY_LABELS: Record<string, string> = {
-  design_preference: "Design",
-  courtney_preference: "Courtney",
-  amar_preference: "Amar",
-  shared_preference: "Shared",
-  rejected_idea: "Rejected",
-  approved_decision: "Decided",
-  project_constraint: "Constraint",
-  budget_philosophy: "Budget",
-  material: "Material",
-  vendor: "Vendor",
-  dimension: "Dimension",
-  paint_color: "Paint",
-  furniture_under_consideration: "Considering",
-};
-
-function MemoryItem({ memory }: { memory: MemoryRow }) {
-  return (
-    <li className="text-sm leading-snug text-ink-soft">
-      <span className="mr-1.5 inline-block rounded-sm bg-olive-soft px-1.5 py-px text-[10px] font-medium uppercase tracking-wider text-olive">
-        {MEMORY_LABELS[memory.type] ?? memory.type}
-      </span>
-      {memory.content}
-      {!memory.project_id ? <span className="ml-1 text-[11px] text-ink-muted">· household</span> : null}
-    </li>
-  );
-}
-
-const DECISION_STYLES: Record<DecisionRow["status"], string> = {
-  approved: "bg-olive-soft text-olive",
-  keep_looking: "bg-tobacco-soft text-tobacco",
-  rejected: "bg-oxblood-soft text-oxblood",
-  pending: "bg-paper-sunk text-ink-muted",
-};
-
-function DecisionItem({ decision }: { decision: DecisionRow }) {
-  return (
-    <li className="text-sm leading-snug text-ink-soft">
-      <span
-        className={cn(
-          "mr-1.5 inline-block rounded-sm px-1.5 py-px text-[10px] font-medium uppercase tracking-wider",
-          DECISION_STYLES[decision.status],
-        )}
-      >
-        {decision.status.replace("_", " ")}
-      </span>
-      <span className="text-ink">{decision.title}</span>
-      {decision.detail ? <span className="block pt-0.5 text-ink-muted">{decision.detail}</span> : null}
-    </li>
   );
 }

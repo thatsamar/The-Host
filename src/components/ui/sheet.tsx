@@ -25,6 +25,8 @@ function SheetContent({
           side === "left" ? "left-0 border-r border-stone" : "right-0 border-l border-stone",
           className,
         )}
+        // Don't focus a text field on open: on a phone that pops up the keyboard.
+        onOpenAutoFocus={(e) => e.preventDefault()}
         {...props}
       >
         <SheetPrimitive.Title className="sr-only">{title}</SheetPrimitive.Title>

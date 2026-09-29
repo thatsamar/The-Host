@@ -3,7 +3,7 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { isHumanSpeaker, type HumanSpeaker } from "@/lib/gio/speakers";
 import { createClient, getUserId } from "@/lib/supabase/server";
-import type { ChatRow, DecisionRow, FileRow, MemoryRow, MessageRow, ProjectRow, RoomRow } from "./types";
+import type { ChatRow, DecisionRow, FileRow, MemoryRow, MessageRow, ProductRow, ProjectRow, RoomRow } from "./types";
 
 /** Signed-in Supabase client + user id, or a redirect to /login. */
 export const requireSession = cache(async () => {
@@ -21,13 +21,14 @@ export interface Workspace {
   memories: MemoryRow[];
   decisions: DecisionRow[];
   files: FileRow[];
+  products: ProductRow[];
   lastSpeaker: HumanSpeaker;
   userId: string;
 }
 
 export const loadWorkspace = cache(async (projectId: string): Promise<Workspace | null> => {
   const { supabase, userId } = await requireSession();
-  const [projects, rooms, chats, memories, decisions, profile, files] = await Promise.all([
+  const [projects, rooms, chats, memories, decisions, profile, files, products] = await Promise.all([
     supabase.from("projects").select("*").order("is_default", { ascending: false }).order("created_at"),
     supabase.from("rooms").select("*").eq("project_id", projectId).order("created_at"),
     supabase
@@ -38,13 +39,13 @@ export const loadWorkspace = cache(async (projectId: string): Promise<Workspace 
       .limit(200),
     supabase
       .from("memories")
-      .select("*")
+      .select("id,project_id,room_id,type,content,attributed_to,review_state,source_message_id,source,evidence,created_at,source_message:messages(chat_id)")
       .or(`project_id.eq.${projectId},project_id.is.null`)
       .in("review_state", ["approved", "proposed"])
       .order("created_at", { ascending: false }),
     supabase
       .from("decisions")
-      .select("*")
+      .select("id,project_id,room_id,title,detail,status,review_state,source_message_id,product_id,decided_by,source,evidence,created_at,source_message:messages(chat_id)")
       .eq("project_id", projectId)
       .in("review_state", ["approved", "proposed"])
       .order("created_at", { ascending: false }),
@@ -54,8 +55,13 @@ export const loadWorkspace = cache(async (projectId: string): Promise<Workspace 
       .select("id,project_id,room_id,name,mime_type,size_bytes,status,error,progress,chunk_count,page_count,created_at,updated_at")
       .eq("project_id", projectId)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("products")
+      .select("*, source_message:messages(chat_id)")
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: false }),
   ]);
-  for (const r of [projects, rooms, chats, memories, decisions, profile, files]) {
+  for (const r of [projects, rooms, chats, memories, decisions, profile, files, products]) {
     if (r.error) throw new Error(r.error.message);
   }
   const project = (projects.data as ProjectRow[]).find((p) => p.id === projectId);
@@ -66,9 +72,10 @@ export const loadWorkspace = cache(async (projectId: string): Promise<Workspace 
     project,
     rooms: rooms.data as RoomRow[],
     chats: chats.data as ChatRow[],
-    memories: memories.data as MemoryRow[],
-    decisions: decisions.data as DecisionRow[],
+    memories: memories.data as unknown as MemoryRow[],
+    decisions: decisions.data as unknown as DecisionRow[],
     files: files.data as FileRow[],
+    products: products.data as unknown as ProductRow[],
     lastSpeaker: isHumanSpeaker(last) ? last : "Both",
     userId,
   };

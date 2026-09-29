@@ -103,3 +103,23 @@ begin
   assert n = 0, 'other user cannot match foreign chunks';
 end $$;
 reset role;
+
+-- match_memories: approved only, project plus household, and never another user's.
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false) \gset
+do $$
+declare p uuid; n int; v extensions.vector := array_fill(0.1::real, array[1024])::extensions.vector;
+begin
+  select id into p from public.projects where is_default;
+  insert into public.memories (project_id, type, content, review_state, embedding) values
+    (p, 'material', 'oak', 'approved', v),
+    (null, 'budget_philosophy', 'invest in seating', 'approved', v),
+    (p, 'material', 'proposed only', 'proposed', v),
+    (p, 'material', 'dismissed', 'dismissed', v);
+  select count(*) into n from public.match_memories(v, p, 10);
+  assert n = 2, 'approved project + household memories only, got ' || n;
+  perform set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
+  select count(*) into n from public.match_memories(v, p, 10);
+  assert n = 0, 'other user cannot match foreign memories';
+end $$;
+reset role;

@@ -13,6 +13,7 @@
 
 import type { ChatContentPart, ChatRequest, ChatTurn, ContextBlock } from "@/lib/ai/types";
 import type { MemoryType } from "@/lib/db/types";
+import { type ChatMode, modeLine } from "./modes";
 import { type HumanSpeaker, type Speaker, speakerLabel } from "./speakers";
 
 export interface PromptProject {
@@ -51,6 +52,7 @@ export interface PromptHistoryMessage {
   speaker: Speaker;
   content: string;
   images?: { mediaType: string; data: string }[];
+  mode?: ChatMode | null;
 }
 
 export interface PromptInput {
@@ -65,6 +67,7 @@ export interface PromptInput {
     speaker: HumanSpeaker;
     text: string;
     images?: { mediaType: string; data: string }[];
+    mode?: ChatMode | null;
   };
   webSearch?: boolean;
   /** Keep at most this many prior messages (oldest dropped first). */
@@ -110,6 +113,11 @@ export function capabilitiesBlock(webSearch: boolean): ContextBlock {
   } else {
     lines.push("Web search is unavailable for this turn. Mark every price as an estimate.");
   }
+  lines.push(
+    "When you recommend a purchase, give for each piece: Dimensions; Material/color; Vintage vs. new; Approximate price (sourced, with where it came from, or marked as an estimate); Placement; Why it belongs; Invest / save / skip.",
+    "\"Don't buy anything\" is a legitimate answer. Say it when the highest-leverage move is subtraction, repositioning, lighting, scale or editing.",
+    "A message may include a \"Request:\" line from a command button. Follow it for that message.",
+  );
   return { label: "app_capabilities", title: "APP CAPABILITIES", body: lines.join("\n"), cacheable: true };
 }
 
@@ -179,6 +187,7 @@ function userTurnContent(
   speaker: HumanSpeaker,
   text: string,
   images: { mediaType: string; data: string }[] = [],
+  mode?: ChatMode | null,
 ): ChatContentPart[] {
   const parts: ChatContentPart[] = images.map((img) => ({
     type: "image",
@@ -186,7 +195,8 @@ function userTurnContent(
     data: img.data,
   }));
   const body = text.trim() || (images.length ? "(Photo attached, no message.)" : "");
-  parts.push({ type: "text", text: `${speakerLabel(speaker)}\n\n${body}` });
+  const header = mode ? `${speakerLabel(speaker)}\n${modeLine(mode)}` : speakerLabel(speaker);
+  parts.push({ type: "text", text: `${header}\n\n${body}` });
   return parts;
 }
 
@@ -197,7 +207,7 @@ export function historyToTurns(history: PromptHistoryMessage[]): ChatTurn[] {
     let content: ChatContentPart[];
     if (m.role === "user") {
       const speaker = m.speaker === "Gio" ? "Both" : m.speaker;
-      content = userTurnContent(speaker, m.content, m.images);
+      content = userTurnContent(speaker, m.content, m.images, m.mode);
     } else {
       if (!m.content.trim()) continue; // failed or empty assistant turn
       content = [{ type: "text", text: m.content }];
@@ -241,7 +251,7 @@ export function assemblePrompt(input: PromptInput): Omit<ChatRequest, "signal"> 
 
   const currentContent = [
     ...referenceImageParts(input.references),
-    ...userTurnContent(input.current.speaker, input.current.text, input.current.images),
+    ...userTurnContent(input.current.speaker, input.current.text, input.current.images, input.current.mode),
   ];
   const last = turns[turns.length - 1];
   if (last && last.role === "user") {

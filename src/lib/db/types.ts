@@ -77,6 +77,9 @@ export interface MessageMetadata {
   web_sources?: WebSource[];
   references?: MessageReference[];
   retrieval_error?: string;
+  mode?: import("@/lib/gio/modes").ChatMode;
+  /** Memory and decision proposals created from this exchange. */
+  proposals?: { memories: number; decisions: number };
   error?: string;
 }
 
@@ -117,6 +120,10 @@ export interface MemoryRow {
   attributed_to: HumanSpeaker | null;
   review_state: "proposed" | "approved" | "dismissed";
   source_message_id: string | null;
+  source?: "extracted" | "manual" | "import";
+  evidence?: string | null;
+  /** Joined: the chat the source message belongs to. */
+  source_message?: { chat_id: string } | null;
   created_at: string;
 }
 
@@ -129,5 +136,34 @@ export interface DecisionRow {
   status: "approved" | "keep_looking" | "rejected" | "pending";
   review_state: "proposed" | "approved" | "dismissed";
   source_message_id: string | null;
+  product_id?: string | null;
+  decided_by?: HumanSpeaker | null;
+  source?: "extracted" | "manual" | "import";
+  evidence?: string | null;
+  source_message?: { chat_id: string } | null;
+  created_at: string;
+}
+
+export interface ProductRow {
+  id: string;
+  project_id: string;
+  room_id: string | null;
+  name: string;
+  designer: string | null;
+  vendor: string | null;
+  url: string | null;
+  dimensions: string | null;
+  material_color: string | null;
+  provenance: "vintage" | "new" | "antique" | "custom" | "unknown" | null;
+  price_amount: number | null;
+  price_currency: string | null;
+  price_basis: "sourced" | "estimated" | null;
+  price_source_url: string | null;
+  placement: string | null;
+  rationale: string | null;
+  verdict: "invest" | "save" | "skip" | null;
+  status: "considering" | "approved" | "rejected" | "purchased";
+  source_message_id: string | null;
+  source_message?: { chat_id: string } | null;
   created_at: string;
 }

@@ -1,3 +1,5 @@
+import type { z } from "zod";
+
 // Provider-neutral interfaces for the models Gio uses. The Anthropic
 // implementation lives in ./anthropic.ts; swapping providers means writing a
 // new implementation of these interfaces, not touching the chat pipeline.
@@ -61,6 +63,13 @@ export interface BackgroundModel {
     content: ChatContentPart[];
     maxTokens?: number;
   }): Promise<string>;
+  /** Returns JSON that matches `schema`, or throws. */
+  extract<T>(input: {
+    system?: string;
+    content: ChatContentPart[];
+    schema: z.ZodType<T>;
+    maxTokens?: number;
+  }): Promise<T>;
 }
 
 /** Text embeddings for the reference library and memory search. */

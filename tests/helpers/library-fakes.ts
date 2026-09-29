@@ -23,6 +23,9 @@ export class FakeEmbedder implements EmbeddingProvider {
 /** Describes images with a fixed sentence; can be told to fail. */
 export class FakeDescriber implements BackgroundModel {
   calls = 0;
+  async extract<T>(): Promise<T> {
+    throw new Error("not used");
+  }
   failOn = new Set<number>();
   async complete(input: Parameters<BackgroundModel["complete"]>[0]) {
     this.calls++;

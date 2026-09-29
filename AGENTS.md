@@ -17,4 +17,6 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - Every table has RLS on `user_id = auth.uid()`; add policies with any new table. `npm run check:migrations` verifies.
 - Library indexing (`src/lib/library/indexer.ts`) is resumable by unit (PDF page, docx image); rows carry `unit` so a step can redo partial work. Keep steps bounded by `budgetMs`.
 - PDF rendering needs `pdfjs-dist/legacy` + `@napi-rs/canvas`; they're in `serverExternalPackages` and `outputFileTracingIncludes` in `next.config.ts`.
+- Memory is proposed, never silently written: extraction output passes through `src/lib/memory/attribution.ts` (evidence must quote the user's own words; speaker attribution; dedupe). Keep those rules in code and tested.
+- Command modes live in `src/lib/gio/modes.ts` and are stored on the user message so history replays identically.
 - Checks: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`.

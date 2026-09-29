@@ -5,7 +5,9 @@ import {
   type PromptHistoryMessage,
   type PromptMemory,
 } from "@/lib/gio/prompt";
+import type { ChatMode } from "@/lib/gio/modes";
 import type { HumanSpeaker } from "@/lib/gio/speakers";
+import { proposeFromTurn } from "@/lib/memory/extract";
 import { buildRetrievalQuery, type RetrievedReference } from "@/lib/library/retrieval";
 import type { ChatRepository } from "./repository";
 
@@ -23,6 +25,8 @@ export interface ChatTurnInput {
   speaker: HumanSpeaker;
   text: string;
   attachments?: ChatAttachmentInput[];
+  /** A command-button mode (compare, analyze photo, shopping brief, keep looking). */
+  mode?: ChatMode | null;
 }
 
 /** Events streamed to the browser as newline-delimited JSON. */
@@ -33,6 +37,7 @@ export type ChatServerEvent =
   | { type: "web_results"; sources: WebSourceRef[] }
   | { type: "done"; message: MessageRow }
   | { type: "title"; chatId: string; title: string }
+  | { type: "proposals"; memories: number; decisions: number }
   | { type: "error"; message: string };
 
 export interface ChatTurnDeps {
@@ -43,12 +48,22 @@ export interface ChatTurnDeps {
   retrieve?: (query: string, scope: { projectId: string; roomId: string | null }) => Promise<RetrievedReference[]>;
   /** Loads a stored photo, ready for the model. Required for attachments. */
   loadImage?: (storagePath: string) => Promise<{ mediaType: string; data: string }>;
+  /**
+   * Picks the memories most relevant to the query (ids, best first). Used
+   * only when there are too many approved memories to include them all.
+   */
+  rankMemories?: (query: string, projectId: string) => Promise<string[]>;
+  /** Propose memories and decisions after each reply (default true). */
+  proposeMemories?: boolean;
   signal?: AbortSignal;
 }
 
 export class ChatInputError extends Error {}
 
 export const MAX_ATTACHMENTS = 6;
+/** Approved memories are all included up to this many; beyond it, the most relevant. */
+export const MEMORY_PROMPT_LIMIT = 40;
+export const DECISION_PROMPT_LIMIT = 30;
 /** Photos from earlier turns that are re-sent so follow-ups can see them. */
 export const MAX_HISTORY_IMAGES = 4;
 const HISTORY_IMAGE_WINDOW = 8;
@@ -110,6 +125,7 @@ export async function* runChatTurn(
     speaker: input.speaker,
     content: text,
     attachments: storedAttachments,
+    ...(input.mode ? { metadata: { mode: input.mode } } : {}),
   });
   if (assetIds.length) await repo.linkImageAssets(assetIds, userMessage.id);
   await repo.setLastSpeaker(input.speaker);
@@ -130,14 +146,15 @@ export async function* runChatTurn(
 
   const historyImages = deps.loadImage ? await loadHistoryImages(history, deps.loadImage) : new Map();
 
+  const selectedMemories = await selectMemories(memories, text, projectId, deps.rankMemories);
   const promptMemories: PromptMemory[] = [
-    ...memories.map((m) => ({
+    ...selectedMemories.map((m) => ({
       type: m.type,
       content: m.content,
       attributedTo: m.attributed_to,
       scope: m.project_id ? ("project" as const) : ("household" as const),
     })),
-    ...decisions.map((d) => ({
+    ...decisions.slice(-DECISION_PROMPT_LIMIT).map((d) => ({
       type: "decision" as const,
       content: d.detail ? `${d.title}: ${d.detail}` : d.title,
       scope: "project" as const,
@@ -163,9 +180,10 @@ export async function* runChatTurn(
         speaker: m.speaker,
         content: m.content,
         images: historyImages.get(m.id),
+        mode: m.metadata?.mode ?? null,
       }),
     ),
-    current: { speaker: input.speaker, text, images: currentImages },
+    current: { speaker: input.speaker, text, images: currentImages, mode: input.mode ?? null },
     webSearch: true,
   });
   const referenceSummary: MessageReference[] = references.map((r) => ({
@@ -224,6 +242,36 @@ export async function* runChatTurn(
       titled = true;
       yield { type: "title", chatId: chat.id, title };
     }
+
+    // Propose memories and decisions from what they said. Never fatal.
+    if (deps.proposeMemories !== false && text) {
+      try {
+        const known = await repo.listKnownMemory(projectId);
+        const proposals = await proposeFromTurn(deps.background, {
+          speaker: input.speaker,
+          userText: text,
+          assistantText: assistant.content,
+          projectName: project.name,
+          roomName: room?.name,
+          existingMemories: known.memories,
+          existingDecisions: known.decisions,
+        });
+        if (proposals.memories.length || proposals.decisions.length) {
+          await repo.insertProposals({
+            projectId,
+            roomId,
+            sourceMessageId: userMessage.id,
+            memories: proposals.memories,
+            decisions: proposals.decisions,
+          });
+          const counts = { memories: proposals.memories.length, decisions: proposals.decisions.length };
+          await repo.updateMessageMetadata(assistant.id, { ...assistant.metadata, proposals: counts });
+          yield { type: "proposals", ...counts };
+        }
+      } catch (err) {
+        console.warn("Memory extraction failed:", err instanceof Error ? err.message : err);
+      }
+    }
   } finally {
     // Runs on success, failure, and when the client disconnects mid-stream.
     if (!assistant && partial.trim()) {
@@ -244,6 +292,36 @@ export async function* runChatTurn(
     }
     if (!titled) await repo.setChatTitle(chat.id, fallbackTitle(text)).catch(() => undefined);
   }
+}
+
+/**
+ * All approved memories when there are few; otherwise the most relevant ones
+ * (by embedding search) topped up with the most recent.
+ */
+export async function selectMemories<T extends { id: string }>(
+  memories: T[],
+  query: string,
+  projectId: string,
+  rank?: (query: string, projectId: string) => Promise<string[]>,
+): Promise<T[]> {
+  if (memories.length <= MEMORY_PROMPT_LIMIT) return memories;
+  const chosen = new Set<string>();
+  if (rank && query.trim()) {
+    try {
+      for (const id of await rank(query, projectId)) {
+        if (chosen.size >= MEMORY_PROMPT_LIMIT * 0.75) break;
+        if (memories.some((m) => m.id === id)) chosen.add(id);
+      }
+    } catch (err) {
+      console.warn("Memory ranking failed:", err instanceof Error ? err.message : err);
+    }
+  }
+  for (const m of [...memories].reverse()) {
+    if (chosen.size >= MEMORY_PROMPT_LIMIT) break;
+    chosen.add(m.id);
+  }
+  // Keep the original (chronological) order in the prompt.
+  return memories.filter((m) => chosen.has(m.id));
 }
 
 /** Re-sends the most recent earlier photos so follow-up questions can see them. */

@@ -1,4 +1,5 @@
 import type { HumanSpeaker } from "@/lib/gio/speakers";
+import type { DecisionProposal, MemoryProposal } from "@/lib/memory/extract";
 import type {
   ChatRow,
   DecisionRow,
@@ -29,6 +30,7 @@ export interface ChatRepository {
     metadata?: MessageMetadata;
   }): Promise<MessageRow>;
   setLastSpeaker(speaker: HumanSpeaker): Promise<void>;
+  updateMessageMetadata(messageId: string, metadata: MessageMetadata): Promise<void>;
   /** Records chat photos as image assets; returns their ids in order. */
   createImageAssets(input: {
     projectId: string;
@@ -38,6 +40,18 @@ export interface ChatRepository {
   linkImageAssets(ids: string[], messageId: string): Promise<void>;
   /** Approved memories for the project plus household-wide ones. */
   listApprovedMemories(projectId: string): Promise<MemoryRow[]>;
+  /**
+   * Everything already known or already proposed (including dismissed items),
+   * so extraction doesn't propose it again.
+   */
+  listKnownMemory(projectId: string): Promise<{ memories: string[]; decisions: string[] }>;
+  insertProposals(input: {
+    projectId: string;
+    roomId: string | null;
+    sourceMessageId: string;
+    memories: MemoryProposal[];
+    decisions: DecisionProposal[];
+  }): Promise<void>;
   /** Approved-into-the-log decisions for the project. */
   listDecisions(projectId: string): Promise<DecisionRow[]>;
 }

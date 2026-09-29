@@ -2,7 +2,19 @@
 
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { BookOpenIcon, GlobeIcon } from "lucide-react";
+import {
+  BookmarkPlusIcon,
+  BookOpenIcon,
+  GlobeIcon,
+  ListChecksIcon,
+  MoreHorizontalIcon,
+  NotebookPenIcon,
+  RotateCcwIcon,
+  ScaleIcon,
+  ShoppingBagIcon,
+} from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { MODE_LABELS, type ChatMode } from "@/lib/gio/modes";
 import type { MessageReference, WebSource } from "@/lib/db/types";
 import type { Speaker } from "@/lib/gio/speakers";
 import { cn } from "@/lib/utils";
@@ -19,7 +31,12 @@ export interface DisplayMessage {
   webSources?: WebSource[];
   pending?: boolean;
   error?: string;
+  mode?: ChatMode | null;
+  /** Proposals created from this exchange (live only). */
+  proposals?: { memories: number; decisions: number };
 }
+
+export type MessageCommand = "decision" | "memory" | "keep_looking" | "compare" | "shopping_brief";
 
 const SPEAKER_STYLES: Record<string, string> = {
   Courtney: "text-oxblood",
@@ -27,12 +44,28 @@ const SPEAKER_STYLES: Record<string, string> = {
   Both: "text-tobacco",
 };
 
-export function Message({ message }: { message: DisplayMessage }) {
+export function Message({
+  message,
+  onCommand,
+  highlighted,
+}: {
+  message: DisplayMessage;
+  onCommand?: (command: MessageCommand, message: DisplayMessage) => void;
+  highlighted?: boolean;
+}) {
+  const frame = cn("scroll-mt-6 rounded-lg transition-colors duration-700", highlighted && "bg-tobacco-soft/50 ring-8 ring-tobacco-soft/50");
   if (message.role === "user") {
     return (
-      <div className="flex flex-col items-end">
-        <span className={cn("mb-1 text-[11px] font-medium uppercase tracking-[0.14em]", SPEAKER_STYLES[message.speaker])}>
-          {message.speaker}
+      <div id={`msg-${message.id}`} className={cn("flex flex-col items-end", frame)}>
+        <span className="mb-1 flex items-center gap-2">
+          {message.mode ? (
+            <span className="rounded-full border border-stone px-2 py-px text-[10px] uppercase tracking-[0.1em] text-ink-muted">
+              {MODE_LABELS[message.mode]}
+            </span>
+          ) : null}
+          <span className={cn("text-[11px] font-medium uppercase tracking-[0.14em]", SPEAKER_STYLES[message.speaker])}>
+            {message.speaker}
+          </span>
         </span>
         {message.images?.length ? (
           <div className="mb-2 flex max-w-[85%] flex-wrap justify-end gap-2">
@@ -54,8 +87,9 @@ export function Message({ message }: { message: DisplayMessage }) {
   }
 
   const searching = message.pending && message.webSearches?.length;
+  const canCommand = onCommand && !message.pending && message.content.trim() && !message.id.startsWith("local-");
   return (
-    <div>
+    <div id={`msg-${message.id}`} className={frame}>
       <span className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.14em] text-ink-muted">Gio</span>
       {message.webSearches?.length ? (
         <div className="mb-3 flex flex-wrap gap-1.5">
@@ -90,6 +124,52 @@ export function Message({ message }: { message: DisplayMessage }) {
       {message.error ? <p className="mt-2 text-sm text-oxblood">{message.error}</p> : null}
       {!message.pending && message.references?.length ? <References references={message.references} /> : null}
       {!message.pending && message.webSources?.length ? <Sources sources={message.webSources} /> : null}
+      {message.proposals && message.proposals.memories + message.proposals.decisions > 0 ? (
+        <p className="mt-3 flex items-center gap-1.5 text-xs text-tobacco">
+          <NotebookPenIcon className="size-3.5" />
+          {describeProposals(message.proposals)} for the notebook
+        </p>
+      ) : null}
+      {canCommand ? <MessageCommands onCommand={(c) => onCommand(c, message)} /> : null}
+    </div>
+  );
+}
+
+function describeProposals(p: { memories: number; decisions: number }): string {
+  const parts = [];
+  if (p.memories) parts.push(`${p.memories} ${p.memories === 1 ? "memory" : "memories"}`);
+  if (p.decisions) parts.push(`${p.decisions} ${p.decisions === 1 ? "decision" : "decisions"}`);
+  return `${parts.join(" and ")} proposed`;
+}
+
+const commandButton =
+  "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-ink-muted transition-colors hover:bg-paper-sunk hover:text-ink [&_svg]:size-3.5";
+
+function MessageCommands({ onCommand }: { onCommand: (c: MessageCommand) => void }) {
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-0.5 border-t border-stone/70 pt-2">
+      <button type="button" className={commandButton} onClick={() => onCommand("decision")}>
+        <ListChecksIcon /> Save as decision
+      </button>
+      <button type="button" className={commandButton} onClick={() => onCommand("memory")}>
+        <BookmarkPlusIcon /> Add to memory
+      </button>
+      <button type="button" className={commandButton} onClick={() => onCommand("keep_looking")}>
+        <RotateCcwIcon /> Keep looking
+      </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger className={commandButton} aria-label="More commands">
+          <MoreHorizontalIcon />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="min-w-[12rem]">
+          <DropdownMenuItem onSelect={() => onCommand("compare")}>
+            <ScaleIcon /> Compare options
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => onCommand("shopping_brief")}>
+            <ShoppingBagIcon /> Create shopping brief
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

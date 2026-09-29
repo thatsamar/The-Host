@@ -4,7 +4,9 @@ import { getBackgroundModel, getChatProvider, getEmbeddingProvider } from "@/lib
 import { ChatInputError, MAX_ATTACHMENTS, runChatTurn, type ChatServerEvent } from "@/lib/chat/service";
 import { SupabaseChatRepository } from "@/lib/db/supabase-repository";
 import { serverEnv } from "@/lib/env";
+import { CHAT_MODES } from "@/lib/gio/modes";
 import { HUMAN_SPEAKERS } from "@/lib/gio/speakers";
+import { toVectorLiteral } from "@/lib/db/library-store";
 import { indexChatPhotos, type ChatPhoto } from "@/lib/library/chat-photos";
 import { IMAGE_MIME_TYPES } from "@/lib/library/file-types";
 import { retrieveReferences } from "@/lib/library/retrieval";
@@ -36,6 +38,7 @@ const bodySchema = z.object({
     )
     .max(MAX_ATTACHMENTS)
     .default([]),
+  mode: z.enum(CHAT_MODES).nullish(),
 });
 
 export async function POST(request: Request) {
@@ -71,6 +74,16 @@ export async function POST(request: Request) {
           { projectIds, roomId: scope.roomId },
           { topK: env.RETRIEVAL_TOP_K, minSimilarity: env.RETRIEVAL_MIN_SIMILARITY, maxImages: env.RETRIEVAL_MAX_IMAGES },
         );
+      },
+      rankMemories: async (query, projectId) => {
+        const [embedding] = await getEmbeddingProvider().embed([query], "query");
+        const { data, error } = await supabase.rpc("match_memories", {
+          query_embedding: toVectorLiteral(embedding),
+          project_id: projectId,
+          match_count: 30,
+        });
+        if (error) throw new Error(error.message);
+        return ((data ?? []) as { id: string }[]).map((r) => r.id);
       },
       signal: request.signal,
     },

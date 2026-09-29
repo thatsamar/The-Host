@@ -409,3 +409,107 @@ describe("photos and references", () => {
     expect(queries[1]).toBe("Compare the Wegner and Juhl lounge chairs for the study\n\nWhich is warmer?");
   });
 });
+
+describe("memory proposals and modes", () => {
+  it("proposes memories and decisions after the reply, linked to the user's message", async () => {
+    const { repo, project, room } = setup();
+    const background = new FakeBackground("Velvet vs Linen");
+    background.extraction = {
+      memories: [
+        { type: "amar_preference", content: "Amar loves green velvet.", holder: "Amar", scope: "household", evidence: "I want the green velvet" },
+        { type: "amar_preference", content: "Gio's advice", holder: "Amar", scope: "project", evidence: "olive mohair" },
+      ],
+      decisions: [],
+    };
+    const events = await collect(
+      runChatTurn(
+        { repo, provider: new ScriptedProvider(replyWith("THE CALL — olive mohair.")), background },
+        { projectId: project.id, roomId: room.id, speaker: "Amar", text: "I want the green velvet." },
+      ),
+    );
+    expect(events.map((e) => e.type).slice(-3)).toEqual(["done", "title", "proposals"]);
+    expect(events.at(-1)).toEqual({ type: "proposals", memories: 1, decisions: 0 });
+    expect(repo.proposals).toHaveLength(1);
+    expect(repo.proposals[0]).toMatchObject({
+      projectId: project.id,
+      roomId: room.id,
+      sourceMessageId: repo.messages[0].id,
+      memories: [{ type: "amar_preference", content: "Amar loves green velvet.", attributedTo: "Amar", scope: "household" }],
+    });
+    expect(background.extractCalls[0].text).toContain("THE CALL — olive mohair.");
+    expect(repo.messages[1].metadata.proposals).toEqual({ memories: 1, decisions: 0 });
+  });
+
+  it("an extraction failure never breaks the reply", async () => {
+    const { repo, project } = setup();
+    const background = new FakeBackground();
+    background.extraction = new Error("haiku down");
+    const events = await collect(
+      runChatTurn({ repo, provider: new ScriptedProvider(replyWith("ok")), background }, { projectId: project.id, speaker: "Both", text: "Hello there" }),
+    );
+    expect(events.map((e) => e.type)).toContain("done");
+    expect(events.map((e) => e.type)).not.toContain("error");
+    expect(repo.proposals).toHaveLength(0);
+  });
+
+  it("can be turned off", async () => {
+    const { repo, project } = setup();
+    const background = new FakeBackground();
+    await collect(
+      runChatTurn(
+        { repo, provider: new ScriptedProvider(replyWith("ok")), background, proposeMemories: false },
+        { projectId: project.id, speaker: "Both", text: "Hello there" },
+      ),
+    );
+    expect(background.extractCalls).toHaveLength(0);
+  });
+
+  it("stores a command mode on the message and replays it in later turns", async () => {
+    const { repo, project } = setup();
+    const background = new FakeBackground();
+    const provider = new ScriptedProvider(replyWith("1. Juhl. 2. Wegner. Winner: Juhl."));
+    const first = await collect(
+      runChatTurn({ repo, provider, background }, { projectId: project.id, speaker: "Both", text: "Juhl 45 vs Wegner CH25", mode: "compare" }),
+    );
+    expect(repo.messages[0].metadata.mode).toBe("compare");
+    expect(textOf(provider.requests[0].messages.at(-1)!.content)).toMatch(/^Speaker: Both \(Courtney and Amar together\)\nRequest: Compare options\. Comparison mode\. Rank every option/);
+
+    const chatId = (first[0] as Extract<ChatServerEvent, { type: "meta" }>).chatId;
+    const next = new ScriptedProvider(replyWith("ok"));
+    await collect(runChatTurn({ repo, provider: next, background }, { chatId, projectId: project.id, speaker: "Amar", text: "Why the Juhl?" }));
+    expect(textOf(next.requests[0].messages[0].content)).toContain("Request: Compare options.");
+    expect(textOf(next.requests[0].messages.at(-1)!.content)).not.toContain("Request:");
+  });
+
+  it("includes every approved memory when there are few, and the most relevant when there are many", async () => {
+    const { repo, project } = setup();
+    const base = { room_id: null, source_message_id: null, created_at: "", attributed_to: null, review_state: "approved" as const };
+    for (let i = 0; i < 60; i++) {
+      repo.memories.push({ ...base, id: `m${i}`, project_id: project.id, type: "material", content: `Memory number ${i}` });
+    }
+    const ranked: string[] = [];
+    const provider = new ScriptedProvider(replyWith("ok"));
+    await collect(
+      runChatTurn(
+        {
+          repo,
+          provider,
+          background: new FakeBackground(),
+          rankMemories: async (query) => {
+            ranked.push(query);
+            return ["m3", "m7", "nonexistent"];
+          },
+        },
+        { projectId: project.id, speaker: "Both", text: "What about the oak?" },
+      ),
+    );
+    expect(ranked).toEqual(["What about the oak?"]);
+    const body = provider.requests[0].system.find((b) => b.label === "memories")!.body;
+    const included = body.match(/Memory number \d+/g)!;
+    expect(included).toHaveLength(40);
+    expect(body).toContain("Memory number 3\n");
+    expect(body).toContain("Memory number 7\n");
+    expect(body).toContain("Memory number 59");
+    expect(body).not.toContain("Memory number 10\n");
+  });
+});

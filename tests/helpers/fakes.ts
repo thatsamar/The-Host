@@ -88,6 +88,10 @@ export class MemoryRepo implements ChatRepository {
     this.messages.push(row);
     return row;
   }
+  async updateMessageMetadata(messageId: string, metadata: MessageRow["metadata"]) {
+    const m = this.messages.find((x) => x.id === messageId);
+    if (m) m.metadata = metadata;
+  }
   async setLastSpeaker(speaker: string) {
     this.lastSpeaker = speaker;
   }
@@ -100,6 +104,16 @@ export class MemoryRepo implements ChatRepository {
   }
   async linkImageAssets(ids: string[], messageId: string) {
     for (const a of this.imageAssets) if (ids.includes(a.id)) a.messageId = messageId;
+  }
+  proposals: Parameters<ChatRepository["insertProposals"]>[0][] = [];
+  async listKnownMemory(projectId: string) {
+    return {
+      memories: this.memories.filter((m) => m.project_id === projectId || m.project_id === null).map((m) => m.content),
+      decisions: this.decisions.filter((d) => d.project_id === projectId).map((d) => d.title),
+    };
+  }
+  async insertProposals(input: Parameters<ChatRepository["insertProposals"]>[0]) {
+    this.proposals.push(input);
   }
   async listApprovedMemories(projectId: string) {
     return this.memories.filter(
@@ -142,7 +156,18 @@ export function replyWith(text: string, extra: Partial<Extract<ChatStreamEvent, 
 
 export class FakeBackground implements BackgroundModel {
   calls: Parameters<BackgroundModel["complete"]>[0][] = [];
+  extractCalls: { system?: string; text: string }[] = [];
+  /** What `extract` returns (validated against the caller's schema), or an error to throw. */
+  extraction: unknown = { memories: [], decisions: [] };
   constructor(private readonly answer: string | Error = "Reading Corner Chair") {}
+  async extract<T>(input: Parameters<BackgroundModel["extract"]>[0] & { schema: import("zod").ZodType<T> }): Promise<T> {
+    this.extractCalls.push({
+      system: input.system,
+      text: input.content.map((p) => (p.type === "text" ? p.text : "")).join("\n"),
+    });
+    if (this.extraction instanceof Error) throw this.extraction;
+    return input.schema.parse(this.extraction);
+  }
   async complete(input: Parameters<BackgroundModel["complete"]>[0]) {
     this.calls.push(input);
     if (this.answer instanceof Error) throw this.answer;
