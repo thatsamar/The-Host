@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import Anthropic from "@anthropic-ai/sdk";
-import { AnthropicChatProvider, toAnthropicSystem } from "@/lib/ai/anthropic";
+import { AnthropicChatProvider, BUSY, UNAVAILABLE, describeAnthropicError, toAnthropicSystem } from "@/lib/ai/anthropic";
 import type { ChatRequest, ChatStreamEvent } from "@/lib/ai/types";
 import { assemblePrompt } from "@/lib/gio/prompt";
 import { collect } from "./helpers/fakes";
@@ -144,7 +144,25 @@ describe("error handling", () => {
       },
     } as unknown as Anthropic;
     const provider = new AnthropicChatProvider(failing, "m", options);
-    await expect(collect(provider.streamChat(request))).rejects.toThrow("Couldn't connect to Anthropic");
+    await expect(collect(provider.streamChat(request))).rejects.toThrow("Couldn't reach Gio");
+  });
+});
+
+describe("describeAnthropicError", () => {
+  const apiError = (status: number, message: string) =>
+    Anthropic.APIError.generate(status, { type: "error", error: { type: "x", message } }, message, new Headers());
+  it("keeps setup problems out of the person's view and says when Gio is busy", () => {
+    for (const [status, text] of [
+      [401, "invalid x-api-key"],
+      [400, "Your credit balance is too low"],
+      [404, "model: nope"],
+      [500, "boom"],
+    ] as const) {
+      expect(describeAnthropicError(apiError(status, text)).message).toBe(UNAVAILABLE);
+    }
+    expect(describeAnthropicError(apiError(429, "slow")).message).toBe(BUSY);
+    expect(describeAnthropicError(apiError(529, "overloaded")).message).toBe(BUSY);
+    expect(describeAnthropicError(new Anthropic.APIUserAbortError()).name).toBe("AbortError");
   });
 });
 

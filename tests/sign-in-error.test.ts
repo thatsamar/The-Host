@@ -1,14 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { missingSupabaseConfig, signInErrorMessage } from "@/lib/auth/sign-in-error";
+import { SIGN_IN_UNAVAILABLE, missingSupabaseConfig, signInErrorMessage } from "@/lib/auth/sign-in-error";
 
 describe("signInErrorMessage", () => {
-  it("explains each failure", () => {
-    expect(signInErrorMessage({ code: "email_not_confirmed", status: 400 })).toMatch(/Auto Confirm/);
-    expect(signInErrorMessage({ code: "invalid_credentials", status: 400 })).toMatch(/don't match/);
-    expect(signInErrorMessage({ status: 401, message: "Invalid API key" })).toMatch(/PUBLISHABLE_KEY/);
-    expect(signInErrorMessage({ name: "AuthRetryableFetchError", status: 0, message: "fetch failed" })).toMatch(/SUPABASE_URL/);
+  it("explains what the person can act on, and keeps setup problems out of their view", () => {
+    expect(signInErrorMessage({ code: "invalid_credentials", status: 400 })).toBe("That email and password don't match.");
+    expect(signInErrorMessage({ code: "email_not_confirmed", status: 400 })).toMatch(/Ask the person who invited you/);
     expect(signInErrorMessage({ status: 429 })).toMatch(/Too many/);
-    expect(signInErrorMessage({ status: 500, message: "Database error" })).toBe("Sign-in failed: Database error.");
+    for (const setup of [
+      { status: 401, message: "Invalid API key" },
+      { name: "AuthRetryableFetchError", status: 0, message: "fetch failed" },
+      { status: 500, message: "Database error" },
+    ]) {
+      const message = signInErrorMessage(setup);
+      expect(message).toBe(SIGN_IN_UNAVAILABLE);
+      expect(message).not.toMatch(/Supabase|Vercel|KEY|URL/);
+    }
   });
 
   it("lists missing Supabase settings", () => {

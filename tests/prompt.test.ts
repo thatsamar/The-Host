@@ -16,10 +16,17 @@ describe("assemblePrompt", () => {
     expect(req.webSearch).toBe(true);
   });
 
-  it("tells Gio the app keeps nothing and has no speakers, memories or library", () => {
+  it("isn't addressed to any one household", () => {
+    const req = assemblePrompt({ systemPrompt: DEFAULT_SYSTEM_PROMPT, turns: [{ role: "user", text: "Hi" }] });
+    for (const block of req.system) expect(block.body).not.toMatch(/Courtney|Amar\b|speaker|memories are provided|uploaded library/i);
+    expect(DEFAULT_SYSTEM_PROMPT).toMatch(/Always imagine the room at midnight/);
+    expect(DEFAULT_SYSTEM_PROMPT).toMatch(/Could this be in almost anyone's expensive house\?/);
+  });
+
+  it("tells Gio the app keeps nothing and not to assume who is asking", () => {
     const body = capabilitiesBlock(true).body;
     expect(body).toMatch(/keeps nothing/);
-    expect(body).toMatch(/no speaker labels, saved memories, projects or uploaded library/);
+    expect(body).toMatch(/Don't assume their name, their taste or a home you haven't seen/);
     expect(body).toMatch(/up to 10 photos/);
     expect(body).toMatch(/web_search/);
     expect(body).toMatch(/Invest \/ save \/ skip/);

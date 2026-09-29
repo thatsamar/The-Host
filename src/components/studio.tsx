@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ArrowUpIcon, CameraIcon, SquareIcon, XIcon } from "lucide-react";
+import { signOut } from "@/app/login/actions";
 import type { WebSourceRef } from "@/lib/ai/types";
 import type { AskEvent } from "@/lib/gio/ask";
 import { fitToBudget } from "@/lib/gio/budget";
@@ -25,6 +26,8 @@ interface Turn {
   text: string;
   photos?: PreparedPhoto[];
   pending?: boolean;
+  /** The question this answers had photos. */
+  withPhotos?: boolean;
   searching?: boolean;
   sources?: WebSourceRef[];
   error?: string;
@@ -40,6 +43,7 @@ export function Studio() {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const lastRequest = useRef<AbortController | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -63,10 +67,12 @@ export function Studio() {
             URL.revokeObjectURL(previewUrl);
             setStaged((s) => s.map((p) => (p.key === key ? { ...p, photo, previewUrl: photo.previewUrl } : p)));
           },
-          (err: unknown) =>
-            setStaged((s) =>
-              s.map((p) => (p.key === key ? { ...p, error: err instanceof Error ? err.message : "Couldn't read that photo." } : p)),
-            ),
+          (err: unknown) => {
+            // Drop the photo and say why, rather than leaving a dead thumbnail.
+            URL.revokeObjectURL(previewUrl);
+            setStaged((s) => s.filter((p) => p.key !== key));
+            setNotice(err instanceof Error ? err.message : "Couldn't read that photo.");
+          },
         );
       }
     },
@@ -82,7 +88,7 @@ export function Studio() {
     const question = text.trim();
     const photos = ready.map((p) => p.photo!);
     const userTurn: Turn = { key: nextKey(), role: "user", text: question, photos };
-    const answer: Turn = { key: nextKey(), role: "assistant", text: "", pending: true };
+    const answer: Turn = { key: nextKey(), role: "assistant", text: "", pending: true, withPhotos: photos.length > 0 };
 
     // Earlier photos go along small; this question's photos go at full size.
     let turns: AskTurn[];
@@ -98,6 +104,7 @@ export function Studio() {
       return;
     }
 
+    following.current = true;
     setThread((all) => [...all, userTurn, answer]);
     setText("");
     setStaged((s) => s.filter((p) => !p.photo));
@@ -105,6 +112,8 @@ export function Studio() {
     setBusy(true);
     const controller = new AbortController();
     abortRef.current = controller;
+    lastRequest.current = controller;
+    let failed = false;
 
     try {
       const response = await fetch("/api/ask", {
@@ -125,19 +134,31 @@ export function Studio() {
         else if (event.type === "searching") update(answer.key, (t) => ({ ...t, searching: true }));
         else if (event.type === "sources")
           update(answer.key, (t) => ({ ...t, sources: [...(t.sources ?? []), ...event.sources] }));
-        else if (event.type === "error") update(answer.key, (t) => ({ ...t, error: event.message }));
+        else if (event.type === "error") {
+          update(answer.key, (t) => ({ ...t, error: event.message }));
+          failed = event.message !== "Stopped.";
+        }
       }
     } catch (err) {
       const stopped = err instanceof DOMException && err.name === "AbortError";
       update(answer.key, (t) => ({ ...t, error: stopped ? "Stopped." : err instanceof Error ? err.message : "Something went wrong." }));
+      failed = !stopped;
     } finally {
       update(answer.key, (t) => ({ ...t, pending: false, searching: false }));
       setBusy(false);
       abortRef.current = null;
+      // Put the question back so it can be sent again with one tap.
+      if (failed && controller === lastRequest.current) {
+        setText((current) => current || question);
+        setStaged((current) =>
+          current.length ? current : photos.map((photo) => ({ key: nextKey(), previewUrl: photo.previewUrl, photo })),
+        );
+      }
     }
   };
 
   const startOver = () => {
+    lastRequest.current = null;
     abortRef.current?.abort();
     setThread([]);
     setText("");
@@ -146,9 +167,10 @@ export function Studio() {
     inputRef.current?.focus();
   };
 
-  // Follow the answer as it streams.
+  // Follow the answer as it streams, unless the reader has scrolled up to read.
+  const following = useRef(true);
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+    if (following.current) endRef.current?.scrollIntoView({ block: "end" });
   }, [thread]);
 
   // Grow the text box with its content, up to a limit.
@@ -226,6 +248,13 @@ export function Studio() {
               void ask();
             }
           }}
+          onPaste={(e) => {
+            const files = [...e.clipboardData.files].filter((f) => f.type.startsWith("image/"));
+            if (files.length) {
+              e.preventDefault();
+              addFiles(files);
+            }
+          }}
           rows={1}
           placeholder={staged.length ? "Add a question, or just send" : "Ask a question"}
           aria-label="Ask Gio"
@@ -268,6 +297,11 @@ export function Studio() {
           <div className="mt-10">{composer}</div>
           {hint}
         </div>
+        <form action={signOut} className="fixed inset-x-0 bottom-0 flex justify-center pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+          <button type="submit" className="text-sm text-ink-muted transition-colors hover:text-ink">
+            Sign out
+          </button>
+        </form>
       </main>
     );
   }
@@ -281,7 +315,13 @@ export function Studio() {
         </button>
       </header>
 
-      <main className="min-h-0 flex-1 overflow-y-auto">
+      <main
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          following.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+        }}
+        className="min-h-0 flex-1 overflow-y-auto"
+      >
         <div className="mx-auto flex w-full max-w-[640px] flex-col gap-8 px-4 py-6">
           {thread.map((t) => (t.role === "user" ? <Question key={t.key} turn={t} /> : <Answer key={t.key} turn={t} />))}
           <div ref={endRef} />
@@ -337,20 +377,44 @@ function Answer({ turn }: { turn: Turn }) {
       ) : null}
       {turn.pending && (!turn.text || turn.searching) ? (
         <p className={cn("text-[15px] text-ink-muted", turn.text && "mt-4")}>
-          <span className="gio-dots">{turn.searching ? "Checking real listings" : "Looking"}</span>
+          <span className="gio-dots">{turn.searching ? "Checking real listings" : turn.withPhotos ? "Looking" : "Thinking"}</span>
         </p>
       ) : null}
       {turn.error ? <p className="mt-2 text-[15px] text-warn">{turn.error}</p> : null}
-      {!turn.pending && turn.sources?.length ? <Sources sources={turn.sources} /> : null}
+      {!turn.pending && turn.text.trim() ? (
+        <div className="mt-4 flex flex-wrap items-start gap-x-5 gap-y-2 text-sm text-ink-muted">
+          <CopyButton text={turn.text} />
+          {turn.sources?.length ? <Sources sources={turn.sources} /> : null}
+        </div>
+      ) : null}
     </div>
+  );
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      className="self-start transition-colors hover:text-ink"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(text);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1600);
+        } catch {}
+      }}
+    >
+      {copied ? "Copied" : "Copy"}
+    </button>
   );
 }
 
 function Sources({ sources }: { sources: WebSourceRef[] }) {
   const unique = [...new Map(sources.map((s) => [s.url, s])).values()].slice(0, 12);
   return (
-    <details className="mt-4 text-sm text-ink-muted">
-      <summary className="cursor-pointer select-none hover:text-ink">Sources</summary>
+    <details className="min-w-0">
+      <summary className="cursor-pointer select-none transition-colors hover:text-ink">Sources</summary>
       <ul className="mt-2 space-y-1">
         {unique.map((s) => (
           <li key={s.url} className="truncate">

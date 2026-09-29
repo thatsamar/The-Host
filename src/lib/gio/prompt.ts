@@ -30,9 +30,9 @@ export const MAX_HISTORY_TURNS = 40;
 
 export function capabilitiesBlock(webSearch: boolean): ContextBlock {
   const lines = [
-    "Courtney and Amar use this app for quick design questions. A message may carry up to 10 photos, a question, or both. With photos and no question, assess what you see: what's working, what isn't, and what to change first.",
+    "People use this app for design questions about their own homes. A message may carry up to 10 photos, a question, or both. With photos and no question, assess what you see: what's working, what isn't, and what to change first.",
     "Look closely at every photo before you judge, and refer to specific things you can see so the advice is clearly about these photos.",
-    "This app keeps nothing. There are no speaker labels, saved memories, projects or uploaded library, and each visit starts fresh. Treat every message as coming from Courtney and Amar together, and don't claim to remember anything from before this conversation. Where your instructions mention those things, work from what's in this conversation instead.",
+    "This app keeps nothing: each visit starts fresh, so don't claim to remember anything from before this conversation. You know only what the person tells you and shows you. Don't assume their name, their taste or a home you haven't seen; when it matters, make the most likely assumption and say so, or ask one question.",
   ];
   if (webSearch) {
     lines.push(

@@ -33,10 +33,10 @@ describe("askGio", () => {
     ]);
   });
 
-  it("reports failures as a readable error", async () => {
-    const provider = new ScriptedProvider(() => Object.assign(new Error("Your credit balance is too low"), { status: 400 }));
+  it("reports failures as an error event", async () => {
+    const provider = new ScriptedProvider(() => new Error("Gio is busy right now. Try again in a minute."));
     const events = await collect(askGio({ provider, systemPrompt: "x" }, [{ role: "user", text: "Hi" }]));
-    expect(events).toEqual([{ type: "error", message: expect.stringMatching(/out of credit/) }]);
+    expect(events).toEqual([{ type: "error", message: "Gio is busy right now. Try again in a minute." }]);
   });
 
   it("refuses a conversation that doesn't end with a question", async () => {
@@ -48,12 +48,9 @@ describe("askGio", () => {
 });
 
 describe("errorMessage", () => {
-  const apiError = (status: number, message: string) => Object.assign(new Error(message), { status });
-  it("names the fix for common Anthropic failures", () => {
-    expect(errorMessage(apiError(401, "invalid x-api-key"))).toMatch(/ANTHROPIC_API_KEY/);
-    expect(errorMessage(apiError(404, "model: nope"))).toMatch(/GIO_CHAT_MODEL/);
-    expect(errorMessage(apiError(429, "slow down"))).toMatch(/rate-limiting/);
-    expect(errorMessage(apiError(500, "boom"))).toBe("boom");
+  it("passes the provider's plain message through, and names a stop", () => {
+    expect(errorMessage(new Error("Gio is busy right now. Try again in a minute."))).toMatch(/busy/);
     expect(errorMessage(Object.assign(new Error("x"), { name: "AbortError" }))).toBe("Stopped.");
+    expect(errorMessage("weird")).toBe("Something went wrong. Try again.");
   });
 });

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getChatProvider } from "@/lib/ai";
+import { UNAVAILABLE } from "@/lib/ai/anthropic";
 import { serverEnv } from "@/lib/env";
 import { askGio, type AskEvent } from "@/lib/gio/ask";
 import { DEFAULT_SYSTEM_PROMPT } from "@/lib/gio/default-system-prompt";
@@ -29,18 +30,21 @@ const bodySchema = z.object({
 
 export async function POST(request: Request) {
   const supabase = await createClient();
-  if (!(await getUserId(supabase))) return Response.json({ error: "Not signed in" }, { status: 401 });
+  if (!(await getUserId(supabase))) {
+    return Response.json({ error: "You've been signed out. Reload the page to sign in again." }, { status: 401 });
+  }
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return Response.json({ error: "Invalid request" }, { status: 400 });
+  if (!parsed.success) return Response.json({ error: "That didn't go through. Try again." }, { status: 400 });
 
   let provider;
   try {
     serverEnv();
     provider = getChatProvider();
   } catch (err) {
-    // Names the missing settings (never their values) so the page can show what to fix.
-    return Response.json({ error: err instanceof Error ? err.message : "Server settings are incomplete" }, { status: 500 });
+    // Names the missing settings (never their values) in the server log.
+    console.error("Gio is misconfigured:", err instanceof Error ? err.message : err);
+    return Response.json({ error: UNAVAILABLE }, { status: 503 });
   }
 
   const events = askGio(

@@ -1,11 +1,23 @@
 # Gio
 
-Courtney and Amar's private designer. One page: add up to 10 photos, ask a question, or both, and Gio answers with a designer's eye. It keeps the custom GPT's personality and design philosophy, and nothing else.
+A private-beta designer. One page: add up to 10 photos, ask a question, or both, and Gio answers with a designer's eye. It carries the custom GPT's design point of view, addressed to whoever is asking, and nothing else.
 
 - **No saved conversations.** A visit is one conversation. Follow-up questions work while the page is open; **New** or a reload starts fresh.
 - **Nothing stored.** Photos are shrunk in the browser and sent with the question. The app has no database tables of its own and keeps no files.
 - **Live prices.** Gio can search the web for real listings when a question calls for it.
-- **Private.** A sign-in keeps strangers (and their questions on your Anthropic bill) out.
+- **Invitation only.** Each tester gets a login; strangers (and their questions on your Anthropic bill) stay out.
+
+## Inviting testers
+
+1. Supabase → **Authentication → Users → Add user → Create new user**. Enter their email and a password, tick **Auto Confirm User**.
+2. Send them the address and their login. On a phone, **Share → Add to Home Screen** installs Gio with its own icon.
+3. To remove someone, delete their user in the same place.
+
+Set a monthly spend limit at platform.claude.com → Settings → Limits; every tester's questions go on your Anthropic account.
+
+## When something goes wrong
+
+Testers see plain messages ("Gio isn't available right now", "Gio is busy right now"). The reason (a rejected key, no credit, a missing setting) goes to the server log: Vercel → your project → **Logs**, filtered to errors.
 
 ---
 
@@ -25,10 +37,11 @@ Browser ──► Next.js on Vercel ──► Anthropic (claude-opus-5-5, web se
                  └──► Supabase Auth (sign-in only)
 ```
 
-- `src/components/studio.tsx` is the whole interface: the start screen, the conversation and the composer (camera button, optional text, send).
+- `src/components/studio.tsx` is the whole interface: the start screen, the conversation and the composer (camera button, optional text, send). A failed answer puts the question and photos back to resend; answers can be copied.
+- `src/app/icon.tsx`, `apple-icon.tsx`, `opengraph-image.tsx` and `manifest.ts` give Gio its home-screen icon and link preview, drawn at build time with the fonts in `assets/fonts` (SIL Open Font License).
 - `src/lib/gio/photos.ts` shrinks photos in the browser. `src/lib/gio/budget.ts` keeps each request under Vercel's 4.5 MB body limit by dropping the oldest photos from long visits first.
 - `src/app/api/ask/route.ts` checks the sign-in, validates the request and streams the answer as NDJSON.
-- `src/lib/gio/prompt.ts` assembles what Gio sees, in order: Gio's system prompt (verbatim, in `default-system-prompt.ts`), then an **app capabilities** block that tells Gio what this app does and doesn't have, then the conversation.
+- `src/lib/gio/prompt.ts` assembles what Gio sees, in order: Gio's system prompt (`default-system-prompt.ts`: the custom GPT's design point of view, with the parts addressed to one household removed), then an **app capabilities** block that tells Gio what this app does and that it doesn't know who's asking, then the conversation.
 - `src/lib/ai/anthropic.ts` streams from Claude with web search, resumes paused search turns, and falls back server-side when a request is refused.
 
 To change how Gio thinks, edit `src/lib/gio/default-system-prompt.ts` and redeploy.
