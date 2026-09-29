@@ -16,10 +16,20 @@ export function signInErrorMessage(error: { code?: string; status?: number; mess
 }
 
 /** Names the Supabase settings that are missing from the environment. */
-export function missingSupabaseConfig(env: Record<string, string | undefined> = process.env): string[] {
+export function missingSupabaseConfig(env: Record<string, string | undefined> = supabaseEnv()): string[] {
   const missing: string[] = [];
   if (!env.NEXT_PUBLIC_SUPABASE_URL?.trim()) missing.push("NEXT_PUBLIC_SUPABASE_URL");
   if (!env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() && !env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim())
     missing.push("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY");
   return missing;
+}
+
+// Read each setting by its literal name, as the Supabase clients do, so the
+// build inlines NEXT_PUBLIC_ values the same way for both.
+function supabaseEnv(): Record<string, string | undefined> {
+  return {
+    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  };
 }
