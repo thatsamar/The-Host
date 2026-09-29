@@ -1,0 +1,337 @@
+<title>Gio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Schibsted+Grotesk:wght@400;500;700&display=swap">
+<style>
+/* Layout: one narrow column. The answer is the page; everything else stays quiet. */
+:root{
+  --ground:#F4F4F1; --surface:#FFFFFF; --ink:#18181A; --muted:#6B6A66; --line:#DCDBD6;
+  --accent:#2536C9; --accent-ink:#FFFFFF; --warn:#A33A2A;
+  --voice:"Newsreader", "Iowan Old Style", Georgia, serif;
+  --ui:"Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#121213; --surface:#1B1B1D; --ink:#EDECE8; --muted:#9A9993; --line:#2E2E31;
+    --accent:#8C98FF; --accent-ink:#0E0F1F; --warn:#F08F7E; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#121213; --surface:#1B1B1D; --ink:#EDECE8; --muted:#9A9993; --line:#2E2E31;
+  --accent:#8C98FF; --accent-ink:#0E0F1F; --warn:#F08F7E; color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--ground);color:var(--ink);font:16px/1.55 var(--ui);padding-inline:16px}
+.app{max-width:640px;margin:0 auto;min-height:100%;display:flex;flex-direction:column}
+button,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding-block:24px 14px}
+.mark{margin:0;font:700 26px/1 var(--ui);letter-spacing:-.04em}
+.link{background:none;border:0;padding:0;color:var(--muted);font-size:13px;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.link:hover{color:var(--ink)}
+
+main{flex:1;display:flex;flex-direction:column;gap:28px;padding-block:18px 24px}
+.intro{display:flex;flex-direction:column;gap:18px;padding-top:6vh}
+.intro h1{margin:0;font:400 clamp(36px,9vw,54px)/1.02 var(--voice);letter-spacing:-.02em;text-wrap:balance}
+.intro p{margin:0;color:var(--muted);max-width:44ch}
+.starters{display:flex;flex-direction:column;border-top:1px solid var(--line)}
+.starter{text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:12px 0;cursor:pointer;display:flex;justify-content:space-between;gap:12px}
+.starter span:last-child{color:var(--muted)}
+.starter:hover span:first-child{color:var(--accent)}
+
+.you{align-self:flex-end;max-width:85%;display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.you p{margin:0;background:var(--ink);color:var(--ground);padding:9px 14px;border-radius:16px 16px 4px 16px;white-space:pre-wrap;overflow-wrap:anywhere}
+.you img{max-height:180px;border-radius:6px;display:block}
+
+.gio{display:flex;flex-direction:column;gap:20px;min-width:0}
+.read{margin:0;color:var(--muted);font-size:14px}
+.verdict{margin:0;font:400 clamp(22px,5vw,27px)/1.3 var(--voice);letter-spacing:-.01em;text-wrap:pretty}
+.block{display:flex;flex-direction:column;gap:10px}
+.label{margin:0;font-size:11px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.keep{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.keep li{padding-left:18px;position:relative}
+.keep li::before{content:"";position:absolute;left:0;top:.72em;width:8px;height:1px;background:var(--muted)}
+.moves{margin:0;padding:0;list-style:none;counter-reset:m;display:flex;flex-direction:column;border-top:1px solid var(--line)}
+.moves li{counter-increment:m;display:grid;grid-template-columns:26px 1fr;gap:4px 10px;padding-block:12px;border-bottom:1px solid var(--line)}
+.moves li::before{content:counter(m);grid-row:span 2;font:500 13px/1.6 var(--ui);color:var(--accent);font-variant-numeric:tabular-nums}
+.moves strong{font-weight:500}
+.moves p{margin:0;color:var(--muted);min-width:0}
+.avoid{margin:0;color:var(--warn)}
+.first{margin:0;border-top:1.5px solid var(--ink);padding-top:12px;font:400 19px/1.4 var(--voice)}
+.first b{display:block;font:500 11px/1.5 var(--ui);font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:4px}
+.prose{margin:0;white-space:pre-wrap}
+.status{margin:0;color:var(--muted);display:flex;gap:14px;align-items:baseline}
+.status span::after{content:"";animation:dots 1.4s steps(4) infinite}
+@keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
+@media (prefers-reduced-motion: reduce){.status span::after{animation:none;content:"…"}}
+.error{margin:0;color:var(--warn)}
+
+.composer{position:sticky;bottom:0;background:var(--ground);padding-block:10px calc(16px + env(safe-area-inset-bottom,0px))}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:14px;display:flex;flex-direction:column;gap:8px;padding:10px}
+.box.drag{border-color:var(--accent)}
+.preview{position:relative;align-self:flex-start;padding:6px}
+.preview img{max-height:96px;display:block}
+/* viewfinder crop marks around the attached photo */
+.preview::before,.preview::after{content:"";position:absolute;width:12px;height:12px;border:1.5px solid var(--ink)}
+.preview::before{top:0;left:0;border-right:0;border-bottom:0}
+.preview::after{bottom:0;right:0;border-left:0;border-top:0}
+.preview button{position:absolute;top:10px;right:10px;width:24px;height:24px;border-radius:50%;border:0;background:var(--ink);color:var(--ground);cursor:pointer;line-height:1}
+textarea{border:0;background:none;resize:none;padding:4px 6px;min-height:28px;max-height:160px}
+textarea:focus-visible{outline:none}
+textarea::placeholder{color:var(--muted)}
+.bar{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.photo{display:inline-flex;align-items:center;gap:6px;background:none;border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:14px;cursor:pointer;color:var(--ink)}
+.photo:hover{border-color:var(--ink)}
+.send{border:0;border-radius:999px;background:var(--accent);color:var(--accent-ink);font-weight:500;padding:7px 18px;cursor:pointer}
+.send:disabled{opacity:.35;cursor:default}
+.fine{margin:8px 4px 0;color:var(--muted);font-size:12px}
+</style>
+
+<div class="app">
+  <header>
+    <p class="mark">Gio</p>
+    <button class="link" id="reset" type="button" hidden>New question</button>
+  </header>
+
+  <main id="thread" aria-live="polite">
+    <section class="intro" id="intro">
+      <h1>See with a designer’s eye.</h1>
+      <p>Ask about any design decision, or add a photo of a room, a logo, an outfit, a layout. You get a straight answer and what to do next.</p>
+      <div class="starters" id="starters"></div>
+    </section>
+  </main>
+
+  <div class="composer">
+    <form id="form">
+      <div class="box" id="box">
+        <div class="preview" id="preview" hidden>
+          <img id="previewImg" alt="Photo to assess">
+          <button type="button" id="clearPhoto" aria-label="Remove photo">×</button>
+        </div>
+        <textarea id="input" rows="1" aria-label="Ask Gio" placeholder="Ask anything about design, or add a photo"></textarea>
+        <div class="bar">
+          <button class="photo" id="photoBtn" type="button" hidden>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M1.5 5.5h2.5l1.2-2h5.6l1.2 2h2.5v8h-13z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><circle cx="8" cy="9.2" r="2.4" stroke="currentColor" stroke-width="1.3"/></svg>
+            Photo
+          </button>
+          <input type="file" id="file" accept="image/*" hidden>
+          <button class="send" id="send" type="submit">Ask</button>
+        </div>
+      </div>
+    </form>
+    <p class="fine" id="fine">Nothing is saved. Close the page and it’s gone.</p>
+  </div>
+</div>
+
+<script>
+const RULES = `You are Gio. You have the eye of a very good designer who works across interiors, architecture, graphic and brand design, typography, product, fashion, photography, gardens, and everyday objects. People come to you for one thing: judgment. They want to know what's right, what's wrong, and exactly what to do about it.
+
+HOW YOU JUDGE
+- Commit. Give one clear answer. If there are two good paths, say which you'd take and why in one line. Never hand back a menu of options or "it depends" without then deciding.
+- Be specific enough to act on today. Name the thing: the actual colour (describe it plainly, and give a paint or hex reference only when you're confident), the measurement ("hang it so the centre sits at about 145 cm", "leave 45 cm between sofa and coffee table"), the material, the weight, the typeface category or a well-known face, the proportion, the placement. "Add warmth" is useless; "swap the 6500K bulbs for 2700K and add a lamp at seat height in the far corner" is useful.
+- Reason from principles a designer actually uses: proportion and scale, hierarchy, contrast, restraint, light (its direction and colour temperature), material honesty, repetition and rhythm, negative space, context, and how something is really used. Mention a principle only when it explains the advice. Don't lecture.
+- Honesty over flattery. If something isn't working, say so plainly and kindly. If it's already good, say that and don't invent problems. Say what to keep as well as what to change.
+- Taste: you favour clarity, good materials, considered proportions, and a few strong decisions over many small ones. You're wary of trends for their own sake, matching everything, clutter, too many accent colours, feature walls, and things that look designed rather than lived with. Subtract before you add. Fix the biggest problem first.
+- Work within what they have. Assume a realistic budget unless they say otherwise, and prefer moves that are cheap and reversible before expensive ones.
+- If a detail you need is missing, don't ask. Make the most likely assumption and state it in the "read" line so they can correct you.
+
+PHOTOS
+- When there's a photo, look closely before judging: composition, proportion, colour, light, materials, alignment, scale of objects relative to each other, what the eye goes to first and whether it should.
+- Refer to specific things you can see ("the brass lamp on the left", "the headline's letter-spacing") so the advice is clearly about this photo, not generic.
+- If the photo is too dark, too cropped, or unclear to judge something, say what you can't see and judge the rest.
+
+VOICE
+Plain words, short sentences, like a designer friend talking across a table. Confident, never cruel, never gushing. No jargon unless you explain it in a few words. No filler like "Great question", "elevate", "curated", "timeless", "pop", "statement piece", "cohesive", "vibe".
+
+OUTPUT
+Reply with only one JSON object and nothing else:
+{"read":string,"verdict":string,"keep":[string],"moves":[{"what":string,"why":string}],"avoid":string,"first":string}
+- read: one short sentence saying what you understand they're asking or what you see, including any assumption you made.
+- verdict: your judgment in one or two sentences. This is the answer. Lead with it.
+- keep: what's already working and should stay (0-3 short items). Usually empty for a question with no photo.
+- moves: 2-5 specific actions, most important first. "what" is the action in one imperative sentence with the specifics. "why" is one sentence on what it fixes.
+- avoid: the one mistake most likely here, in one sentence, or "".
+- first: the single thing to do first, in one sentence.
+For a quick follow-up that doesn't need the full structure, you may leave keep and moves empty and put the whole answer in verdict.`;
+
+const STARTERS = [
+  ["My living room feels flat and I can't say why.", "Rooms"],
+  ["Serif or sans serif for a small law firm's logo?", "Type"],
+  ["What white should I paint a north-facing room?", "Colour"],
+  ["How big should the rug be under a 7-foot sofa?", "Scale"],
+];
+
+const $ = (id) => document.getElementById(id);
+const thread = $("thread"), input = $("input"), send = $("send"), file = $("file");
+let sample = null, canImages = false, busy = false, ctl = null, photo = null, photoUrl = null;
+let turns = [];
+
+function el(tag, attrs = {}, ...kids){
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") n.className = v; else if (k.startsWith("on")) n.addEventListener(k.slice(2), v); else n.setAttribute(k, v);
+  }
+  for (const k of kids) if (k != null && k !== "") n.append(k);
+  return n;
+}
+
+for (const [q, tag] of STARTERS) {
+  $("starters").append(el("button", {class:"starter", type:"button", onclick(){ ask(q); }}, el("span", {}, q), el("span", {}, tag)));
+}
+
+// Photo handling: pick, drop, or paste.
+function setPhoto(f){
+  if (!f || !f.type.startsWith("image/")) return;
+  if (photoUrl) URL.revokeObjectURL(photoUrl);
+  photo = f; photoUrl = URL.createObjectURL(f);
+  $("previewImg").src = photoUrl; $("preview").hidden = false;
+  if (!input.value.trim()) input.placeholder = "What do you want to know? Or just ask";
+  input.focus();
+}
+function clearPhoto(){
+  photo = null; photoUrl = null; $("preview").hidden = true; file.value = "";
+  input.placeholder = "Ask anything about design, or add a photo";
+}
+$("photoBtn").onclick = () => file.click();
+$("clearPhoto").onclick = () => { if (photoUrl) URL.revokeObjectURL(photoUrl); clearPhoto(); };
+file.onchange = () => setPhoto(file.files[0]);
+const box = $("box");
+box.addEventListener("dragover", e => { if (!canImages) return; e.preventDefault(); box.classList.add("drag"); });
+box.addEventListener("dragleave", () => box.classList.remove("drag"));
+box.addEventListener("drop", e => { if (!canImages) return; e.preventDefault(); box.classList.remove("drag"); setPhoto(e.dataTransfer.files[0]); });
+input.addEventListener("paste", e => {
+  if (!canImages) return;
+  const f = [...(e.clipboardData?.files || [])].find(f => f.type.startsWith("image/"));
+  if (f) { e.preventDefault(); setPhoto(f); }
+});
+
+const text = (v) => v == null ? "" : String(v).trim();
+const list = (v) => Array.isArray(v) ? v : [];
+
+function normalize(o){
+  if (!o || typeof o !== "object") return null;
+  const r = {
+    read: text(o.read),
+    verdict: text(o.verdict),
+    keep: list(o.keep).map(text).filter(Boolean).slice(0, 3),
+    moves: list(o.moves).map(m => typeof m === "string" ? {what: text(m), why: ""} : {what: text(m?.what), why: text(m?.why)}).filter(m => m.what).slice(0, 5),
+    avoid: text(o.avoid),
+    first: text(o.first),
+  };
+  return r.verdict || r.moves.length ? r : null;
+}
+
+function asText(r){
+  const out = [];
+  if (r.read) out.push(r.read);
+  if (r.verdict) out.push(r.verdict);
+  if (r.keep.length) out.push("Keep: " + r.keep.join("; "));
+  r.moves.forEach((m, i) => out.push(`${i + 1}. ${m.what}${m.why ? " " + m.why : ""}`));
+  if (r.avoid) out.push("Avoid: " + r.avoid);
+  if (r.first) out.push("Start here: " + r.first);
+  return out.join("\n");
+}
+
+function render(r, wrap, hadPhoto){
+  if (r.read) wrap.append(el("p", {class:"read"}, r.read));
+  if (r.verdict) wrap.append(el("p", {class:"verdict"}, r.verdict));
+  if (r.keep.length) wrap.append(el("div", {class:"block"}, el("p", {class:"label"}, "Keep"),
+    el("ul", {class:"keep"}, ...r.keep.map(k => el("li", {}, k)))));
+  if (r.moves.length) wrap.append(el("div", {class:"block"}, el("p", {class:"label"}, hadPhoto ? "Change" : "Do this"),
+    el("ol", {class:"moves"}, ...r.moves.map(m => el("li", {}, el("strong", {}, m.what), m.why ? el("p", {}, m.why) : null)))));
+  if (r.avoid) wrap.append(el("div", {class:"block"}, el("p", {class:"label"}, "Avoid"), el("p", {class:"avoid"}, r.avoid)));
+  if (r.first) wrap.append(el("p", {class:"first"}, el("b", {}, "Start here"), r.first));
+  const copy = el("button", {class:"link", type:"button"}, "Copy");
+  copy.onclick = async () => {
+    try { await navigator.clipboard.writeText(asText(r)); copy.textContent = "Copied"; }
+    catch { copy.textContent = "Select the text to copy"; }
+  };
+  wrap.append(el("div", {}, copy));
+}
+
+const COPY = {
+  not_granted: "Gio needs your OK to use Claude on this page. Reload the page to be asked again.",
+  sampling_disabled: "Claude isn't available on this account, so Gio can't answer here.",
+  rate_limited: "That was a lot at once. Wait a minute, then ask again.",
+  session_expired: "Your Claude session expired. Sign in again, then ask.",
+  refused: "Gio can't help with that one. Try asking it another way.",
+  image_rejected: "That photo couldn't be read. Try a JPEG or PNG under 20 MB.",
+  images_unavailable: "Photos aren't supported in this view. Ask in words instead.",
+  empty_completion: "No answer came back. Add a little more detail and ask again.",
+  invalid_json: "The answer came back garbled. Ask again.",
+  prompt_too_large: "This conversation got long. Start a new question.",
+};
+
+async function ask(q){
+  q = (q ?? input.value).trim();
+  const img = photo;
+  if (busy || (!q && !img)) return;
+  if (!sample) { thread.append(el("p", {class:"error"}, "Open this page in Claude to use Gio.")); return; }
+  if (!q) q = "Assess this. What's working, what isn't, and what should I change?";
+
+  $("intro").hidden = true; $("reset").hidden = false;
+  const you = el("div", {class:"you"});
+  if (img) you.append(el("img", {src: URL.createObjectURL(img), alt:"Your photo"}));
+  you.append(el("p", {}, q));
+  thread.append(you);
+  input.value = ""; autosize(); clearPhoto();
+
+  const content = img ? `[Photo attached]\n${q}` : q;
+  turns.push({role:"user", content});
+  const status = el("p", {class:"status"}, el("span", {}, img ? "Looking closely" : "Thinking"));
+  const stop = el("button", {class:"link", type:"button", onclick(){ ctl?.abort(); }}, "Stop");
+  status.append(stop);
+  const wrap = el("div", {class:"gio"}, status);
+  thread.append(wrap); scrollDown();
+  busy = true; send.disabled = true;
+
+  ctl = new AbortController();
+  const opts = {cache:false, signal: ctl.signal, modelTier:"complex"};
+  if (img) opts.images = img;
+  try {
+    const raw = await sample.json([{role:"user", content: RULES + "\n\nThe conversation starts now."}, ...turns.slice(-12)], opts);
+    const r = normalize(raw);
+    wrap.replaceChildren();
+    if (!r) throw {code:"invalid_json"};
+    render(r, wrap, !!img);
+    turns.push({role:"assistant", content: asText(r)});
+  } catch (e) {
+    turns.pop();
+    wrap.replaceChildren();
+    if (e?.code === "cancelled") { wrap.append(el("p", {class:"read"}, "Stopped.")); }
+    else {
+      wrap.append(el("p", {class:"error"}, COPY[e?.code] || "Something went wrong. Ask again."));
+      if (!input.value) { input.value = q; autosize(); }
+      if (img && !photo) setPhoto(img);
+    }
+  } finally {
+    busy = false; send.disabled = false; scrollDown();
+  }
+}
+
+function scrollDown(){ window.scrollTo({top: document.body.scrollHeight, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"}); }
+function autosize(){ input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 160) + "px"; }
+input.addEventListener("input", autosize);
+input.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(); } });
+$("form").addEventListener("submit", e => { e.preventDefault(); ask(); });
+
+$("reset").onclick = () => {
+  ctl?.abort(); turns = []; busy = false; send.disabled = false;
+  thread.querySelectorAll(".you, .gio, .error").forEach(n => n.remove());
+  $("intro").hidden = false; $("reset").hidden = true;
+  input.value = ""; autosize(); clearPhoto(); window.scrollTo({top:0});
+};
+
+(async () => {
+  sample = await (window.claude?.use?.("sample") ?? null);
+  if (!sample) {
+    send.disabled = true; input.disabled = true;
+    $("fine").textContent = "Open this page in Claude to use Gio.";
+    return;
+  }
+  try { canImages = !!(await sample.limits()).images; } catch { canImages = false; }
+  $("photoBtn").hidden = !canImages;
+  if (!canImages) input.placeholder = "Ask anything about design";
+})();
+</script>
