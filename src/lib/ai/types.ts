@@ -1,13 +1,11 @@
-import type { z } from "zod";
-
 // Provider-neutral interfaces for the models Gio uses. The Anthropic
 // implementation lives in ./anthropic.ts; swapping providers means writing a
 // new implementation of these interfaces, not touching the chat pipeline.
 
 export interface ContextBlock {
-  /** Short machine label, e.g. "project_context". Rendered as an XML-ish tag. */
+  /** Short machine label, e.g. "app_capabilities". Rendered as an XML-ish tag. */
   label: string;
-  /** Human heading shown inside the block, e.g. "PROJECT CONTEXT". */
+  /** Human heading shown inside the block, e.g. "APP CAPABILITIES". */
   title: string;
   body: string;
   /** Hint that this block is stable across turns and worth caching. */
@@ -54,28 +52,4 @@ export type ChatStreamEvent =
 
 export interface ChatProvider {
   streamChat(request: ChatRequest): AsyncIterable<ChatStreamEvent>;
-}
-
-/** Small, fast model for titles, captions and extraction. */
-export interface BackgroundModel {
-  complete(input: {
-    system?: string;
-    content: ChatContentPart[];
-    maxTokens?: number;
-  }): Promise<string>;
-  /** Returns JSON that matches `schema`, or throws. */
-  extract<T>(input: {
-    system?: string;
-    content: ChatContentPart[];
-    schema: z.ZodType<T>;
-    maxTokens?: number;
-  }): Promise<T>;
-}
-
-/** Text embeddings for the reference library and memory search. */
-export interface EmbeddingProvider {
-  readonly model: string;
-  readonly dimension: number;
-  /** "document" for library content, "query" for search queries. */
-  embed(texts: string[], inputType: "document" | "query"): Promise<number[][]>;
 }

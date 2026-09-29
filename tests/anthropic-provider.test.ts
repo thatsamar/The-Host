@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import Anthropic from "@anthropic-ai/sdk";
-import { AnthropicBackgroundModel, AnthropicChatProvider, toAnthropicSystem } from "@/lib/ai/anthropic";
+import { AnthropicChatProvider, toAnthropicSystem } from "@/lib/ai/anthropic";
 import type { ChatRequest, ChatStreamEvent } from "@/lib/ai/types";
 import { assemblePrompt } from "@/lib/gio/prompt";
 import { collect } from "./helpers/fakes";
@@ -48,28 +48,15 @@ function fakeClient(turns: ScriptedTurn[]) {
         },
       },
     },
-    messages: {
-      parse: async (params: Record<string, unknown>) => {
-        calls.push(params);
-        const text = '{"title":"Pendant","n":2}';
-        return { stop_reason: "end_turn", content: [{ type: "text", text }], parsed_output: JSON.parse(text) };
-      },
-      create: async (params: Record<string, unknown>) => {
-        calls.push(params);
-        return { content: [{ type: "text", text: "  Dining Room Lighting Plan \n" }] };
-      },
-    },
   };
   return { client: client as unknown as Anthropic, calls };
 }
 
 const request: ChatRequest = assemblePrompt({
   systemPrompt: "You are Gio.",
-  project: { name: "Marfa", location: null, brief: null, isDefault: false },
-  memories: [],
-  references: [],
-  history: [],
-  current: { speaker: "Both", text: "Find us a vintage lounge chair under $2,000.", images: [{ mediaType: "image/png", data: "aW1n" }] },
+  turns: [
+    { role: "user", text: "Find us a vintage lounge chair under $2,000.", images: [{ mediaType: "image/png", data: "aW1n" }] },
+  ],
 });
 
 const options = { effort: "high" as const, webSearchMaxUses: 5 };
@@ -166,29 +153,6 @@ describe("toAnthropicSystem", () => {
     const system = toAnthropicSystem(request);
     expect(system[0].text).toBe("You are Gio.");
     expect(system[1].text.startsWith("<app_capabilities>\nAPP CAPABILITIES")).toBe(true);
-    expect(system[2].text.startsWith("<project_context>")).toBe(true);
-    expect(system.map((b) => Boolean(b.cache_control))).toEqual([false, true, false, false, false]);
-  });
-});
-
-describe("AnthropicBackgroundModel", () => {
-  it("extracts structured JSON with the schema as the output format", async () => {
-    const { z } = await import("zod");
-    const { client, calls } = fakeClient([]);
-    const model = new AnthropicBackgroundModel(client, "claude-haiku-4-5-20251001");
-    const out = await model.extract({ content: [{ type: "text", text: "x" }], schema: z.object({ title: z.string(), n: z.number() }) });
-    expect(out).toEqual({ title: "Pendant", n: 2 });
-    const format = (calls[0].output_config as { format: { type: string; schema: { properties: object } } }).format;
-    expect(format.type).toBe("json_schema");
-    expect(Object.keys(format.schema.properties)).toEqual(["title", "n"]);
-    expect(calls[0].model).toBe("claude-haiku-4-5-20251001");
-  });
-
-  it("uses the background model and returns trimmed text", async () => {
-    const { client, calls } = fakeClient([]);
-    const model = new AnthropicBackgroundModel(client, "claude-haiku-4-5-20251001");
-    const out = await model.complete({ system: "Title it", content: [{ type: "text", text: "hi" }], maxTokens: 40 });
-    expect(out).toBe("Dining Room Lighting Plan");
-    expect(calls[0]).toMatchObject({ model: "claude-haiku-4-5-20251001", max_tokens: 40, system: "Title it" });
+    expect(system.map((b) => Boolean(b.cache_control))).toEqual([false, true]);
   });
 });

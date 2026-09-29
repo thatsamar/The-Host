@@ -10,14 +10,11 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # Gio project notes
 
-- Build plan is phased (see README "Build status"). Don't stub later-phase features.
-- Prompt assembly lives only in `src/lib/gio/prompt.ts`; keep block order and labels stable and covered by `tests/prompt.test.ts`.
-- Model access goes through `src/lib/ai/types.ts` interfaces. Model IDs come from env (`GIO_CHAT_MODEL`, `GIO_BACKGROUND_MODEL`).
-- Assistant history is replayed as text only (no thinking blocks), because retrieved context changes every turn.
-- Every table has RLS on `user_id = auth.uid()`; add policies with any new table. `npm run check:migrations` verifies.
-- Library indexing (`src/lib/library/indexer.ts`) is resumable by unit (PDF page, docx image); rows carry `unit` so a step can redo partial work. Keep steps bounded by `budgetMs`.
-- PDF rendering needs `pdfjs-dist/legacy` + `@napi-rs/canvas`; they're in `serverExternalPackages` and `outputFileTracingIncludes` in `next.config.ts`.
-- Memory is proposed, never silently written: extraction output passes through `src/lib/memory/attribution.ts` (evidence must quote the user's own words; speaker attribution; dedupe). Keep those rules in code and tested.
-- Command modes live in `src/lib/gio/modes.ts` and are stored on the user message so history replays identically.
-- Export/import and the ChatGPT importer run in the browser through `src/lib/portability/store.ts` (RLS applies); keep them pure over the `DataStore` interface. Imports keep ids, so re-importing is idempotent.
+- Gio is deliberately one page: photos (up to 10) and/or a question, one conversation per visit, nothing saved. Don't add features back without being asked.
+- Prompt assembly lives only in `src/lib/gio/prompt.ts`: system prompt (verbatim, `default-system-prompt.ts`) → app capabilities → conversation. Keep block order and labels stable and covered by `tests/prompt.test.ts`.
+- The capabilities block tells Gio what the app lacks (speakers, memory, library) because the verbatim prompt still mentions them. Update it if the app changes.
+- Model access goes through `src/lib/ai/types.ts` interfaces. Model IDs come from env (`GIO_CHAT_MODEL`).
+- Assistant history is replayed as text only (no thinking blocks).
+- Requests carry the whole visit; `src/lib/gio/budget.ts` keeps them under Vercel's 4.5 MB body limit. Keep photo sizes in `photos.ts` and the budget in step.
+- Supabase is used for sign-in only. The old migrations stay for existing projects; nothing reads those tables.
 - Checks: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`.
