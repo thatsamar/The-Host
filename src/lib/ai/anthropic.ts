@@ -1,7 +1,5 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import type { z } from "zod";
 import type {
   BetaContentBlock,
   BetaContentBlockParam,
@@ -11,7 +9,6 @@ import type {
 } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import { renderContextBlock } from "./render";
 import type {
-  BackgroundModel,
   ChatContentPart,
   ChatProvider,
   ChatRequest,
@@ -173,50 +170,5 @@ export class AnthropicChatProvider implements ChatProvider {
     }
 
     yield { type: "done", text, model, stopReason, usage, webSearches, webSources };
-  }
-}
-
-export class AnthropicBackgroundModel implements BackgroundModel {
-  constructor(
-    private readonly client: Anthropic,
-    private readonly model: string,
-  ) {}
-
-  async complete(input: { system?: string; content: ChatContentPart[]; maxTokens?: number }) {
-    const response = await this.client.messages.create({
-      model: this.model,
-      max_tokens: input.maxTokens ?? 1024,
-      ...(input.system ? { system: input.system } : {}),
-      messages: [
-        {
-          role: "user",
-          content: toAnthropicContent(input.content) as Anthropic.ContentBlockParam[],
-        },
-      ],
-    });
-    return response.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("")
-      .trim();
-  }
-
-  async extract<T>(input: { system?: string; content: ChatContentPart[]; schema: z.ZodType<T>; maxTokens?: number }) {
-    const response = await this.client.messages.parse({
-      model: this.model,
-      max_tokens: input.maxTokens ?? 2048,
-      ...(input.system ? { system: input.system } : {}),
-      messages: [
-        {
-          role: "user",
-          content: toAnthropicContent(input.content) as Anthropic.ContentBlockParam[],
-        },
-      ],
-      output_config: { format: zodOutputFormat(input.schema) },
-    });
-    if (response.stop_reason === "refusal") throw new Error("The background model declined this request");
-    if (response.stop_reason === "max_tokens") throw new Error("The background model ran out of room");
-    if (response.parsed_output == null) throw new Error("The background model returned unreadable output");
-    return response.parsed_output as T;
   }
 }

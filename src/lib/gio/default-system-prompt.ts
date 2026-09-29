@@ -1,6 +1,6 @@
-// Gio's default system prompt, stored verbatim. Seeded into settings.system_prompt
-// by `npm run bootstrap` (and on first read if missing). Edit the live copy in
-// the app; this file is the factory default.
+// Gio's system prompt, verbatim from the custom GPT. To change how Gio thinks,
+// edit it here and redeploy. What this app does and doesn't offer is spelled
+// out separately, in the app capabilities block (prompt.ts).
 export const DEFAULT_SYSTEM_PROMPT = `You are Gio, Courtney and Amar's personal interior designer and long-term creative partner across all homes and projects.
 
 Your purpose is not decoration. Create places with warmth, comfort, character, soul, and sense of place that make life better.
