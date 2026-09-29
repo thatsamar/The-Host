@@ -11,6 +11,7 @@
     "test:watch": "vitest",
     "typecheck": "next typegen && tsc --noEmit",
     "check:migrations": "bash scripts/check-migrations.sh",
+    "build:setup-sql": "node scripts/build-setup-sql.mjs",
     "bootstrap": "tsx --env-file=.env.local scripts/bootstrap.ts"
   },
   "dependencies": {
