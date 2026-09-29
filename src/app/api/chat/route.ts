@@ -57,7 +57,13 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid attachment" }, { status: 400 });
   }
 
-  const env = serverEnv();
+  let env: ReturnType<typeof serverEnv>;
+  try {
+    env = serverEnv();
+  } catch (err) {
+    // Names the missing settings (never their values) so the chat can show what to fix.
+    return Response.json({ error: err instanceof Error ? err.message : "Server settings are incomplete" }, { status: 500 });
+  }
   const background = getBackgroundModel();
   const events = runChatTurn(
     {

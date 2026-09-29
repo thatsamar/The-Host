@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ChatContentPart } from "@/lib/ai/types";
-import { ChatInputError, dedupeSources, fallbackTitle, runChatTurn, type ChatServerEvent } from "@/lib/chat/service";
+import { ChatInputError, dedupeSources, errorMessage, fallbackTitle, runChatTurn, type ChatServerEvent } from "@/lib/chat/service";
 import { FakeBackground, MemoryRepo, ScriptedProvider, collect, replyWith } from "./helpers/fakes";
 
 const textOf = (parts: ChatContentPart[]) =>
@@ -511,5 +511,15 @@ describe("memory proposals and modes", () => {
     expect(body).toContain("Memory number 7\n");
     expect(body).toContain("Memory number 59");
     expect(body).not.toContain("Memory number 10\n");
+  });
+});
+
+describe("errorMessage", () => {
+  const apiError = (status: number, message: string) => Object.assign(new Error(message), { status });
+  it("names the fix for common Anthropic failures", () => {
+    expect(errorMessage(apiError(401, "invalid x-api-key"))).toMatch(/ANTHROPIC_API_KEY/);
+    expect(errorMessage(apiError(400, "Your credit balance is too low to access the Anthropic API."))).toMatch(/out of credit/);
+    expect(errorMessage(apiError(404, "model: nope"))).toMatch(/GIO_CHAT_MODEL/);
+    expect(errorMessage(apiError(500, "boom"))).toBe("boom");
   });
 });
