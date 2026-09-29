@@ -382,8 +382,16 @@ export async function generateTitle(
   }
 }
 
-function errorMessage(err: unknown): string {
+export function errorMessage(err: unknown): string {
   if (err instanceof Error && err.name === "AbortError") return "Stopped.";
-  if (err instanceof Error) return err.message;
-  return "Something went wrong talking to Gio.";
+  if (!(err instanceof Error)) return "Something went wrong talking to Gio.";
+  const status = (err as { status?: number }).status;
+  if (status === 401) return "The Anthropic API key isn't valid. Check ANTHROPIC_API_KEY in Vercel, then redeploy.";
+  if (/credit balance/i.test(err.message))
+    return "The Anthropic account is out of credit. Add credit at console.anthropic.com → Billing.";
+  if (status === 404 && /model/i.test(err.message))
+    return "Anthropic doesn't recognise the model name. Check GIO_CHAT_MODEL in Vercel (or remove it to use the default).";
+  if (status === 429) return "Anthropic is rate-limiting this account. Wait a minute and try again.";
+  if (status === 529 || status === 503) return "Anthropic is busy right now. Try again in a moment.";
+  return err.message;
 }

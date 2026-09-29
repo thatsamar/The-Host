@@ -34,7 +34,7 @@ export function serverEnv(): ServerEnv {
   });
   if (!parsed.success) {
     const missing = parsed.error.issues.map((i) => i.path.join(".")).join(", ");
-    throw new Error(`Invalid or missing environment variables: ${missing}. See .env.example.`);
+    throw new Error(`Gio is missing settings in Vercel: ${missing}. Add them under Settings → Environment Variables, then redeploy.`);
   }
   cached = parsed.data;
   return cached;
