@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fitToBudget } from "@/lib/gio/budget";
+import { fitToBudget } from "@/lib/ask/budget";
 
 const img = (size: number) => ({ mediaType: "image/jpeg", data: "a".repeat(size) });
 

@@ -10,12 +10,13 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # Gio project notes
 
-- Gio is deliberately one page: photos (up to 10) and/or a question, one conversation per visit, nothing saved. Don't add features back without being asked.
-- Prompt assembly lives only in `src/lib/gio/prompt.ts`: system prompt (verbatim, `default-system-prompt.ts`) → app capabilities → conversation. Keep block order and labels stable and covered by `tests/prompt.test.ts`.
-- Gio is for invited testers, not one household: keep names and personal references out of the system prompt and the UI (`tests/prompt.test.ts` checks the prompt). The design point of view in the prompt is the owner's; keep it.
+- One engine, two companions: Gio (design) and Tony (travel). Each deployment picks one with `COMPANION`; everything companion-specific (prompt, capabilities, page words, icon tile) lives in `src/lib/companions/`. Keep the engine free of companion names.
+- The app is deliberately one page: photos (up to 10) and/or a question, one conversation per visit, nothing saved. Don't add features back without being asked.
+- Prompt assembly lives only in `src/lib/ask/prompt.ts`: companion system prompt → app capabilities → conversation. Keep block order and labels stable and covered by `tests/prompt.test.ts`.
+- Gio is for invited testers, not one household: keep names and personal references out of its prompt (tested). Tony's prompt is the owner's text and deliberately in Amar Lalvani's voice; its capabilities tell it the traveler isn't Amar. Keep both points of view as written.
 - Testers see plain error messages; technical reasons go to the server log (`describeAnthropicError`, `signInErrorMessage`).
-- Model access goes through `src/lib/ai/types.ts` interfaces. Model IDs come from env (`GIO_CHAT_MODEL`).
+- Model access goes through `src/lib/ai/types.ts` interfaces. Model IDs come from env (`CHAT_MODEL`).
 - Assistant history is replayed as text only (no thinking blocks).
-- Requests carry the whole visit; `src/lib/gio/budget.ts` keeps them under Vercel's 4.5 MB body limit. Keep photo sizes in `photos.ts` and the budget in step.
+- Requests carry the whole visit; `src/lib/ask/budget.ts` keeps them under Vercel's 4.5 MB body limit. Keep photo sizes in `photos.ts` and the budget in step.
 - Supabase is used for sign-in only. The old migrations stay for existing projects; nothing reads those tables.
 - Checks: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`.

@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og";
 import { BRAND, brandFonts } from "@/lib/brand/fonts";
+import { currentCompanion } from "@/lib/companions";
 
 export const size = { width: 512, height: 512 };
 export const contentType = "image/png";
@@ -9,6 +10,7 @@ export default async function Icon() {
 }
 
 export function Mark({ size }: { size: number }) {
+  const companion = currentCompanion();
   return (
     <div
       style={{
@@ -17,7 +19,7 @@ export function Mark({ size }: { size: number }) {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: BRAND.ink,
+        background: companion.iconTile,
         color: BRAND.ground,
         fontFamily: "Schibsted Grotesk",
         fontWeight: 700,
@@ -26,7 +28,7 @@ export function Mark({ size }: { size: number }) {
         paddingBottom: size * 0.04,
       }}
     >
-      G
+      {companion.name[0]}
     </div>
   );
 }

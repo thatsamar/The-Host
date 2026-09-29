@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Newsreader, Schibsted_Grotesk } from "next/font/google";
+import { currentCompanion } from "@/lib/companions";
 import "./globals.css";
 
 // next/font downloads these at build time and serves them from this app, so
@@ -16,11 +17,13 @@ const sans = Schibsted_Grotesk({
   subsets: ["latin"],
 });
 
+const companion = currentCompanion();
+
 export const metadata: Metadata = {
-  title: "Gio",
-  description: "See with a designer's eye.",
-  appleWebApp: { capable: true, title: "Gio", statusBarStyle: "default" },
-  openGraph: { title: "Gio", description: "See with a designer's eye.", type: "website" },
+  title: companion.name,
+  description: companion.description,
+  appleWebApp: { capable: true, title: companion.name, statusBarStyle: "default" },
+  openGraph: { title: companion.name, description: companion.description, type: "website" },
   robots: { index: false, follow: false },
 };
 

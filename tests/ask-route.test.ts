@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { readNdjson } from "@/lib/gio/ndjson";
+import { readNdjson } from "@/lib/ask/ndjson";
 import { ScriptedProvider, collect, replyWith } from "./helpers/fakes";
 
 const state = vi.hoisted(() => ({ userId: "u1" as string | null, provider: null as unknown }));
@@ -29,6 +29,18 @@ describe("POST /api/ask", () => {
     const events = await collect(readNdjson<{ type: string; text?: string }>(res.body!));
     expect(events.map((e) => e.text ?? "").join("")).toBe("Lower the lamp.");
     expect(events.at(-1)).toEqual({ type: "done" });
+  });
+
+  it("answers as the deployment's companion", async () => {
+    process.env.COMPANION = "tony";
+    try {
+      const provider = state.provider as ScriptedProvider;
+      const res = await post({ turns: [{ role: "user", text: "First night in Mexico City?" }] });
+      await collect(readNdjson(res.body!));
+      expect(provider.requests[0].system[0].body).toMatch(/^You are Amar Lalvani’s private travel intelligence/);
+    } finally {
+      delete process.env.COMPANION;
+    }
   });
 
   it("requires sign-in", async () => {

@@ -59,24 +59,24 @@ function sourcesFrom(block: BetaContentBlock): WebSourceRef[] {
 
 // What the person asking sees. Setup problems (bad key, no credit, unknown
 // model) read the same to them; the specifics go to the server log.
-export const UNAVAILABLE = "Gio isn't available right now. Please try again a little later.";
-export const BUSY = "Gio is busy right now. Try again in a minute.";
+export const unavailable = (name: string) => `${name} isn't available right now. Please try again a little later.`;
+export const busy = (name: string) => `${name} is busy right now. Try again in a minute.`;
 
 /** Turns SDK errors into short messages that are safe to show to anyone. */
-export function describeAnthropicError(err: unknown): Error {
+export function describeAnthropicError(err: unknown, name = "Gio"): Error {
   if (err instanceof Anthropic.APIUserAbortError) {
     const e = new Error("Stopped.");
     e.name = "AbortError";
     return e;
   }
   if (err instanceof Anthropic.APIConnectionError) {
-    return new Error("Couldn't reach Gio. Check your connection and try again.");
+    return new Error(`Couldn't reach ${name}. Check your connection and try again.`);
   }
-  if (err instanceof Anthropic.RateLimitError) return new Error(BUSY);
+  if (err instanceof Anthropic.RateLimitError) return new Error(busy(name));
   if (err instanceof Anthropic.APIError) {
-    if (err.status === 529 || err.status === 503) return new Error(BUSY);
+    if (err.status === 529 || err.status === 503) return new Error(busy(name));
     if (err.status === 413) return new Error("That's too much to send at once. Try fewer photos.");
-    return new Error(UNAVAILABLE);
+    return new Error(unavailable(name));
   }
   return err instanceof Error ? err : new Error(String(err));
 }
@@ -85,7 +85,7 @@ export class AnthropicChatProvider implements ChatProvider {
   constructor(
     private readonly client: Anthropic,
     private readonly model: string,
-    private readonly options: { effort: Effort; webSearchMaxUses: number },
+    private readonly options: { effort: Effort; webSearchMaxUses: number; name?: string },
   ) {}
 
   async *streamChat(request: ChatRequest): AsyncIterable<ChatStreamEvent> {
@@ -94,7 +94,7 @@ export class AnthropicChatProvider implements ChatProvider {
     } catch (err) {
       // The person asking sees a plain message; this is where the reason goes.
       if (err instanceof Anthropic.APIError) console.error("Anthropic chat error", err.status, err.message);
-      throw describeAnthropicError(err);
+      throw describeAnthropicError(err, this.options.name);
     }
   }
 
@@ -161,7 +161,7 @@ export class AnthropicChatProvider implements ChatProvider {
       if (message.stop_reason === "refusal") {
         const notice =
           (text ? "\n\n" : "") +
-          "_Gio couldn't answer this one. Try rephrasing the request._";
+          `_${this.options.name ?? "Gio"} couldn't answer this one. Try asking another way._`;
         text += notice;
         yield { type: "text", text: notice };
         break;

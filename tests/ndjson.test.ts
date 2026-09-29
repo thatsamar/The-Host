@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readNdjson } from "@/lib/gio/ndjson";
+import { readNdjson } from "@/lib/ask/ndjson";
 import { collect } from "./helpers/fakes";
 
 function streamOf(chunks: string[]) {

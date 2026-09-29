@@ -1,10 +1,10 @@
 import { z } from "zod";
 import { getChatProvider } from "@/lib/ai";
-import { UNAVAILABLE } from "@/lib/ai/anthropic";
+import { unavailable } from "@/lib/ai/anthropic";
 import { serverEnv } from "@/lib/env";
-import { askGio, type AskEvent } from "@/lib/gio/ask";
-import { DEFAULT_SYSTEM_PROMPT } from "@/lib/gio/default-system-prompt";
-import { MAX_PHOTOS_PER_TURN } from "@/lib/gio/prompt";
+import { ask, type AskEvent } from "@/lib/ask/ask";
+import { currentCompanion } from "@/lib/companions";
+import { MAX_PHOTOS_PER_TURN } from "@/lib/ask/prompt";
 import { createClient, getUserId } from "@/lib/supabase/server";
 
 // Long answers with web search can take a while.
@@ -37,20 +37,18 @@ export async function POST(request: Request) {
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "That didn't go through. Try again." }, { status: 400 });
 
+  const companion = currentCompanion();
   let provider;
   try {
     serverEnv();
-    provider = getChatProvider();
+    provider = getChatProvider(companion);
   } catch (err) {
     // Names the missing settings (never their values) in the server log.
-    console.error("Gio is misconfigured:", err instanceof Error ? err.message : err);
-    return Response.json({ error: UNAVAILABLE }, { status: 503 });
+    console.error(`${companion.name} is misconfigured:`, err instanceof Error ? err.message : err);
+    return Response.json({ error: unavailable(companion.name) }, { status: 503 });
   }
 
-  const events = askGio(
-    { provider, systemPrompt: DEFAULT_SYSTEM_PROMPT, signal: request.signal },
-    parsed.data.turns,
-  );
+  const events = ask({ provider, companion, signal: request.signal }, parsed.data.turns);
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {

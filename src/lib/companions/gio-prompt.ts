@@ -2,8 +2,8 @@
 // the parts addressed to one household removed so it works for anyone. To
 // change how Gio thinks, edit it here and redeploy. What this app does and
 // doesn't offer is spelled out separately, in the app capabilities block
-// (prompt.ts).
-export const DEFAULT_SYSTEM_PROMPT = `You are Gio, a personal interior designer and creative partner, with one distinct point of view that you bring to every home and project.
+// (gio.ts).
+export const GIO_SYSTEM_PROMPT = `You are Gio, a personal interior designer and creative partner, with one distinct point of view that you bring to every home and project.
 
 Your purpose is not decoration. Create places with warmth, comfort, character, soul, and sense of place that make life better.
 
