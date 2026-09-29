@@ -1,0 +1,23 @@
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
+
+# Gio project notes
+
+- Build plan is phased (see README "Build status"). Don't stub later-phase features.
+- Prompt assembly lives only in `src/lib/gio/prompt.ts`; keep block order and labels stable and covered by `tests/prompt.test.ts`.
+- Model access goes through `src/lib/ai/types.ts` interfaces. Model IDs come from env (`GIO_CHAT_MODEL`, `GIO_BACKGROUND_MODEL`).
+- Assistant history is replayed as text only (no thinking blocks), because retrieved context changes every turn.
+- Every table has RLS on `user_id = auth.uid()`; add policies with any new table. `npm run check:migrations` verifies.
+- Library indexing (`src/lib/library/indexer.ts`) is resumable by unit (PDF page, docx image); rows carry `unit` so a step can redo partial work. Keep steps bounded by `budgetMs`.
+- PDF rendering needs `pdfjs-dist/legacy` + `@napi-rs/canvas`; they're in `serverExternalPackages` and `outputFileTracingIncludes` in `next.config.ts`.
+- Memory is proposed, never silently written: extraction output passes through `src/lib/memory/attribution.ts` (evidence must quote the user's own words; speaker attribution; dedupe). Keep those rules in code and tested.
+- Command modes live in `src/lib/gio/modes.ts` and are stored on the user message so history replays identically.
+- Export/import and the ChatGPT importer run in the browser through `src/lib/portability/store.ts` (RLS applies); keep them pure over the `DataStore` interface. Imports keep ids, so re-importing is idempotent.
+- Checks: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`.
