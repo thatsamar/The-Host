@@ -57,25 +57,26 @@ function sourcesFrom(block: BetaContentBlock): WebSourceRef[] {
   return block.content.map((r) => ({ title: r.title, url: r.url }));
 }
 
-/** Turns SDK errors into short messages that are safe to show in the chat. */
+// What the person asking sees. Setup problems (bad key, no credit, unknown
+// model) read the same to them; the specifics go to the server log.
+export const UNAVAILABLE = "Gio isn't available right now. Please try again a little later.";
+export const BUSY = "Gio is busy right now. Try again in a minute.";
+
+/** Turns SDK errors into short messages that are safe to show to anyone. */
 export function describeAnthropicError(err: unknown): Error {
   if (err instanceof Anthropic.APIUserAbortError) {
     const e = new Error("Stopped.");
     e.name = "AbortError";
     return e;
   }
-  if (err instanceof Anthropic.AuthenticationError) {
-    return new Error("Gio can't reach Anthropic: the API key was rejected. Check ANTHROPIC_API_KEY.");
-  }
-  if (err instanceof Anthropic.RateLimitError) {
-    return new Error("Anthropic is rate-limiting requests right now. Try again in a minute.");
-  }
   if (err instanceof Anthropic.APIConnectionError) {
-    return new Error("Couldn't connect to Anthropic. Check the network and try again.");
+    return new Error("Couldn't reach Gio. Check your connection and try again.");
   }
+  if (err instanceof Anthropic.RateLimitError) return new Error(BUSY);
   if (err instanceof Anthropic.APIError) {
-    const status = err.status ? ` (${err.status})` : "";
-    return new Error(`Anthropic returned an error${status}. Try again; if it keeps happening, check the server logs.`);
+    if (err.status === 529 || err.status === 503) return new Error(BUSY);
+    if (err.status === 413) return new Error("That's too much to send at once. Try fewer photos.");
+    return new Error(UNAVAILABLE);
   }
   return err instanceof Error ? err : new Error(String(err));
 }
@@ -91,6 +92,7 @@ export class AnthropicChatProvider implements ChatProvider {
     try {
       yield* this.run(request);
     } catch (err) {
+      // The person asking sees a plain message; this is where the reason goes.
       if (err instanceof Anthropic.APIError) console.error("Anthropic chat error", err.status, err.message);
       throw describeAnthropicError(err);
     }

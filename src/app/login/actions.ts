@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { missingSupabaseConfig, signInErrorMessage } from "@/lib/auth/sign-in-error";
+import { SIGN_IN_UNAVAILABLE, missingSupabaseConfig, signInErrorMessage } from "@/lib/auth/sign-in-error";
 import { createClient } from "@/lib/supabase/server";
 
 export async function signIn(
@@ -13,16 +13,29 @@ export async function signIn(
   if (!email || !password) return { error: "Enter the email and password." };
 
   const missing = missingSupabaseConfig();
-  if (missing.length) return { error: `Gio isn't connected to Supabase yet. Add ${missing.join(" and ")} in Vercel, then redeploy.` };
+  if (missing.length) {
+    console.error(`Sign-in is misconfigured: set ${missing.join(" and ")} in Vercel, then redeploy.`);
+    return { error: SIGN_IN_UNAVAILABLE };
+  }
 
   let failure: string | null = null;
   try {
     const supabase = await createClient();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) failure = signInErrorMessage(error);
+    if (error) {
+      failure = signInErrorMessage(error);
+      if (failure === SIGN_IN_UNAVAILABLE) console.error("Sign-in failed:", error.status, error.code, error.message);
+    }
   } catch (err) {
-    failure = signInErrorMessage({ message: err instanceof Error ? err.message : String(err), status: 0 });
+    console.error("Sign-in failed:", err instanceof Error ? err.message : err);
+    failure = SIGN_IN_UNAVAILABLE;
   }
   if (failure) return { error: failure };
   redirect("/");
+}
+
+export async function signOut() {
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  redirect("/login");
 }

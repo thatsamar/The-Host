@@ -2,7 +2,8 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { missingSupabaseConfig } from "@/lib/auth/sign-in-error";
 
-const PUBLIC_PATHS = ["/login"];
+// Sign-in, plus what a logged-out browser or a link preview needs to show Gio.
+const PUBLIC_PATHS = ["/login", "/icon", "/apple-icon", "/opengraph-image", "/manifest.webmanifest"];
 
 /** Refreshes the auth session on every request and gates the app behind login. */
 export async function updateSession(request: NextRequest) {

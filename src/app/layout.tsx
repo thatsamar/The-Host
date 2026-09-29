@@ -18,7 +18,9 @@ const sans = Schibsted_Grotesk({
 
 export const metadata: Metadata = {
   title: "Gio",
-  description: "Courtney and Amar's private design partner.",
+  description: "See with a designer's eye.",
+  appleWebApp: { capable: true, title: "Gio", statusBarStyle: "default" },
+  openGraph: { title: "Gio", description: "See with a designer's eye.", type: "website" },
   robots: { index: false, follow: false },
 };
 
