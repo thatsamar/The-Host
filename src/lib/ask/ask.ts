@@ -1,4 +1,5 @@
 import type { ChatProvider, WebSourceRef } from "@/lib/ai/types";
+import type { Companion } from "@/lib/companions/types";
 import { assemblePrompt, type AskTurn } from "./prompt";
 
 export type AskEvent =
@@ -12,11 +13,11 @@ export type AskEvent =
  * Answers the latest question in a visit's conversation. Nothing is read from
  * or written to storage: the conversation arrives whole with each request.
  */
-export async function* askGio(
-  deps: { provider: ChatProvider; systemPrompt: string; webSearch?: boolean; signal?: AbortSignal },
+export async function* ask(
+  deps: { provider: ChatProvider; companion: Companion; webSearch?: boolean; signal?: AbortSignal },
   turns: AskTurn[],
 ): AsyncGenerator<AskEvent> {
-  const request = assemblePrompt({ systemPrompt: deps.systemPrompt, turns, webSearch: deps.webSearch });
+  const request = assemblePrompt({ companion: deps.companion, turns, webSearch: deps.webSearch });
   if (request.messages.at(-1)?.role !== "user") {
     yield { type: "error", message: "Add a photo or a question." };
     return;

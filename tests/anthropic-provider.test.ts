@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import Anthropic from "@anthropic-ai/sdk";
-import { AnthropicChatProvider, BUSY, UNAVAILABLE, describeAnthropicError, toAnthropicSystem } from "@/lib/ai/anthropic";
+import { AnthropicChatProvider, busy, describeAnthropicError, toAnthropicSystem, unavailable } from "@/lib/ai/anthropic";
+import { gio } from "@/lib/companions/gio";
 import type { ChatRequest, ChatStreamEvent } from "@/lib/ai/types";
-import { assemblePrompt } from "@/lib/gio/prompt";
+import { assemblePrompt } from "@/lib/ask/prompt";
 import { collect } from "./helpers/fakes";
 
 type Block = Record<string, unknown> & { type: string };
@@ -53,7 +54,7 @@ function fakeClient(turns: ScriptedTurn[]) {
 }
 
 const request: ChatRequest = assemblePrompt({
-  systemPrompt: "You are Gio.",
+  companion: { ...gio, systemPrompt: "You are Gio." },
   turns: [
     { role: "user", text: "Find us a vintage lounge chair under $2,000.", images: [{ mediaType: "image/png", data: "aW1n" }] },
   ],
@@ -158,10 +159,10 @@ describe("describeAnthropicError", () => {
       [404, "model: nope"],
       [500, "boom"],
     ] as const) {
-      expect(describeAnthropicError(apiError(status, text)).message).toBe(UNAVAILABLE);
+      expect(describeAnthropicError(apiError(status, text)).message).toBe(unavailable("Gio"));
     }
-    expect(describeAnthropicError(apiError(429, "slow")).message).toBe(BUSY);
-    expect(describeAnthropicError(apiError(529, "overloaded")).message).toBe(BUSY);
+    expect(describeAnthropicError(apiError(429, "slow"), "Tony").message).toBe(busy("Tony"));
+    expect(describeAnthropicError(apiError(529, "overloaded"), "Tony").message).toBe("Tony is busy right now. Try again in a minute.");
     expect(describeAnthropicError(new Anthropic.APIUserAbortError()).name).toBe("AbortError");
   });
 });

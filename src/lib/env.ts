@@ -7,9 +7,10 @@ const schema = z.object({
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
   ANTHROPIC_API_KEY: z.string().min(1),
   ANTHROPIC_BASE_URL: z.string().url().optional(),
-  GIO_CHAT_MODEL: z.string().min(1).default("claude-opus-5-5"),
-  GIO_CHAT_EFFORT: z.enum(["low", "medium", "high", "xhigh", "max"]).default("high"),
-  GIO_WEB_SEARCH_MAX_USES: z.coerce.number().int().min(0).max(20).default(5),
+  CHAT_MODEL: z.string().min(1).default("claude-opus-5-5"),
+  CHAT_EFFORT: z.enum(["low", "medium", "high", "xhigh", "max"]).default("high"),
+  // Unset means the companion's own default (Gio 5, Tony 8).
+  WEB_SEARCH_MAX_USES: z.coerce.number().int().min(0).max(20).optional(),
 });
 
 export type ServerEnv = z.infer<typeof schema>;
@@ -23,10 +24,14 @@ export function serverEnv(): ServerEnv {
     // The Vercel Supabase integration may provide the legacy anon key instead.
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
       process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    // Earlier names, from when this app was only Gio.
+    CHAT_MODEL: process.env.CHAT_MODEL || process.env.GIO_CHAT_MODEL || undefined,
+    CHAT_EFFORT: process.env.CHAT_EFFORT || process.env.GIO_CHAT_EFFORT || undefined,
+    WEB_SEARCH_MAX_USES: process.env.WEB_SEARCH_MAX_USES || process.env.GIO_WEB_SEARCH_MAX_USES || undefined,
   });
   if (!parsed.success) {
     const missing = parsed.error.issues.map((i) => i.path.join(".")).join(", ");
-    throw new Error(`Gio is missing settings in Vercel: ${missing}. Add them under Settings → Environment Variables, then redeploy.`);
+    throw new Error(`Missing settings in Vercel: ${missing}. Add them under Settings → Environment Variables, then redeploy.`);
   }
   cached = parsed.data;
   return cached;

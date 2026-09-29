@@ -1,11 +1,13 @@
 import type { MetadataRoute } from "next";
+import { currentCompanion } from "@/lib/companions";
 
-// Lets "Add to Home Screen" open Gio full screen, like an app.
+// Lets "Add to Home Screen" open the app full screen, like an app.
 export default function manifest(): MetadataRoute.Manifest {
+  const companion = currentCompanion();
   return {
-    name: "Gio",
-    short_name: "Gio",
-    description: "See with a designer's eye.",
+    name: companion.name,
+    short_name: companion.name,
+    description: companion.description,
     start_url: "/",
     display: "standalone",
     background_color: "#f4f4f1",

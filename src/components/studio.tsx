@@ -5,12 +5,13 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ArrowUpIcon, CameraIcon, SquareIcon, XIcon } from "lucide-react";
 import { signOut } from "@/app/login/actions";
+import type { CompanionCopy } from "@/lib/companions/types";
 import type { WebSourceRef } from "@/lib/ai/types";
-import type { AskEvent } from "@/lib/gio/ask";
-import { fitToBudget } from "@/lib/gio/budget";
-import { readNdjson } from "@/lib/gio/ndjson";
-import { PHOTO_ACCEPT, preparePhoto, type PreparedPhoto } from "@/lib/gio/photos";
-import { MAX_PHOTOS_PER_TURN, type AskTurn } from "@/lib/gio/prompt";
+import type { AskEvent } from "@/lib/ask/ask";
+import { fitToBudget } from "@/lib/ask/budget";
+import { readNdjson } from "@/lib/ask/ndjson";
+import { PHOTO_ACCEPT, preparePhoto, type PreparedPhoto } from "@/lib/ask/photos";
+import { MAX_PHOTOS_PER_TURN, type AskTurn } from "@/lib/ask/prompt";
 import { cn } from "@/lib/utils";
 
 interface StagedPhoto {
@@ -36,7 +37,7 @@ interface Turn {
 let counter = 0;
 const nextKey = () => `k${++counter}`;
 
-export function Studio() {
+export function Studio({ companion }: { companion: CompanionCopy }) {
   const [thread, setThread] = useState<Turn[]>([]);
   const [text, setText] = useState("");
   const [staged, setStaged] = useState<StagedPhoto[]>([]);
@@ -256,8 +257,8 @@ export function Studio() {
             }
           }}
           rows={1}
-          placeholder={staged.length ? "Add a question, or just send" : "Ask a question"}
-          aria-label="Ask Gio"
+          placeholder={staged.length ? companion.placeholderWithPhotos : companion.placeholder}
+          aria-label={`Ask ${companion.name}`}
           className="min-h-10 flex-1 resize-none bg-transparent py-2 text-base leading-6 text-ink outline-none placeholder:text-ink-muted focus-visible:outline-none"
         />
         {busy ? (
@@ -289,11 +290,11 @@ export function Studio() {
     return (
       <main className="flex min-h-dvh flex-col items-center justify-center px-4 pb-[max(2rem,env(safe-area-inset-bottom))] pt-8">
         <div className="w-full max-w-[640px]">
-          <p className="text-center text-[22px] font-bold leading-none tracking-[-0.04em] text-ink">Gio</p>
+          <p className="text-center text-[22px] font-bold leading-none tracking-[-0.04em] text-ink">{companion.name}</p>
           <h1 className="mt-6 text-center font-serif text-[clamp(40px,10vw,64px)] font-normal leading-[1.02] tracking-[-0.025em] text-ink [text-wrap:balance]">
-            See with a designer&rsquo;s eye.
+            {companion.tagline}
           </h1>
-          <p className="mt-5 text-center text-lg text-ink-muted">Upload a picture or ask a question.</p>
+          <p className="mt-5 text-center text-lg text-ink-muted">{companion.subtitle}</p>
           <div className="mt-10">{composer}</div>
           {hint}
         </div>
@@ -309,7 +310,7 @@ export function Studio() {
   return (
     <div className="flex h-dvh flex-col">
       <header className="mx-auto flex w-full max-w-[640px] shrink-0 items-center justify-between px-4 pb-2 pt-[max(1rem,env(safe-area-inset-top))]">
-        <p className="text-[22px] font-bold leading-none tracking-[-0.04em] text-ink">Gio</p>
+        <p className="text-[22px] font-bold leading-none tracking-[-0.04em] text-ink">{companion.name}</p>
         <button type="button" onClick={startOver} className="text-sm text-ink-muted transition-colors hover:text-ink">
           New
         </button>
@@ -323,7 +324,7 @@ export function Studio() {
         className="min-h-0 flex-1 overflow-y-auto"
       >
         <div className="mx-auto flex w-full max-w-[640px] flex-col gap-8 px-4 py-6">
-          {thread.map((t) => (t.role === "user" ? <Question key={t.key} turn={t} /> : <Answer key={t.key} turn={t} />))}
+          {thread.map((t) => (t.role === "user" ? <Question key={t.key} turn={t} /> : <Answer key={t.key} turn={t} status={companion.status} />))}
           <div ref={endRef} />
         </div>
       </main>
@@ -356,7 +357,7 @@ function Question({ turn }: { turn: Turn }) {
   );
 }
 
-function Answer({ turn }: { turn: Turn }) {
+function Answer({ turn, status }: { turn: Turn; status: CompanionCopy["status"] }) {
   return (
     <div className="min-w-0">
       {turn.text ? (
@@ -377,7 +378,7 @@ function Answer({ turn }: { turn: Turn }) {
       ) : null}
       {turn.pending && (!turn.text || turn.searching) ? (
         <p className={cn("text-[15px] text-ink-muted", turn.text && "mt-4")}>
-          <span className="gio-dots">{turn.searching ? "Checking real listings" : turn.withPhotos ? "Looking" : "Thinking"}</span>
+          <span className="gio-dots">{turn.searching ? status.searching : turn.withPhotos ? status.looking : status.thinking}</span>
         </p>
       ) : null}
       {turn.error ? <p className="mt-2 text-[15px] text-warn">{turn.error}</p> : null}

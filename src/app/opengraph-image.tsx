@@ -1,7 +1,10 @@
 import { ImageResponse } from "next/og";
 import { BRAND, brandFonts } from "@/lib/brand/fonts";
+import { currentCompanion } from "@/lib/companions";
 
-export const alt = "Gio. See with a designer's eye.";
+const companion = currentCompanion();
+
+export const alt = `${companion.name}. ${companion.description}`;
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -21,9 +24,9 @@ export default async function OpengraphImage() {
           color: BRAND.ink,
         }}
       >
-        <div style={{ fontFamily: "Schibsted Grotesk", fontWeight: 700, fontSize: 44, letterSpacing: "-0.04em" }}>Gio</div>
+        <div style={{ fontFamily: "Schibsted Grotesk", fontWeight: 700, fontSize: 44, letterSpacing: "-0.04em" }}>{companion.name}</div>
         <div style={{ marginTop: 36, fontFamily: "Newsreader", fontSize: 104, letterSpacing: "-0.025em", lineHeight: 1 }}>
-          See with a designer’s eye.
+          {companion.tagline}
         </div>
       </div>
     ),
