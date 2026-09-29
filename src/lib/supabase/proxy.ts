@@ -1,10 +1,23 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { missingSupabaseConfig } from "@/lib/auth/sign-in-error";
 
 const PUBLIC_PATHS = ["/login"];
 
 /** Refreshes the auth session on every request and gates the app behind login. */
 export async function updateSession(request: NextRequest) {
+  // Without Supabase settings nobody can sign in; send everything to /login,
+  // which says which setting is missing.
+  if (missingSupabaseConfig().length) {
+    const path = request.nextUrl.pathname;
+    if (PUBLIC_PATHS.includes(path)) return NextResponse.next({ request });
+    if (path.startsWith("/api/")) return NextResponse.json({ error: "Supabase is not configured" }, { status: 503 });
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
