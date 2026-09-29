@@ -28,8 +28,8 @@ export function LoginForm() {
         <Label htmlFor="password">Password</Label>
         <Input id="password" name="password" type="password" autoComplete="current-password" required />
       </div>
-      {state?.error ? <p className="text-sm text-oxblood">{state.error}</p> : null}
-      <Button type="submit" className="w-full" size="lg" disabled={pending}>
+      {state?.error ? <p className="text-sm text-warn">{state.error}</p> : null}
+      <Button type="submit" variant="accent" className="w-full rounded-full" size="lg" disabled={pending}>
         {pending ? "Opening…" : "Enter"}
       </Button>
     </form>

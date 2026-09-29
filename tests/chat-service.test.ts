@@ -176,14 +176,16 @@ describe("runChatTurn", () => {
     expect(repo.messages[1].metadata.web_searches).toEqual(["vintage lounge chair"]);
   });
 
-  it("reports provider failures as an error event and keeps the user message", async () => {
+  it("reports provider failures as an error event and keeps the error with the chat", async () => {
     const { repo, project } = setup();
     const provider = new ScriptedProvider(() => new Error("overloaded"));
     const events = await collect(
       runChatTurn({ repo, provider, background: new FakeBackground() }, { projectId: project.id, speaker: "Amar", text: "Hi" }),
     );
     expect(events.at(-1)).toEqual({ type: "error", message: "overloaded" });
-    expect(repo.messages.map((m) => m.role)).toEqual(["user"]);
+    // The failed reply is saved empty, with its error, so it survives a reload.
+    expect(repo.messages.map((m) => m.role)).toEqual(["user", "assistant"]);
+    expect(repo.messages[1]).toMatchObject({ content: "", metadata: { error: "overloaded", stop_reason: "error" } });
     expect(repo.chats[0].title).toBe("Hi");
   });
 

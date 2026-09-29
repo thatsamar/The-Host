@@ -62,7 +62,7 @@ export function MemoryManager({ memories, projects }: { memories: MemoryRow[]; p
         </select>
       </div>
 
-      <ul className="mt-5 divide-y divide-stone border-y border-stone">
+      <ul className="mt-5 divide-y divide-line border-y border-line">
         {shown.length === 0 ? <li className="py-6 text-sm text-ink-muted">Nothing matches.</li> : null}
         {shown.map((m) => (
           <MemoryRowItem key={m.id} memory={m} projectName={m.project_id ? projectName.get(m.project_id) : "Household-wide"} />
@@ -100,7 +100,7 @@ function MemoryRowItem({ memory: m, projectName }: { memory: MemoryRow; projectN
   return (
     <li className={cn("flex flex-col gap-2 py-3 sm:flex-row sm:items-start", m.review_state === "dismissed" && "opacity-60")}>
       <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-tobacco">
+        <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-accent">
           {MEMORY_TYPE_LABELS[m.type]}
           {m.review_state !== "approved" ? ` · ${m.review_state}` : ""}
         </p>
@@ -111,7 +111,7 @@ function MemoryRowItem({ memory: m, projectName }: { memory: MemoryRow; projectN
           <span>· {new Date(m.created_at).toLocaleDateString()}</span>
           {m.source ? <span>· {m.source}</span> : null}
           {href ? (
-            <Link href={href} className="hover:text-oxblood">
+            <Link href={href} className="hover:text-accent">
               · source
             </Link>
           ) : null}
@@ -139,7 +139,7 @@ function MemoryRowItem({ memory: m, projectName }: { memory: MemoryRow; projectN
         <Button
           size="sm"
           variant="ghost"
-          className="h-7 text-xs text-oxblood"
+          className="h-7 text-xs text-warn"
           disabled={pending}
           onClick={() => confirm("Delete this memory for good?") && run(() => deleteMemory(m.id))}
         >

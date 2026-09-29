@@ -197,6 +197,7 @@ export async function* runChatTurn(
 
   // Text streamed so far, kept so a stopped or failed answer isn't lost.
   let partial = "";
+  let failure: string | null = null;
   const webSearches: string[] = [];
   const webSources: WebSourceRef[] = [];
   let assistant: MessageRow | null = null;
@@ -216,7 +217,8 @@ export async function* runChatTurn(
       }
       if (!final) throw new Error("The model stream ended without a final message");
     } catch (err) {
-      yield { type: "error", message: errorMessage(err) };
+      failure = errorMessage(err);
+      yield { type: "error", message: failure };
       return;
     }
     assistant = await repo.insertMessage({
@@ -274,7 +276,10 @@ export async function* runChatTurn(
     }
   } finally {
     // Runs on success, failure, and when the client disconnects mid-stream.
-    if (!assistant && partial.trim()) {
+    // A failed reply is kept (with its error) so it still shows after the
+    // page reloads, e.g. when a new chat moves to its own URL.
+    const keepFailure = failure !== null && failure !== "Stopped.";
+    if (!assistant && (partial.trim() || keepFailure)) {
       await repo
         .insertMessage({
           chatId: chat.id,
@@ -282,7 +287,8 @@ export async function* runChatTurn(
           speaker: "Gio",
           content: partial,
           metadata: {
-            stop_reason: "interrupted",
+            stop_reason: keepFailure ? "error" : "interrupted",
+            ...(keepFailure && failure ? { error: failure } : {}),
             web_searches: webSearches,
             web_sources: dedupeSources(webSources),
             references: referenceSummary,

@@ -48,8 +48,8 @@ export function SettingsView({ data, initialTab }: { data: SettingsData; initial
   };
 
   return (
-    <div className="min-h-dvh bg-paper">
-      <header className="sticky top-0 z-10 border-b border-stone bg-paper/95 backdrop-blur">
+    <div className="min-h-dvh bg-ground">
+      <header className="sticky top-0 z-10 border-b border-line bg-ground/95 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3 sm:px-6">
           <Link href={home} className="flex items-center gap-1.5 text-sm text-ink-muted hover:text-ink">
             <ArrowLeftIcon className="size-4" /> Studio
@@ -65,7 +65,7 @@ export function SettingsView({ data, initialTab }: { data: SettingsData; initial
               aria-current={tab === t.id ? "page" : undefined}
               className={cn(
                 "shrink-0 border-b-2 px-3 pb-2.5 pt-1 text-sm transition-colors",
-                tab === t.id ? "border-oxblood text-ink" : "border-transparent text-ink-muted hover:text-ink",
+                tab === t.id ? "border-accent text-ink" : "border-transparent text-ink-muted hover:text-ink",
               )}
             >
               {t.label}

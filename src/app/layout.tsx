@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Instrument_Sans, Newsreader } from "next/font/google";
+import { Newsreader, Schibsted_Grotesk } from "next/font/google";
 import "./globals.css";
 
 // next/font downloads these at build time and serves them from this app, so
@@ -11,7 +11,7 @@ const serif = Newsreader({
   axes: ["opsz"],
 });
 
-const sans = Instrument_Sans({
+const sans = Schibsted_Grotesk({
   variable: "--font-sans-face",
   subsets: ["latin"],
 });
@@ -26,7 +26,10 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#faf7f1",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f4f4f1" },
+    { media: "(prefers-color-scheme: dark)", color: "#121213" },
+  ],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

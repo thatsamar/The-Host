@@ -21,7 +21,7 @@ function DialogContent({
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-ink/30" />
       <DialogPrimitive.Content
         className={cn(
-          "fixed left-1/2 top-1/2 z-50 w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-stone bg-paper-raised p-6 shadow-xl outline-none",
+          "fixed left-1/2 top-1/2 z-50 w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-line bg-surface p-6 shadow-xl outline-none",
           className,
         )}
         {...props}
@@ -33,7 +33,7 @@ function DialogContent({
           <DialogPrimitive.Description className="sr-only">{title}</DialogPrimitive.Description>
         )}
         <div className="mt-5">{children}</div>
-        <DialogPrimitive.Close className="absolute right-3 top-3 rounded-md p-1.5 text-ink-muted hover:bg-paper-sunk hover:text-ink">
+        <DialogPrimitive.Close className="absolute right-3 top-3 rounded-md p-1.5 text-ink-muted hover:bg-sunk hover:text-ink">
           <XIcon className="size-4" />
           <span className="sr-only">Close</span>
         </DialogPrimitive.Close>

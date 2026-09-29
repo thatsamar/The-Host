@@ -54,8 +54,8 @@ export function LibraryManager({
 
       <div
         className={cn(
-          "mt-5 rounded-lg border border-dashed border-stone-strong p-4 transition-colors",
-          dragging && "border-tobacco bg-tobacco-soft/50",
+          "mt-5 rounded-lg border border-dashed border-line-strong p-4 transition-colors",
+          dragging && "border-accent bg-accent-soft/50",
         )}
         onDragOver={(e) => {
           e.preventDefault();
@@ -121,11 +121,11 @@ export function LibraryManager({
           </p>
         ))}
         {problems.map((p) => (
-          <p key={p} className="mt-1 text-sm text-oxblood">
+          <p key={p} className="mt-1 text-sm text-warn">
             {p}
           </p>
         ))}
-        {notice ? <p className="mt-2 rounded-md bg-oxblood-soft px-2 py-1.5 text-sm text-oxblood">{notice}</p> : null}
+        {notice ? <p className="mt-2 rounded-md bg-warn-soft px-2 py-1.5 text-sm text-warn">{notice}</p> : null}
       </div>
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -166,9 +166,9 @@ export function LibraryManager({
           <RotateCcwIcon /> Re-index all
         </Button>
       </div>
-      {message ? <p className="mt-2 text-sm text-olive">{message}</p> : null}
+      {message ? <p className="mt-2 text-sm text-ok">{message}</p> : null}
 
-      <div className="mt-3 divide-y divide-stone border-y border-stone">
+      <div className="mt-3 divide-y divide-line border-y border-line">
         {shown.length === 0 ? <p className="py-6 text-sm text-ink-muted">No files yet.</p> : null}
         {shown.map((f) => (
           <div key={f.id} className="flex items-start gap-3 py-1">

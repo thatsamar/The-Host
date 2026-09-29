@@ -53,7 +53,7 @@ export function PromptEditor({ prompt, defaultPrompt, versions }: { prompt: stri
           value={text}
           onChange={(e) => setText(e.target.value)}
           spellCheck
-          className="mt-4 h-[60vh] min-h-80 w-full resize-y rounded-md border border-stone-strong bg-paper-raised p-4 font-serif text-[15px] leading-relaxed text-ink outline-none focus-visible:border-tobacco focus-visible:ring-2 focus-visible:ring-tobacco/20"
+          className="mt-4 h-[60vh] min-h-80 w-full resize-y rounded-md border border-line-strong bg-surface p-4 font-serif text-[15px] leading-relaxed text-ink outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20"
         />
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="What changed? (optional)" className="h-9 max-w-xs" />
@@ -90,7 +90,7 @@ export function PromptEditor({ prompt, defaultPrompt, versions }: { prompt: stri
             <RotateCcwIcon /> Reset to default
           </Button>
         </div>
-        {message ? <p className={cn("mt-3 text-sm", message.tone === "ok" ? "text-olive" : "text-oxblood")}>{message.text}</p> : null}
+        {message ? <p className={cn("mt-3 text-sm", message.tone === "ok" ? "text-ok" : "text-warn")}>{message.text}</p> : null}
       </section>
 
       <aside>
@@ -103,7 +103,7 @@ export function PromptEditor({ prompt, defaultPrompt, versions }: { prompt: stri
               const current = v.content === prompt;
               const diff = diffSummary(prompt, v.content);
               return (
-                <li key={v.id} className="rounded-md border border-stone bg-paper-raised">
+                <li key={v.id} className="rounded-md border border-line bg-surface">
                   <button
                     type="button"
                     className="flex w-full items-start gap-2 p-3 text-left"
@@ -113,7 +113,7 @@ export function PromptEditor({ prompt, defaultPrompt, versions }: { prompt: stri
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm text-ink">
                         {LABELS[v.label] ?? v.label}
-                        {current ? <span className="ml-1.5 rounded-sm bg-olive-soft px-1 text-[10px] uppercase tracking-wider text-olive">Live</span> : null}
+                        {current ? <span className="ml-1.5 rounded-sm bg-ok-soft px-1 text-[10px] uppercase tracking-wider text-ok">Live</span> : null}
                       </span>
                       <span className="block text-xs text-ink-muted">{when(v.created_at)}</span>
                       {v.note ? <span className="mt-0.5 block text-xs text-ink-soft">{v.note}</span> : null}
@@ -126,7 +126,7 @@ export function PromptEditor({ prompt, defaultPrompt, versions }: { prompt: stri
                     <ChevronDownIcon className={cn("mt-1 size-4 shrink-0 text-ink-muted transition-transform", open === v.id && "rotate-180")} />
                   </button>
                   {open === v.id ? (
-                    <div className="border-t border-stone p-3">
+                    <div className="border-t border-line p-3">
                       <pre className="max-h-72 overflow-auto whitespace-pre-wrap font-serif text-xs leading-relaxed text-ink-soft">{v.content}</pre>
                       <div className="mt-2 flex gap-2">
                         <Button

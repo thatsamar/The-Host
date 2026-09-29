@@ -46,7 +46,7 @@ export function DecisionManager({ decisions, projects }: { decisions: DecisionRo
           ))}
         </select>
       </div>
-      <ul className="mt-5 divide-y divide-stone border-y border-stone">
+      <ul className="mt-5 divide-y divide-line border-y border-line">
         {shown.length === 0 ? <li className="py-6 text-sm text-ink-muted">Nothing matches.</li> : null}
         {shown.map((d) => (
           <DecisionRowItem key={d.id} decision={d} projectName={projectName.get(d.project_id)} />
@@ -95,7 +95,7 @@ function DecisionRowItem({ decision: d, projectName }: { decision: DecisionRow; 
           <span className={cn("rounded-sm px-1.5 py-px text-[10px] font-medium uppercase tracking-wider", DECISION_STATUS_STYLES[d.status])}>
             {DECISION_STATUS_LABELS[d.status]}
           </span>
-          {d.review_state === "proposed" ? <span className="text-[10px] uppercase tracking-wider text-tobacco">Proposed</span> : null}
+          {d.review_state === "proposed" ? <span className="text-[10px] uppercase tracking-wider text-accent">Proposed</span> : null}
         </p>
         <p className="mt-1 font-serif text-[15px] leading-snug text-ink">{d.title}</p>
         {d.detail ? <p className="text-sm text-ink-soft">{d.detail}</p> : null}
@@ -104,7 +104,7 @@ function DecisionRowItem({ decision: d, projectName }: { decision: DecisionRow; 
           {d.decided_by ? <span>· {d.decided_by}</span> : null}
           <span>· {new Date(d.created_at).toLocaleDateString()}</span>
           {href ? (
-            <Link href={href} className="hover:text-oxblood">
+            <Link href={href} className="hover:text-accent">
               · source
             </Link>
           ) : null}
@@ -127,7 +127,7 @@ function DecisionRowItem({ decision: d, projectName }: { decision: DecisionRow; 
         <Button
           size="sm"
           variant="ghost"
-          className="h-7 text-xs text-oxblood"
+          className="h-7 text-xs text-warn"
           disabled={pending}
           onClick={() => confirm("Delete this decision?") && run(() => deleteDecision(d.id))}
         >

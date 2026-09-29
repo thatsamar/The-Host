@@ -40,10 +40,10 @@ export const DECISION_STATUS_LABELS: Record<DecisionRow["status"], string> = {
 };
 
 export const DECISION_STATUS_STYLES: Record<DecisionRow["status"], string> = {
-  approved: "bg-olive-soft text-olive",
-  keep_looking: "bg-tobacco-soft text-tobacco",
-  rejected: "bg-oxblood-soft text-oxblood",
-  pending: "bg-paper-sunk text-ink-muted",
+  approved: "bg-ok-soft text-ok",
+  keep_looking: "bg-accent-soft text-accent",
+  rejected: "bg-warn-soft text-warn",
+  pending: "bg-sunk text-ink-muted",
 };
 
 export const PRODUCT_STATUS_LABELS: Record<ProductRow["status"], string> = {

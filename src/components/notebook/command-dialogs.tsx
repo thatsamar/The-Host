@@ -102,7 +102,7 @@ function DecisionBody({ request, scope, onCancel, onSaved }: { request: CommandR
   return (
     <>
       {note ? <p className="mb-3 text-xs text-ink-muted">{note}</p> : null}
-      {error ? <p className="mb-3 text-sm text-oxblood">{error}</p> : null}
+      {error ? <p className="mb-3 text-sm text-warn">{error}</p> : null}
       <DecisionForm
         initial={initial}
         submitLabel="Save decision"
@@ -166,7 +166,7 @@ function MemoryBody({ request, scope, onCancel, onSaved }: { request: CommandReq
   return (
     <>
       {note ? <p className="mb-3 text-xs text-ink-muted">{note}</p> : null}
-      {error ? <p className="mb-3 text-sm text-oxblood">{error}</p> : null}
+      {error ? <p className="mb-3 text-sm text-warn">{error}</p> : null}
       <MemoryForm
         initial={initial}
         submitLabel="Remember"

@@ -13,7 +13,7 @@ export function SpeakerToggle({
   disabled?: boolean;
 }) {
   return (
-    <div role="radiogroup" aria-label="Who is speaking" className="inline-flex rounded-md border border-stone bg-paper-sunk p-0.5">
+    <div role="radiogroup" aria-label="Who is speaking" className="inline-flex rounded-full border border-line bg-sunk p-0.5">
       {HUMAN_SPEAKERS.map((s) => (
         <button
           key={s}
@@ -23,8 +23,8 @@ export function SpeakerToggle({
           disabled={disabled}
           onClick={() => onChange(s)}
           className={cn(
-            "rounded-[5px] px-2.5 py-1 text-xs font-medium transition-colors",
-            value === s ? "bg-paper-raised text-ink shadow-sm" : "text-ink-muted hover:text-ink",
+            "rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
+            value === s ? "bg-surface text-ink shadow-sm" : "text-ink-muted hover:text-ink",
           )}
         >
           {s}

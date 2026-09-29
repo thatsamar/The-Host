@@ -39,9 +39,9 @@ export interface DisplayMessage {
 export type MessageCommand = "decision" | "memory" | "keep_looking" | "compare" | "shopping_brief";
 
 const SPEAKER_STYLES: Record<string, string> = {
-  Courtney: "text-oxblood",
-  Amar: "text-olive",
-  Both: "text-tobacco",
+  Courtney: "text-accent",
+  Amar: "text-ok",
+  Both: "text-ink-muted",
 };
 
 export function Message({
@@ -53,13 +53,13 @@ export function Message({
   onCommand?: (command: MessageCommand, message: DisplayMessage) => void;
   highlighted?: boolean;
 }) {
-  const frame = cn("scroll-mt-6 rounded-lg transition-colors duration-700", highlighted && "bg-tobacco-soft/50 ring-8 ring-tobacco-soft/50");
+  const frame = cn("scroll-mt-6 rounded-lg transition-colors duration-700", highlighted && "bg-accent-soft/50 ring-8 ring-accent-soft/50");
   if (message.role === "user") {
     return (
       <div id={`msg-${message.id}`} className={cn("flex flex-col items-end", frame)}>
         <span className="mb-1 flex items-center gap-2">
           {message.mode ? (
-            <span className="rounded-full border border-stone px-2 py-px text-[10px] uppercase tracking-[0.1em] text-ink-muted">
+            <span className="rounded-full border border-line px-2 py-px text-[10px] uppercase tracking-[0.1em] text-ink-muted">
               {MODE_LABELS[message.mode]}
             </span>
           ) : null}
@@ -72,13 +72,13 @@ export function Message({
             {message.images.map((url) => (
               <a key={url} href={url} target="_blank" rel="noopener noreferrer">
                 {/* eslint-disable-next-line @next/next/no-img-element -- private signed URLs */}
-                <img src={url} alt="Attached photo" className="h-40 max-w-[16rem] rounded-lg border border-stone object-cover" />
+                <img src={url} alt="Attached photo" className="h-40 max-w-[16rem] rounded-md object-cover" />
               </a>
             ))}
           </div>
         ) : null}
         {message.content ? (
-          <div className="max-w-[85%] whitespace-pre-wrap rounded-lg rounded-tr-sm bg-paper-sunk px-4 py-2.5 text-[15px] leading-relaxed text-ink">
+          <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-[4px] bg-ink px-3.5 py-2 text-[15px] leading-relaxed text-ground [overflow-wrap:anywhere]">
             {message.content}
           </div>
         ) : null}
@@ -90,11 +90,11 @@ export function Message({
   const canCommand = onCommand && !message.pending && message.content.trim() && !message.id.startsWith("local-");
   return (
     <div id={`msg-${message.id}`} className={frame}>
-      <span className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.14em] text-ink-muted">Gio</span>
+      <span className="mb-2 block text-[11px] font-medium uppercase tracking-[0.14em] text-ink-muted">Gio</span>
       {message.webSearches?.length ? (
         <div className="mb-3 flex flex-wrap gap-1.5">
           {message.webSearches.map((q, i) => (
-            <span key={i} className="inline-flex items-center gap-1 rounded-full border border-stone px-2 py-0.5 text-[11px] text-ink-muted">
+            <span key={i} className="inline-flex items-center gap-1 rounded-full border border-line px-2 py-0.5 text-[11px] text-ink-muted">
               <GlobeIcon className="size-3" />
               {q || "Searching"}
             </span>
@@ -117,15 +117,15 @@ export function Message({
           </ReactMarkdown>
         </div>
       ) : message.pending ? (
-        <p className="font-serif text-lg italic text-ink-muted">
-          {searching ? "Looking at real listings…" : "Thinking it through…"}
+        <p className="text-[15px] text-ink-muted">
+          <span className="gio-dots">{searching ? "Looking at real listings" : "Thinking"}</span>
         </p>
       ) : null}
-      {message.error ? <p className="mt-2 text-sm text-oxblood">{message.error}</p> : null}
+      {message.error ? <p className="mt-2 text-sm text-warn">{message.error}</p> : null}
       {!message.pending && message.references?.length ? <References references={message.references} /> : null}
       {!message.pending && message.webSources?.length ? <Sources sources={message.webSources} /> : null}
       {message.proposals && message.proposals.memories + message.proposals.decisions > 0 ? (
-        <p className="mt-3 flex items-center gap-1.5 text-xs text-tobacco">
+        <p className="mt-3 flex items-center gap-1.5 text-xs text-accent">
           <NotebookPenIcon className="size-3.5" />
           {describeProposals(message.proposals)} for the notebook
         </p>
@@ -143,11 +143,11 @@ function describeProposals(p: { memories: number; decisions: number }): string {
 }
 
 const commandButton =
-  "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-ink-muted transition-colors hover:bg-paper-sunk hover:text-ink [&_svg]:size-3.5";
+  "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-ink-muted transition-colors hover:bg-sunk hover:text-ink [&_svg]:size-3.5";
 
 function MessageCommands({ onCommand }: { onCommand: (c: MessageCommand) => void }) {
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-0.5 border-t border-stone/70 pt-2">
+    <div className="mt-3 flex flex-wrap items-center gap-0.5 border-t border-line/70 pt-2">
       <button type="button" className={commandButton} onClick={() => onCommand("decision")}>
         <ListChecksIcon /> Save as decision
       </button>
@@ -211,7 +211,7 @@ function Sources({ sources }: { sources: WebSource[] }) {
       <ul className="mt-2 space-y-1">
         {sources.slice(0, 20).map((s) => (
           <li key={s.url} className="truncate">
-            <a href={s.url} target="_blank" rel="noopener noreferrer" className="hover:text-oxblood hover:underline">
+            <a href={s.url} target="_blank" rel="noopener noreferrer" className="hover:text-accent hover:underline">
               {s.title || s.url}
             </a>
           </li>
