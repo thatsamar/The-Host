@@ -48,7 +48,7 @@ export function LibrarySection({ projectId, rooms, files, activeRoomId, notice }
 
   return (
     <section
-      className={cn("mt-5 rounded-md transition-colors", dragging && "bg-tobacco-soft/60 outline-1 outline-dashed outline-tobacco")}
+      className={cn("mt-5 rounded-md transition-colors", dragging && "bg-accent-soft/60 outline-1 outline-dashed outline-accent")}
       onDragOver={(e) => {
         e.preventDefault();
         setDragging(true);
@@ -67,7 +67,7 @@ export function LibrarySection({ projectId, rooms, files, activeRoomId, notice }
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
-          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-ink-muted hover:bg-paper-raised hover:text-ink"
+          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-ink-muted hover:bg-surface hover:text-ink"
           aria-label="Upload files"
         >
           <UploadIcon className="size-3.5" /> Upload
@@ -85,9 +85,9 @@ export function LibrarySection({ projectId, rooms, files, activeRoomId, notice }
         />
       </div>
 
-      {notice ? <p className="mx-2 mb-2 rounded-md bg-oxblood-soft px-2 py-1.5 text-xs text-oxblood">{notice}</p> : null}
+      {notice ? <p className="mx-2 mb-2 rounded-md bg-warn-soft px-2 py-1.5 text-xs text-warn">{notice}</p> : null}
       {problems.map((p) => (
-        <p key={p} className="mx-2 mb-1 text-xs text-oxblood">
+        <p key={p} className="mx-2 mb-1 text-xs text-warn">
           {p}
         </p>
       ))}
@@ -154,7 +154,7 @@ export function FileItem({ file, roomName }: { file: FileRow; roomName?: string 
   const warnings = file.progress?.warnings?.length ?? 0;
 
   return (
-    <div className="group flex items-start rounded-md hover:bg-paper-raised/70">
+    <div className="group flex items-start rounded-md hover:bg-surface/70">
       <button
         type="button"
         className="flex min-w-0 flex-1 items-start gap-2 px-2 py-1.5 text-left"
@@ -172,7 +172,7 @@ export function FileItem({ file, roomName }: { file: FileRow; roomName?: string 
           <span
             className={cn(
               "flex items-center gap-1 truncate text-[11px]",
-              status.tone === "bad" ? "text-oxblood" : status.tone === "ok" ? "text-olive" : "text-ink-muted",
+              status.tone === "bad" ? "text-warn" : status.tone === "ok" ? "text-ok" : "text-ink-muted",
             )}
           >
             {status.tone === "busy" ? <LoaderIcon className="size-3 shrink-0 animate-spin" /> : null}
@@ -188,7 +188,7 @@ export function FileItem({ file, roomName }: { file: FileRow; roomName?: string 
       <DropdownMenu>
         <DropdownMenuTrigger
           disabled={pending}
-          className="mr-1 mt-1 rounded p-1 text-ink-muted hover:bg-paper-sunk hover:text-ink lg:opacity-0 lg:group-hover:opacity-100 data-[state=open]:opacity-100"
+          className="mr-1 mt-1 rounded p-1 text-ink-muted hover:bg-sunk hover:text-ink lg:opacity-0 lg:group-hover:opacity-100 data-[state=open]:opacity-100"
           aria-label="File options"
         >
           <MoreHorizontalIcon className="size-4" />
@@ -208,7 +208,7 @@ export function FileItem({ file, roomName }: { file: FileRow; roomName?: string 
             </DropdownMenuItem>
           ) : null}
           <DropdownMenuItem
-            className="text-oxblood"
+            className="text-warn"
             onSelect={() => {
               if (!confirm(`Delete "${file.name}" from the library?`)) return;
               start(async () => {
@@ -217,7 +217,7 @@ export function FileItem({ file, roomName }: { file: FileRow; roomName?: string 
               });
             }}
           >
-            <Trash2Icon className="!text-oxblood" /> Delete
+            <Trash2Icon className="!text-warn" /> Delete
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

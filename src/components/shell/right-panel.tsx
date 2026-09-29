@@ -16,7 +16,7 @@ export function RightPanel({ workspace, activeRoom }: { workspace: Workspace; ac
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto px-5 pb-8 pt-5">
-      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-tobacco">Notebook</p>
+      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-accent">Notebook</p>
 
       <ProjectForm key={project.id + project.updated_at} workspace={workspace} />
 
@@ -71,7 +71,7 @@ function ProjectForm({ workspace }: { workspace: Workspace }) {
         aria-label="Project name"
         value={name}
         onChange={(e) => setName(e.target.value)}
-        className="w-full bg-transparent font-serif text-2xl leading-tight text-ink outline-none focus:underline focus:decoration-stone-strong focus:underline-offset-4"
+        className="w-full bg-transparent font-serif text-2xl leading-tight text-ink outline-none focus:underline focus:decoration-line-strong focus:underline-offset-4"
       />
       <div className="space-y-1.5">
         <Label htmlFor="project-location-edit">Place</Label>
@@ -93,12 +93,12 @@ function ProjectForm({ workspace }: { workspace: Workspace }) {
           className="font-serif text-[15px] leading-relaxed md:text-[15px]"
         />
       </div>
-      {error ? <p className="text-sm text-oxblood">{error}</p> : null}
+      {error ? <p className="text-sm text-warn">{error}</p> : null}
       <div className="flex items-center gap-3">
         <Button type="submit" size="sm" disabled={!dirty || pending}>
           {pending ? "Saving…" : "Save"}
         </Button>
-        {saved ? <span className="text-xs text-olive">Saved</span> : null}
+        {saved ? <span className="text-xs text-ok">Saved</span> : null}
         {!project.is_default ? <DeleteProject id={project.id} name={project.name} /> : null}
       </div>
     </form>
@@ -111,7 +111,7 @@ function DeleteProject({ id, name }: { id: string; name: string }) {
     <button
       type="button"
       disabled={pending}
-      className="ml-auto text-xs text-ink-muted hover:text-oxblood"
+      className="ml-auto text-xs text-ink-muted hover:text-warn"
       onClick={() => {
         if (!confirm(`Delete "${name}" with all its rooms and conversations? This can't be undone.`)) return;
         start(() => deleteProject(id).then(() => undefined));
@@ -154,15 +154,15 @@ function RoomForm({ room, projectId }: { room: RoomRow; projectId: string }) {
           placeholder="Dimensions, light, what's in it now, what isn't working."
           className="font-serif text-[15px] leading-relaxed md:text-[15px]"
         />
-        {error ? <p className="text-sm text-oxblood">{error}</p> : null}
+        {error ? <p className="text-sm text-warn">{error}</p> : null}
         <div className="flex items-center gap-3">
           <Button type="submit" size="sm" disabled={!dirty || pending}>
             Save room
           </Button>
-          {saved ? <span className="text-xs text-olive">Saved</span> : null}
+          {saved ? <span className="text-xs text-ok">Saved</span> : null}
           <button
             type="button"
-            className="ml-auto text-xs text-ink-muted hover:text-oxblood"
+            className="ml-auto text-xs text-ink-muted hover:text-warn"
             onClick={() => {
               if (!confirm(`Delete the room "${room.name}"? Its conversations stay in the project.`)) return;
               start(async () => {

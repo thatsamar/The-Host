@@ -64,17 +64,17 @@ export function AppShell({ workspace, children }: { workspace: Workspace; childr
   const panel = <RightPanel workspace={workspace} activeRoom={activeRoom} />;
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-paper">
-      <aside className="hidden w-72 shrink-0 border-r border-stone bg-paper-sunk/60 lg:flex lg:flex-col">{sidebar}</aside>
+    <div className="flex h-dvh overflow-hidden bg-ground">
+      <aside className="hidden w-72 shrink-0 border-r border-line bg-sunk/60 lg:flex lg:flex-col">{sidebar}</aside>
 
       <Sheet open={leftOpen} onOpenChange={setLeftOpen}>
-        <SheetContent side="left" title="Projects, rooms and conversations" className="bg-paper-sunk">
+        <SheetContent side="left" title="Projects, rooms and conversations" className="bg-sunk">
           {sidebar}
         </SheetContent>
       </Sheet>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-stone px-3 lg:px-6">
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-3 lg:px-6">
           <Button variant="ghost" size="icon-sm" className="lg:hidden" onClick={() => setLeftOpen(true)} aria-label="Open sidebar">
             <MenuIcon />
           </Button>
@@ -110,7 +110,7 @@ export function AppShell({ workspace, children }: { workspace: Workspace; childr
       </div>
 
       {rightPinned ? (
-        <aside className="hidden w-80 shrink-0 border-l border-stone bg-paper-sunk/40 lg:flex lg:flex-col xl:w-[22rem]">
+        <aside className="hidden w-80 shrink-0 border-l border-line bg-sunk/40 lg:flex lg:flex-col xl:w-[22rem]">
           {panel}
         </aside>
       ) : null}

@@ -21,8 +21,8 @@ function SheetContent({
       <SheetPrimitive.Overlay className="fixed inset-0 z-40 bg-ink/25 backdrop-blur-[1px]" />
       <SheetPrimitive.Content
         className={cn(
-          "fixed inset-y-0 z-50 flex w-[88vw] max-w-sm flex-col bg-paper shadow-xl outline-none",
-          side === "left" ? "left-0 border-r border-stone" : "right-0 border-l border-stone",
+          "fixed inset-y-0 z-50 flex w-[88vw] max-w-sm flex-col bg-ground shadow-xl outline-none",
+          side === "left" ? "left-0 border-r border-line" : "right-0 border-l border-line",
           className,
         )}
         // Don't focus a text field on open: on a phone that pops up the keyboard.
@@ -32,7 +32,7 @@ function SheetContent({
         <SheetPrimitive.Title className="sr-only">{title}</SheetPrimitive.Title>
         <SheetPrimitive.Description className="sr-only">{title}</SheetPrimitive.Description>
         {children}
-        <SheetPrimitive.Close className="absolute right-3 top-3 rounded-md p-1.5 text-ink-muted hover:bg-paper-sunk hover:text-ink">
+        <SheetPrimitive.Close className="absolute right-3 top-3 rounded-md p-1.5 text-ink-muted hover:bg-sunk hover:text-ink">
           <XIcon className="size-4" />
           <span className="sr-only">Close</span>
         </SheetPrimitive.Close>

@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { DECISION_STATUS_LABELS, MEMORY_TYPE_LABELS } from "./labels";
 
 export const selectClass =
-  "h-9 w-full rounded-md border border-stone-strong bg-paper-raised px-2 text-sm text-ink outline-none focus-visible:border-tobacco focus-visible:ring-2 focus-visible:ring-tobacco/20";
+  "h-9 w-full rounded-md border border-line-strong bg-surface px-2 text-sm text-ink outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20";
 
 export interface MemoryFormValue {
   type: MemoryType;
@@ -79,7 +79,7 @@ export function MemoryForm({
         </Field>
       </div>
       <label className="flex items-center gap-2 text-sm text-ink-soft">
-        <input type="checkbox" checked={value.household} onChange={(e) => set({ household: e.target.checked })} className="accent-[var(--oxblood)]" />
+        <input type="checkbox" checked={value.household} onChange={(e) => set({ household: e.target.checked })} className="accent-[var(--accent)]" />
         Applies to every home (household-wide)
       </label>
       <div className="flex items-center gap-2">
@@ -188,14 +188,14 @@ export function DecisionForm({
             type="checkbox"
             checked={Boolean(p)}
             onChange={(e) => set({ product: e.target.checked ? (initial.product ?? EMPTY_PRODUCT) : null })}
-            className="accent-[var(--oxblood)]"
+            className="accent-[var(--accent)]"
           />
           Track a piece under consideration
         </label>
       ) : null}
 
       {p ? (
-        <div className="grid grid-cols-2 gap-2 rounded-md border border-stone bg-paper p-3">
+        <div className="grid grid-cols-2 gap-2 rounded-md border border-line bg-ground p-3">
           <Field label="Piece" className="col-span-2">
             <Input value={p.name} onChange={(e) => setProduct({ name: e.target.value })} placeholder="Danish rosewood lounge chair" />
           </Field>

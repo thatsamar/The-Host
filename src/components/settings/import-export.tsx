@@ -35,7 +35,7 @@ function download(filename: string, text: string, type: string) {
 
 function Card({ title, children, description }: { title: string; description: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-lg border border-stone bg-paper-raised p-5">
+    <section className="rounded-lg border border-line bg-surface p-5">
       <h2 className="font-serif text-xl text-ink">{title}</h2>
       <p className="mt-1 max-w-2xl text-sm text-ink-muted">{description}</p>
       <div className="mt-4">{children}</div>
@@ -83,7 +83,7 @@ function ExportCard() {
           {busy === "md" ? <LoaderIcon className="animate-spin" /> : <DownloadIcon />} Export Markdown
         </Button>
       </div>
-      {error ? <p className="mt-2 text-sm text-oxblood">{error}</p> : null}
+      {error ? <p className="mt-2 text-sm text-warn">{error}</p> : null}
     </Card>
   );
 }
@@ -137,7 +137,7 @@ function ImportCard({ userId }: { userId: string }) {
       title="Import a Gio export"
       description="Restores a JSON or Markdown export from this app. Nothing is overwritten: items already here are skipped, the export's General Design Brain merges into yours, and a different system prompt is added to the prompt history rather than replacing the current one."
     >
-      <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-stone-strong px-3 py-2 text-sm text-ink hover:bg-paper-sunk">
+      <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-line-strong px-3 py-2 text-sm text-ink hover:bg-sunk">
         <FileUpIcon className="size-4" /> Choose export file
         <input type="file" accept=".json,.md,application/json,text/markdown" className="hidden" onChange={(e) => e.target.files?.[0] && read(e.target.files[0])} />
       </label>
@@ -160,7 +160,7 @@ function ImportCard({ userId }: { userId: string }) {
       ) : null}
       {report ? (
         <div className="mt-4 text-sm text-ink-soft">
-          <p className="text-olive">Imported.</p>
+          <p className="text-ok">Imported.</p>
           <p className="mt-1">
             Added {report.added.projects} projects, {report.added.rooms} rooms, {report.added.chats} conversations ({report.added.messages} messages),{" "}
             {report.added.memories} memories, {report.added.decisions} decisions, {report.added.products} pieces and {report.added.promptVersions} prompt
@@ -173,7 +173,7 @@ function ImportCard({ userId }: { userId: string }) {
           ) : null}
         </div>
       ) : null}
-      {error ? <p className="mt-3 text-sm text-oxblood">{error}</p> : null}
+      {error ? <p className="mt-3 text-sm text-warn">{error}</p> : null}
     </Card>
   );
 }
@@ -253,7 +253,7 @@ function ChatGptCard({ userId, projects, extraction }: { userId: string; project
       title="Import from ChatGPT"
       description="In ChatGPT, go to Settings, then Data controls, then Export data. Unzip the file ChatGPT emails you and choose conversations.json. It's read in this browser; only the conversations you select are saved. Conversations with the old Gio are grouped by its custom GPT id."
     >
-      <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-stone-strong px-3 py-2 text-sm text-ink hover:bg-paper-sunk">
+      <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-line-strong px-3 py-2 text-sm text-ink hover:bg-sunk">
         {reading ? <LoaderIcon className="size-4 animate-spin" /> : <FileUpIcon className="size-4" />} Choose conversations.json
         <input type="file" accept=".json,application/json" className="hidden" onChange={(e) => e.target.files?.[0] && read(e.target.files[0])} />
       </label>
@@ -269,7 +269,7 @@ function ChatGptCard({ userId, projects, extraction }: { userId: string; project
                   key={g.gizmoId ?? "none"}
                   type="button"
                   onClick={() => toggle(ids, !all)}
-                  className={`rounded-full border px-3 py-1 text-xs ${all ? "border-oxblood bg-oxblood text-paper" : "border-stone text-ink-muted hover:text-ink"}`}
+                  className={`rounded-full border px-3 py-1 text-xs ${all ? "border-accent bg-accent text-accent-ink" : "border-line text-ink-muted hover:text-ink"}`}
                 >
                   {g.gizmoId ? `Custom GPT ${g.gizmoId.slice(0, 14)}` : "Regular ChatGPT"} · {g.count}
                 </button>
@@ -288,11 +288,11 @@ function ChatGptCard({ userId, projects, extraction }: { userId: string; project
             <span className="text-sm text-ink-muted">{selected.size} selected</span>
           </div>
 
-          <ul className="max-h-80 divide-y divide-stone overflow-y-auto rounded-md border border-stone">
+          <ul className="max-h-80 divide-y divide-line overflow-y-auto rounded-md border border-line">
             {matching.slice(0, LIST_LIMIT).map((c) => (
               <li key={c.id}>
-                <label className="flex cursor-pointer items-start gap-3 px-3 py-2 hover:bg-paper-sunk">
-                  <input type="checkbox" className="mt-1 accent-[var(--oxblood)]" checked={selected.has(c.id)} onChange={(e) => toggle([c.id], e.target.checked)} />
+                <label className="flex cursor-pointer items-start gap-3 px-3 py-2 hover:bg-sunk">
+                  <input type="checkbox" className="mt-1 accent-[var(--accent)]" checked={selected.has(c.id)} onChange={(e) => toggle([c.id], e.target.checked)} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm text-ink">{c.title}</span>
                     <span className="block text-xs text-ink-muted">
@@ -329,7 +329,7 @@ function ChatGptCard({ userId, projects, extraction }: { userId: string; project
               </select>
             </label>
             <label className="flex items-end gap-2 pb-2 text-sm text-ink-soft">
-              <input type="checkbox" checked={extract} onChange={(e) => setExtract(e.target.checked)} className="accent-[var(--oxblood)]" />
+              <input type="checkbox" checked={extract} onChange={(e) => setExtract(e.target.checked)} className="accent-[var(--accent)]" />
               Propose memories from these conversations
             </label>
           </div>
@@ -339,11 +339,11 @@ function ChatGptCard({ userId, projects, extraction }: { userId: string; project
         </div>
       ) : null}
 
-      {result ? <p className="mt-3 text-sm text-olive">{result}</p> : null}
-      {error ? <p className="mt-3 text-sm text-oxblood">{error}</p> : null}
+      {result ? <p className="mt-3 text-sm text-ok">{result}</p> : null}
+      {error ? <p className="mt-3 text-sm text-warn">{error}</p> : null}
 
       {extraction.waiting || extraction.done || extraction.failed ? (
-        <div className="mt-5 rounded-md bg-paper-sunk p-3 text-sm text-ink-soft">
+        <div className="mt-5 rounded-md bg-sunk p-3 text-sm text-ink-soft">
           <p className="flex items-center gap-2">
             {extraction.running ? <LoaderIcon className="size-4 animate-spin" /> : null}
             Memory proposals from imported conversations: {extraction.done} read, {extraction.waiting} waiting
@@ -366,7 +366,7 @@ function ChatGptCard({ userId, projects, extraction }: { userId: string; project
               Retry failed
             </Button>
           ) : null}
-          {extraction.error ? <p className="mt-1 text-xs text-oxblood">{extraction.error}</p> : null}
+          {extraction.error ? <p className="mt-1 text-xs text-warn">{extraction.error}</p> : null}
         </div>
       ) : null}
     </Card>

@@ -3,10 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowUpIcon,
   BookmarkPlusIcon,
   CameraIcon,
-  ImagePlusIcon,
   ListChecksIcon,
   LoaderIcon,
   RotateCcwIcon,
@@ -28,11 +26,11 @@ import { createClient } from "@/lib/supabase/client";
 import { Message, type DisplayMessage, type MessageCommand } from "./message";
 import { SpeakerToggle } from "./speaker-toggle";
 
-const STARTERS = [
-  "What is the highest-leverage move in this room?",
-  "Create a lighting plan for the dining room.",
-  "What have we learned about Courtney and Amar's taste?",
-  "Find us a vintage lounge chair under $2,000 for the reading corner.",
+const STARTERS: [text: string, tag: string][] = [
+  ["What is the highest-leverage move in this room?", "Rooms"],
+  ["Create a lighting plan for the dining room.", "Light"],
+  ["What have we learned about Courtney and Amar's taste?", "Memory"],
+  ["Find us a vintage lounge chair under $2,000 for the reading corner.", "Shopping"],
 ];
 
 const MAX_PHOTOS = 6;
@@ -334,7 +332,7 @@ export function ChatView({
         </div>
       </div>
 
-      <div className="shrink-0 border-t border-stone bg-paper px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-6">
+      <div className="shrink-0 bg-ground px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 sm:px-6">
         <form
           className="mx-auto w-full max-w-2xl"
           onSubmit={(e) => {
@@ -351,7 +349,7 @@ export function ChatView({
             onDecision={() => setCommand({ kind: "decision", text: input.trim(), nonce: Date.now() })}
           />
           <div
-            className="rounded-lg border border-stone-strong bg-paper-raised focus-within:border-tobacco focus-within:ring-2 focus-within:ring-tobacco/15"
+            className="rounded-[14px] border border-line bg-surface transition-colors focus-within:border-line-strong"
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
               e.preventDefault();
@@ -366,15 +364,15 @@ export function ChatView({
                     <img
                       src={p.previewUrl}
                       alt={p.name}
-                      className={`size-16 rounded-md border border-stone object-cover ${p.status === "error" ? "opacity-40" : ""}`}
+                      className={`size-16 rounded-md object-cover ${p.status === "error" ? "opacity-40" : ""}`}
                     />
                     {p.status === "uploading" ? (
-                      <LoaderIcon className="absolute inset-0 m-auto size-5 animate-spin text-paper drop-shadow" />
+                      <LoaderIcon className="absolute inset-0 m-auto size-5 animate-spin text-ground drop-shadow" />
                     ) : null}
                     <button
                       type="button"
                       onClick={() => setPhotos((all) => all.filter((x) => x.key !== p.key))}
-                      className="absolute -right-1.5 -top-1.5 rounded-full border border-stone bg-paper-raised p-0.5 text-ink-muted hover:text-ink"
+                      className="absolute -right-1.5 -top-1.5 rounded-full bg-ink p-0.5 text-ground hover:bg-ink-soft"
                       aria-label={`Remove ${p.name}`}
                     >
                       <XIcon className="size-3" />
@@ -384,7 +382,7 @@ export function ChatView({
               </div>
             ) : null}
             {photos.some((p) => p.status === "error") ? (
-              <p className="px-4 pt-2 text-xs text-oxblood">
+              <p className="px-4 pt-2 text-xs text-warn">
                 {photos.find((p) => p.status === "error")?.error}
               </p>
             ) : null}
@@ -399,7 +397,7 @@ export function ChatView({
                   ? `${MODE_LABELS[mode]}${mode === "analyze_photo" ? ": attach a photo, add a note if you like" : ": add the details"}…`
                   : photos.length
                     ? "Add a note, or just send the photo…"
-                    : "Ask Gio…"
+                    : "Ask Gio, or add a photo"
               }
               aria-label="Message Gio"
               className="block max-h-60 w-full resize-none bg-transparent px-4 pt-3 text-base leading-relaxed text-ink outline-none placeholder:text-ink-muted"
@@ -407,17 +405,15 @@ export function ChatView({
             <div className="flex items-center justify-between gap-2 px-2 pb-2 pt-1">
               <div className="flex items-center gap-1.5">
                 <SpeakerToggle value={speaker} onChange={setSpeaker} disabled={streaming} />
-                <Button
+                <button
                   type="button"
-                  size="icon-sm"
-                  variant="ghost"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={streaming || photos.length >= MAX_PHOTOS}
-                  aria-label="Attach photos"
                   title="Attach photos"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full border border-line px-3 text-sm text-ink transition-colors hover:border-ink disabled:opacity-40 [&_svg]:size-4"
                 >
-                  <ImagePlusIcon />
-                </Button>
+                  <CameraIcon /> Photo
+                </button>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -431,18 +427,24 @@ export function ChatView({
                 />
               </div>
               {streaming ? (
-                <Button type="button" size="icon-sm" variant="outline" onClick={() => abortRef.current?.abort()} aria-label="Stop">
-                  <SquareIcon className="size-3.5 fill-current" />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="rounded-full px-4"
+                  onClick={() => abortRef.current?.abort()}
+                >
+                  <SquareIcon className="size-3 fill-current" /> Stop
                 </Button>
               ) : (
                 <Button
                   type="submit"
-                  size="icon-sm"
+                  size="sm"
                   variant="accent"
+                  className="rounded-full px-[18px] disabled:opacity-35"
                   disabled={(!input.trim() && !readyPhotos.length) || photosUploading || needsPhoto}
-                  aria-label="Send"
                 >
-                  <ArrowUpIcon />
+                  Ask
                 </Button>
               )}
             </div>
@@ -496,20 +498,20 @@ function CommandBar({
           onClick={() => onMode(m.mode)}
           className={cn(
             chip,
-            mode === m.mode ? "border-oxblood bg-oxblood text-paper" : "border-stone text-ink-muted hover:border-stone-strong hover:text-ink",
+            mode === m.mode ? "border-accent bg-accent text-accent-ink" : "border-line text-ink-muted hover:border-line-strong hover:text-ink",
           )}
         >
           {m.icon}
           {MODE_LABELS[m.mode]}
         </button>
       ))}
-      <span className="mx-0.5 w-px shrink-0 bg-stone" aria-hidden />
+      <span className="mx-0.5 w-px shrink-0 bg-line" aria-hidden />
       <button
         type="button"
         disabled={disabled || !hasText}
         onClick={onRemember}
         title="Save what you've typed as a memory, without sending it"
-        className={cn(chip, "border-stone text-ink-muted hover:border-stone-strong hover:text-ink")}
+        className={cn(chip, "border-line text-ink-muted hover:border-line-strong hover:text-ink")}
       >
         <BookmarkPlusIcon /> Add to memory
       </button>
@@ -518,7 +520,7 @@ function CommandBar({
         disabled={disabled || !hasText}
         onClick={onDecision}
         title="Log what you've typed as a decision, without sending it"
-        className={cn(chip, "border-stone text-ink-muted hover:border-stone-strong hover:text-ink")}
+        className={cn(chip, "border-line text-ink-muted hover:border-line-strong hover:text-ink")}
       >
         <ListChecksIcon /> Save as decision
       </button>
@@ -528,24 +530,26 @@ function CommandBar({
 
 function EmptyState({ onPick }: { onPick: (text: string) => void }) {
   return (
-    <div className="pt-[8vh]">
-      <p className="font-serif text-3xl font-light leading-snug text-ink sm:text-4xl">What are we making better?</p>
-      <p className="mt-3 max-w-md font-serif text-lg italic text-ink-muted">
-        A room, a piece, a disagreement, a feeling you want at midnight.
+    <div className="flex flex-col gap-[18px] pt-[6vh]">
+      <h1 className="font-serif text-[clamp(36px,9vw,54px)] font-normal leading-[1.02] tracking-[-0.02em] text-ink [text-wrap:balance]">
+        See with a designer&rsquo;s eye.
+      </h1>
+      <p className="max-w-[44ch] text-ink-muted">
+        Ask about any room, piece or decision, or add a photo. You get a straight answer and what to do next.
       </p>
-      <ul className="mt-10 space-y-1 border-t border-stone pt-4">
-        {STARTERS.map((s) => (
-          <li key={s}>
-            <button
-              type="button"
-              onClick={() => onPick(s)}
-              className="w-full rounded-md px-2 py-2 text-left text-[15px] text-ink-soft transition-colors hover:bg-paper-sunk hover:text-ink"
-            >
-              {s}
-            </button>
-          </li>
+      <div className="flex flex-col border-t border-line">
+        {STARTERS.map(([text, tag]) => (
+          <button
+            key={text}
+            type="button"
+            onClick={() => onPick(text)}
+            className="group flex justify-between gap-3 border-b border-line py-3 text-left"
+          >
+            <span className="text-ink transition-colors group-hover:text-accent">{text}</span>
+            <span className="shrink-0 text-ink-muted">{tag}</span>
+          </button>
         ))}
-      </ul>
+      </div>
     </div>
   );
 }

@@ -33,7 +33,7 @@ import {
 
 export function PanelSection({ title, count, children }: { title: string; count?: number; children: React.ReactNode }) {
   return (
-    <section className="mt-8 border-t border-stone pt-5">
+    <section className="mt-8 border-t border-line pt-5">
       <h3 className="mb-3 flex items-baseline justify-between font-serif text-lg text-ink">
         {title}
         {count ? <span className="font-sans text-xs text-ink-muted">{count}</span> : null}
@@ -54,7 +54,7 @@ function Chip({ className, children }: { className?: string; children: React.Rea
 function SourceLink({ href }: { href: string | null }) {
   if (!href) return null;
   return (
-    <Link href={href} className="inline-flex items-center gap-1 text-[11px] text-ink-muted hover:text-oxblood">
+    <Link href={href} className="inline-flex items-center gap-1 text-[11px] text-ink-muted hover:text-accent">
       <MessageSquareIcon className="size-3" /> From the conversation
     </Link>
   );
@@ -63,7 +63,7 @@ function SourceLink({ href }: { href: string | null }) {
 function RowMenu({ onEdit, onDelete }: { onEdit?: () => void; onDelete: () => void }) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="shrink-0 rounded p-0.5 text-ink-muted hover:bg-paper-sunk hover:text-ink" aria-label="Options">
+      <DropdownMenuTrigger className="shrink-0 rounded p-0.5 text-ink-muted hover:bg-sunk hover:text-ink" aria-label="Options">
         <MoreHorizontalIcon className="size-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-[9rem]">
@@ -72,8 +72,8 @@ function RowMenu({ onEdit, onDelete }: { onEdit?: () => void; onDelete: () => vo
             <PencilIcon /> Edit
           </DropdownMenuItem>
         ) : null}
-        <DropdownMenuItem className="text-oxblood" onSelect={onDelete}>
-          <Trash2Icon className="!text-oxblood" /> Delete
+        <DropdownMenuItem className="text-warn" onSelect={onDelete}>
+          <Trash2Icon className="!text-warn" /> Delete
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -131,8 +131,8 @@ function MemoryProposal({ memory, projectId }: { memory: MemoryRow; projectId: s
     router.refresh();
   });
   return (
-    <li className="rounded-md border border-stone bg-paper-raised p-3">
-      <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-tobacco">Memory · {MEMORY_TYPE_LABELS[memory.type]}</p>
+    <li className="rounded-md border border-line bg-surface p-3">
+      <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-accent">Memory · {MEMORY_TYPE_LABELS[memory.type]}</p>
       {editing ? (
         <div className="mt-2">
           <MemoryForm
@@ -174,8 +174,8 @@ function DecisionProposal({ decision, projectId }: { decision: DecisionRow; proj
     router.refresh();
   });
   return (
-    <li className="rounded-md border border-stone bg-paper-raised p-3">
-      <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-tobacco">
+    <li className="rounded-md border border-line bg-surface p-3">
+      <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-accent">
         Decision · {DECISION_STATUS_LABELS[decision.status]}
       </p>
       {editing ? (
@@ -238,7 +238,7 @@ function MemoryItem({ memory, projectId }: { memory: MemoryRow; projectId: strin
   const [pending, start] = useTransition();
   if (editing) {
     return (
-      <li className="rounded-md border border-stone bg-paper-raised p-3">
+      <li className="rounded-md border border-line bg-surface p-3">
         <MemoryForm
           compact
           initial={{ type: memory.type, content: memory.content, attributedTo: memory.attributed_to, household: !memory.project_id }}
@@ -259,7 +259,7 @@ function MemoryItem({ memory, projectId }: { memory: MemoryRow; projectId: strin
   return (
     <li className="group flex items-start gap-2 text-sm leading-snug text-ink-soft">
       <span className="min-w-0 flex-1">
-        <Chip className="bg-olive-soft text-olive">{MEMORY_TYPE_SHORT[memory.type]}</Chip>
+        <Chip className="bg-ok-soft text-ok">{MEMORY_TYPE_SHORT[memory.type]}</Chip>
         {memory.content}
         {!memory.project_id ? <span className="ml-1 text-[11px] text-ink-muted">· household</span> : null}
       </span>
@@ -374,7 +374,7 @@ function ProductItem({ product: p, projectId }: { product: ProductRow; projectId
   const price = formatPrice(p);
   const facts = [p.dimensions, p.material_color, p.provenance && p.provenance !== "unknown" ? p.provenance : null].filter(Boolean);
   return (
-    <li className={cn("rounded-md border border-stone bg-paper-raised p-3 text-sm", p.status === "rejected" && "opacity-60")}>
+    <li className={cn("rounded-md border border-line bg-surface p-3 text-sm", p.status === "rejected" && "opacity-60")}>
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <p className="font-serif text-[15px] leading-snug text-ink">{p.name}</p>
@@ -394,10 +394,10 @@ function ProductItem({ product: p, projectId }: { product: ProductRow; projectId
       {p.placement ? <p className="mt-0.5 text-xs text-ink-soft">Placement: {p.placement}</p> : null}
       {p.rationale ? <p className="mt-0.5 text-xs text-ink-muted">{p.rationale}</p> : null}
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        {p.verdict ? <Chip className="bg-tobacco-soft text-tobacco">{p.verdict}</Chip> : null}
+        {p.verdict ? <Chip className="bg-accent-soft text-accent">{p.verdict}</Chip> : null}
         {price ? <span className="text-xs text-ink">{price}</span> : null}
         {p.url ? (
-          <a href={p.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-[11px] text-oxblood hover:underline">
+          <a href={p.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-[11px] text-accent hover:underline">
             Listing <ExternalLinkIcon className="size-3" />
           </a>
         ) : null}

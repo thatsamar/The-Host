@@ -49,7 +49,7 @@ export function LeftSidebar({ workspace, activeChatId, activeRoomId, libraryNoti
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="px-5 pb-3 pt-5">
-        <p className="font-serif text-2xl font-light tracking-tight text-ink">Gio</p>
+        <p className="text-[26px] font-bold leading-none tracking-[-0.04em] text-ink">Gio</p>
       </div>
 
       <div className="px-3">
@@ -105,7 +105,7 @@ export function LeftSidebar({ workspace, activeChatId, activeRoomId, libraryNoti
         />
       </nav>
 
-      <div className="flex items-center gap-1 border-t border-stone p-3">
+      <div className="flex items-center gap-1 border-t border-line p-3">
         <Button asChild variant="ghost" size="sm" className="flex-1 justify-start text-ink-muted">
           <Link href="/settings">
             <SettingsIcon />
@@ -138,7 +138,7 @@ function RoomLink({ href, active, label }: { href: string; active: boolean; labe
       href={href}
       className={cn(
         "block truncate rounded-md px-2 py-1.5 text-sm transition-colors",
-        active ? "bg-paper-raised font-medium text-ink shadow-[inset_2px_0_0_var(--oxblood)]" : "text-ink-soft hover:bg-paper-raised/70",
+        active ? "bg-surface font-medium text-ink shadow-[inset_2px_0_0_var(--accent)]" : "text-ink-soft hover:bg-surface/70",
       )}
     >
       {label}
@@ -157,7 +157,7 @@ function AddRoom({ projectId }: { projectId: string }) {
     return (
       <button
         onClick={() => setAdding(true)}
-        className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-ink-muted hover:bg-paper-raised/70 hover:text-ink"
+        className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-ink-muted hover:bg-surface/70 hover:text-ink"
       >
         <PlusIcon className="size-3.5" /> Add room
       </button>
@@ -190,7 +190,7 @@ function AddRoom({ projectId }: { projectId: string }) {
         className="h-8"
         disabled={pending}
       />
-      {error ? <p className="mt-1 px-1 text-xs text-oxblood">{error}</p> : null}
+      {error ? <p className="mt-1 px-1 text-xs text-warn">{error}</p> : null}
     </form>
   );
 }
@@ -241,7 +241,7 @@ function ChatItem({
     <div
       className={cn(
         "group flex items-center rounded-md transition-colors",
-        active ? "bg-paper-raised shadow-[inset_2px_0_0_var(--oxblood)]" : "hover:bg-paper-raised/70",
+        active ? "bg-surface shadow-[inset_2px_0_0_var(--accent)]" : "hover:bg-surface/70",
       )}
     >
       <Link href={href} className="min-w-0 flex-1 px-2 py-1.5">
@@ -252,7 +252,7 @@ function ChatItem({
       </Link>
       <DropdownMenu>
         <DropdownMenuTrigger
-          className="mr-1 rounded p-1 text-ink-muted opacity-100 hover:bg-paper-sunk hover:text-ink lg:opacity-0 lg:group-hover:opacity-100 data-[state=open]:opacity-100"
+          className="mr-1 rounded p-1 text-ink-muted opacity-100 hover:bg-sunk hover:text-ink lg:opacity-0 lg:group-hover:opacity-100 data-[state=open]:opacity-100"
           aria-label="Conversation options"
         >
           <MoreHorizontalIcon className="size-4" />
@@ -262,7 +262,7 @@ function ChatItem({
             <PencilIcon /> Rename
           </DropdownMenuItem>
           <DropdownMenuItem
-            className="text-oxblood"
+            className="text-warn"
             onSelect={() => {
               if (!confirm("Delete this conversation? This can't be undone.")) return;
               start(async () => {
@@ -271,7 +271,7 @@ function ChatItem({
               });
             }}
           >
-            <Trash2Icon className="!text-oxblood" /> Delete
+            <Trash2Icon className="!text-warn" /> Delete
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -290,7 +290,7 @@ function ProjectSwitcher({ workspace }: { workspace: Workspace }) {
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger className="flex w-full items-center gap-2 rounded-md border border-stone bg-paper-raised px-3 py-2 text-left outline-none hover:border-stone-strong focus-visible:ring-2 focus-visible:ring-tobacco/30">
+        <DropdownMenuTrigger className="flex w-full items-center gap-2 rounded-md border border-line bg-surface px-3 py-2 text-left outline-none hover:border-line-strong focus-visible:ring-2 focus-visible:ring-accent/30">
           <span className="min-w-0 flex-1">
             <span className="block text-[10px] font-medium uppercase tracking-[0.14em] text-ink-muted">Project</span>
             <span className="block truncate font-serif text-[15px] text-ink">{workspace.project.name}</span>
@@ -341,7 +341,7 @@ function ProjectSwitcher({ workspace }: { workspace: Workspace }) {
                 placeholder="Marfa, Texas"
               />
             </div>
-            {error ? <p className="text-sm text-oxblood">{error}</p> : null}
+            {error ? <p className="text-sm text-warn">{error}</p> : null}
             <div className="flex justify-end">
               <Button type="submit" disabled={pending}>
                 {pending ? "Creating…" : "Create project"}
