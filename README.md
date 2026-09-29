@@ -14,9 +14,14 @@ The code is shared. Each companion is its own Vercel project with its own addres
 
 ## Inviting testers
 
-1. Supabase → **Authentication → Users → Add user → Create new user**. Enter their email and a password, tick **Auto Confirm User**.
-2. Send them the address and their login. On a phone, **Share → Add to Home Screen** installs the app with its own icon. If both apps use the same Supabase project, one login opens both.
-3. To remove someone, delete their user in the same place.
+**With a link (Tony uses this).** Set `INVITE_CODE` on the project to something long and hard to guess, then redeploy. The start screen gets an **Invite** button that opens the phone's share sheet with the link, `https://<address>/join/<INVITE_CODE>`. Whoever opens it enters an email and is in, with no password and no email sent. On a new device they open the link again. Joiners appear in Supabase → **Authentication → Users**.
+- **Remove someone:** in Supabase, open their user and **Ban** them. Deleting them isn't enough, because they could rejoin with the link.
+- **Stop a link spreading:** change `INVITE_CODE` and redeploy. Everyone already in stays in; new people need the new link.
+- **Anyone signed in can share the link.** Every question goes on your Anthropic bill, so set a spend limit.
+
+**By hand.** Supabase → **Authentication → Users → Add user → Create new user**. Enter their email and a password, and tick **Auto Confirm User**. Send them the address and their login.
+
+On a phone, **Share → Add to Home Screen** installs the app with its own icon. If both apps use the same Supabase project, one account opens both.
 
 Set a monthly spend limit at platform.claude.com → Settings → Limits; every tester's questions go on your Anthropic account.
 
@@ -92,6 +97,8 @@ Every variable is documented in [`.env.example`](.env.example).
 | `CHAT_MODEL` | Defaults to `claude-opus-5-5` (`GIO_CHAT_MODEL` also works) |
 | `CHAT_EFFORT` | How much the companion thinks before answering. Defaults to `high` |
 | `WEB_SEARCH_MAX_USES` | Web searches allowed per answer. Defaults to Gio 5, Tony 8; `0` turns search off |
+| `INVITE_CODE` | Optional. Turns on link invitations (`/join/<code>`) and the Invite button |
+| `SUPABASE_SERVICE_ROLE_KEY` | Needed for link invitations; server-side only. Set by the Vercel Supabase integration (`SUPABASE_SECRET_KEY` also works) |
 | `NEXT_TELEMETRY_DISABLED` | Set to `1` |
 
 ---
