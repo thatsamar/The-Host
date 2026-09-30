@@ -4,9 +4,9 @@ import type { Companion } from "./types";
 export const martini: Companion = {
   id: "martini",
   name: "Martini",
-  tagline: "Dress like you mean it.",
+  tagline: "Dress with confidence.",
   subtitle: "Show me the outfit, or ask a question.",
-  description: "Dress like you mean it.",
+  description: "Dress with confidence.",
   placeholder: "What's the occasion?",
   placeholderWithPhotos: "Add the occasion, or just send",
   status: { thinking: "Thinking", looking: "Looking", searching: "Checking what's out there" },
