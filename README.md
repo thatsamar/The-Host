@@ -1,11 +1,12 @@
-# Gio and Tony
+# Gio, Tony and Martini
 
-Two private-beta companions on one engine. Each is one page: add up to 10 photos, ask a question, or both, and get an answer with a point of view.
+Three private-beta companions on one engine. Each is one page: add up to 10 photos, ask a question, or both, and get an answer with a point of view.
 
 - **Gio** (design): *See with a designer's eye.* The custom GPT's design point of view, addressed to whoever is asking.
 - **Tony** (travel): *Travel like it matters.* A travel companion for going beneath the surface of a place, in Amar Lalvani's voice and taste.
+- **Martini** (style): *Dress like you mean it.* A personal style advisor for men's, women's and mixed wardrobes: outfit checks, shopping, packing, dress codes, invest / save / skip.
 
-The code is shared. Each companion is its own Vercel project with its own address, name, icon and link preview, chosen by one setting: `COMPANION=gio` or `COMPANION=tony`.
+The code is shared. Each companion is its own Vercel project with its own address, name, icon and link preview, chosen by one setting: `COMPANION=gio`, `tony` or `martini`.
 
 - **No saved conversations.** A visit is one conversation. Follow-up questions work while the page is open; **New** or a reload starts fresh.
 - **Nothing stored.** Photos are shrunk in the browser and sent with the question. The app has no database tables of its own and keeps no files.
@@ -14,9 +15,14 @@ The code is shared. Each companion is its own Vercel project with its own addres
 
 ## Inviting testers
 
-1. Supabase → **Authentication → Users → Add user → Create new user**. Enter their email and a password, tick **Auto Confirm User**.
-2. Send them the address and their login. On a phone, **Share → Add to Home Screen** installs the app with its own icon. If both apps use the same Supabase project, one login opens both.
-3. To remove someone, delete their user in the same place.
+**With a link (Tony uses this).** Set `INVITE_CODE` on the project to something long and hard to guess, then redeploy. The start screen gets an **Invite** button that opens the phone's share sheet with the link, `https://<address>/join/<INVITE_CODE>`. Whoever opens it enters an email and is in, with no password and no email sent. On a new device they open the link again. Joiners appear in Supabase → **Authentication → Users**.
+- **Remove someone:** in Supabase, open their user and **Ban** them. Deleting them isn't enough, because they could rejoin with the link.
+- **Stop a link spreading:** change `INVITE_CODE` and redeploy. Everyone already in stays in; new people need the new link.
+- **Anyone signed in can share the link.** Every question goes on your Anthropic bill, so set a spend limit.
+
+**By hand.** Supabase → **Authentication → Users → Add user → Create new user**. Enter their email and a password, and tick **Auto Confirm User**. Send them the address and their login.
+
+On a phone, **Share → Add to Home Screen** installs the app with its own icon. If both apps use the same Supabase project, one account opens both.
 
 Set a monthly spend limit at platform.claude.com → Settings → Limits; every tester's questions go on your Anthropic account.
 
@@ -43,14 +49,14 @@ Browser ──► Next.js on Vercel ──► Anthropic (claude-opus-5-5, web se
 ```
 
 - `src/components/studio.tsx` is the whole interface: the start screen, the conversation and the composer (camera button, optional text, send). A failed answer puts the question and photos back to resend; answers can be copied.
-- `src/lib/companions/` holds each companion: its system prompt (`gio-prompt.ts`, `tony-prompt.ts`), its capabilities, and the words the page shows (name, tagline, placeholder, status lines). `currentCompanion()` picks one from `COMPANION`.
-- `src/app/icon.tsx`, `apple-icon.tsx`, `opengraph-image.tsx` and `manifest.ts` give each companion its home-screen icon (Gio a black tile, Tony a rust one) and link preview, drawn at build time with the fonts in `assets/fonts` (SIL Open Font License).
+- `src/lib/companions/` holds each companion: its system prompt (`gio-prompt.ts`, `tony-prompt.ts`, `martini-prompt.ts`), its capabilities, and the words the page shows (name, tagline, placeholder, status lines). `currentCompanion()` picks one from `COMPANION`.
+- `src/app/icon.tsx`, `apple-icon.tsx`, `opengraph-image.tsx` and `manifest.ts` give each companion its home-screen icon (Gio black, Tony rust, Martini olive) and link preview, drawn at build time with the fonts in `assets/fonts` (SIL Open Font License).
 - `src/lib/ask/photos.ts` shrinks photos in the browser. `src/lib/ask/budget.ts` keeps each request under Vercel's 4.5 MB body limit by dropping the oldest photos from long visits first.
 - `src/app/api/ask/route.ts` checks the sign-in, validates the request and streams the answer as NDJSON.
 - `src/lib/ask/prompt.ts` assembles what the model sees, in order: the companion's system prompt, then an **app capabilities** block (what the app does, that it keeps nothing, that it doesn't know who's asking), then the conversation.
 - `src/lib/ai/anthropic.ts` streams from Claude with web search, resumes paused search turns, and falls back server-side when a request is refused.
 
-To change how a companion thinks, edit `src/lib/companions/gio-prompt.ts` or `tony-prompt.ts` and redeploy both projects' latest deployment (a merge does this automatically).
+To change how a companion thinks, edit its `src/lib/companions/<name>-prompt.ts` and redeploy both projects' latest deployment (a merge does this automatically).
 
 ---
 
@@ -62,7 +68,7 @@ Needs Node 20+.
 2. Create a Supabase project (or run `npx supabase start` locally, which needs Docker).
 3. In Supabase → **Authentication → Users → Add user**, create the one login you'll share. Tick **Auto Confirm User**.
 4. In **Authentication → Sign In / Providers**, turn off **Allow new users to sign up**.
-5. `cp .env.example .env.local` and fill in the Supabase URL and publishable key and your Anthropic key. Set `COMPANION=tony` to run Tony instead of Gio.
+5. `cp .env.example .env.local` and fill in the Supabase URL and publishable key and your Anthropic key. Set `COMPANION=tony` or `martini` to run another companion.
 6. `npm run dev` and open http://localhost:3000.
 
 The `supabase/` folder holds migrations from the earlier, fuller version of Gio. The app no longer reads those tables; an existing project can keep them, and a new one doesn't need them.
@@ -86,12 +92,14 @@ Every variable is documented in [`.env.example`](.env.example).
 
 | Variable | Purpose |
 | --- | --- |
-| `COMPANION` | `gio` (default) or `tony`. Read at build time: redeploy after changing it |
+| `COMPANION` | `gio` (default), `tony` or `martini`. Read at build time: redeploy after changing it |
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Sign-in. `NEXT_PUBLIC_SUPABASE_ANON_KEY` also works, as set by the Vercel Supabase integration |
 | `ANTHROPIC_API_KEY` | Claude |
 | `CHAT_MODEL` | Defaults to `claude-opus-5-5` (`GIO_CHAT_MODEL` also works) |
 | `CHAT_EFFORT` | How much the companion thinks before answering. Defaults to `high` |
 | `WEB_SEARCH_MAX_USES` | Web searches allowed per answer. Defaults to Gio 5, Tony 8; `0` turns search off |
+| `INVITE_CODE` | Optional. Turns on link invitations (`/join/<code>`) and the Invite button |
+| `SUPABASE_SERVICE_ROLE_KEY` | Needed for link invitations; server-side only. Set by the Vercel Supabase integration (`SUPABASE_SECRET_KEY` also works) |
 | `NEXT_TELEMETRY_DISABLED` | Set to `1` |
 
 ---

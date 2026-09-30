@@ -5,6 +5,8 @@ describe("currentCompanion", () => {
   it("picks the deployment's companion from COMPANION, defaulting to Gio", () => {
     expect(currentCompanion("tony").name).toBe("Tony");
     expect(currentCompanion(" Tony ").name).toBe("Tony");
+    expect(currentCompanion("martini").name).toBe("Martini");
+    expect(currentCompanion("constructor").name).toBe("Gio");
     expect(currentCompanion("gio").name).toBe("Gio");
     expect(currentCompanion(undefined).name).toBe("Gio");
     expect(currentCompanion("nobody").name).toBe("Gio");

@@ -37,7 +37,7 @@ interface Turn {
 let counter = 0;
 const nextKey = () => `k${++counter}`;
 
-export function Studio({ companion }: { companion: CompanionCopy }) {
+export function Studio({ companion, invitePath }: { companion: CompanionCopy; invitePath?: string | null }) {
   const [thread, setThread] = useState<Turn[]>([]);
   const [text, setText] = useState("");
   const [staged, setStaged] = useState<StagedPhoto[]>([]);
@@ -298,11 +298,14 @@ export function Studio({ companion }: { companion: CompanionCopy }) {
           <div className="mt-10">{composer}</div>
           {hint}
         </div>
-        <form action={signOut} className="fixed inset-x-0 bottom-0 flex justify-center pb-[max(1.25rem,env(safe-area-inset-bottom))]">
-          <button type="submit" className="text-sm text-ink-muted transition-colors hover:text-ink">
-            Sign out
-          </button>
-        </form>
+        <div className="fixed inset-x-0 bottom-0 flex justify-center gap-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-sm text-ink-muted">
+          {invitePath ? <InviteButton path={invitePath} companion={companion} /> : null}
+          <form action={signOut}>
+            <button type="submit" className="transition-colors hover:text-ink">
+              Sign out
+            </button>
+          </form>
+        </div>
       </main>
     );
   }
@@ -389,6 +392,35 @@ function Answer({ turn, status }: { turn: Turn; status: CompanionCopy["status"] 
         </div>
       ) : null}
     </div>
+  );
+}
+
+/** Shares the invitation link: the share sheet on a phone, the clipboard elsewhere. */
+function InviteButton({ path, companion }: { path: string; companion: CompanionCopy }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      className="transition-colors hover:text-ink"
+      onClick={async () => {
+        const url = new URL(path, window.location.origin).toString();
+        if (navigator.share) {
+          try {
+            await navigator.share({ title: companion.name, text: `${companion.name}. ${companion.tagline}`, url });
+            return;
+          } catch (err) {
+            if (err instanceof DOMException && err.name === "AbortError") return; // closed the sheet
+          }
+        }
+        try {
+          await navigator.clipboard.writeText(url);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1800);
+        } catch {}
+      }}
+    >
+      {copied ? "Link copied" : "Invite"}
+    </button>
   );
 }
 

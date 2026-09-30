@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { missingSupabaseConfig } from "@/lib/auth/sign-in-error";
 
 // Sign-in, plus what a logged-out browser or a link preview needs to show the app.
-const PUBLIC_PATHS = ["/login", "/icon", "/apple-icon", "/opengraph-image", "/manifest.webmanifest"];
+const PUBLIC_PATHS = ["/login", "/join", "/icon", "/apple-icon", "/opengraph-image", "/manifest.webmanifest"];
 
 /** Refreshes the auth session on every request and gates the app behind login. */
 export async function updateSession(request: NextRequest) {
@@ -11,7 +11,7 @@ export async function updateSession(request: NextRequest) {
   // which says which setting is missing.
   if (missingSupabaseConfig().length) {
     const path = request.nextUrl.pathname;
-    if (PUBLIC_PATHS.includes(path)) return NextResponse.next({ request });
+    if (PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}/`))) return NextResponse.next({ request });
     if (path.startsWith("/api/")) return NextResponse.json({ error: "Supabase is not configured" }, { status: 503 });
     const url = request.nextUrl.clone();
     url.pathname = "/login";
@@ -55,7 +55,7 @@ export async function updateSession(request: NextRequest) {
     url.search = "";
     return NextResponse.redirect(url);
   }
-  if (signedIn && path === "/login") {
+  if (signedIn && (path === "/login" || path.startsWith("/join/"))) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);
