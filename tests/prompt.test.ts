@@ -3,6 +3,7 @@ import type { ChatContentPart } from "@/lib/ai/types";
 import { BLOCK_ORDER, assemblePrompt, capabilitiesBlock, toChatTurns } from "@/lib/ask/prompt";
 import { COMPANIONS } from "@/lib/companions";
 import { gio } from "@/lib/companions/gio";
+import { martini } from "@/lib/companions/martini";
 import { tony } from "@/lib/companions/tony";
 
 const textOf = (parts: ChatContentPart[]) =>
@@ -63,6 +64,34 @@ describe("Tony", () => {
   it("reads a place from photos alone", () => {
     const [turn] = toChatTurns([{ role: "user", text: "", images: [img(), img()] }], tony.photosOnly);
     expect(textOf(turn.content)).toMatch(/^\(2 photos, no question\. Read the place/);
+  });
+});
+
+describe("Martini", () => {
+  it("carries the style brief as written", () => {
+    expect(martini.systemPrompt).toMatch(/^You are Martini, my personal style advisor\./);
+    expect(martini.systemPrompt).toMatch(/Do not treat men’s style as an afterthought or women’s style as the default\./);
+    for (const label of ["THE CALL", "WHY", "THE MOVE", "WHAT NOT TO DO", "COST", "NEXT STEP"]) {
+      expect(martini.systemPrompt).toContain(`${label} — `);
+    }
+    expect(martini.systemPrompt).toMatch(/INVEST:\n[\s\S]*SAVE:\n[\s\S]*SKIP:\n/);
+    expect(martini.systemPrompt).toMatch(/Could this be on anyone with money\?\n\nIf yes, look harder\./);
+    expect(martini.systemPrompt).toMatch(/never generic\.$/);
+  });
+
+  it("serves anyone, keeps headings for real decisions, and prices from listings", () => {
+    const body = capabilitiesBlock(martini, true).body;
+    expect(body).toMatch(/Never assume their gender, body, age, size, budget or taste/);
+    expect(body).toMatch(/give men's, women's and mixed wardrobes equal depth/);
+    expect(body).toMatch(/keeps nothing/);
+    expect(body).toMatch(/For a simple question, just answer it, without headings/);
+    expect(body).toMatch(/including vintage and resale/);
+    expect(capabilitiesBlock(martini, false).body).toMatch(/Mark every price as an estimate/);
+  });
+
+  it("gives an outfit check from photos alone", () => {
+    const [turn] = toChatTurns([{ role: "user", text: "", images: [img()] }], martini.photosOnly);
+    expect(textOf(turn.content)).toBe("(A photo, no question. Give the outfit check: the call, the highest-leverage move, and what not to do.)");
   });
 });
 
