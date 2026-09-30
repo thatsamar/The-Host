@@ -37,7 +37,17 @@ interface Turn {
 let counter = 0;
 const nextKey = () => `k${++counter}`;
 
-export function Studio({ companion, invitePath }: { companion: CompanionCopy; invitePath?: string | null }) {
+export function Studio({
+  companion,
+  share,
+  signedIn = false,
+}: {
+  companion: CompanionCopy;
+  /** What the share button sends: the app itself when it's open, or an invitation link. */
+  share?: { path: string; label: string } | null;
+  /** Sign-in is on for this deployment, so offer Sign out. */
+  signedIn?: boolean;
+}) {
   const [thread, setThread] = useState<Turn[]>([]);
   const [text, setText] = useState("");
   const [staged, setStaged] = useState<StagedPhoto[]>([]);
@@ -299,12 +309,14 @@ export function Studio({ companion, invitePath }: { companion: CompanionCopy; in
           {hint}
         </div>
         <div className="fixed inset-x-0 bottom-0 flex justify-center gap-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-sm text-ink-muted">
-          {invitePath ? <InviteButton path={invitePath} companion={companion} /> : null}
-          <form action={signOut}>
-            <button type="submit" className="transition-colors hover:text-ink">
-              Sign out
-            </button>
-          </form>
+          {share ? <ShareButton path={share.path} label={share.label} companion={companion} /> : null}
+          {signedIn ? (
+            <form action={signOut}>
+              <button type="submit" className="transition-colors hover:text-ink">
+                Sign out
+              </button>
+            </form>
+          ) : null}
         </div>
       </main>
     );
@@ -395,8 +407,8 @@ function Answer({ turn, status }: { turn: Turn; status: CompanionCopy["status"] 
   );
 }
 
-/** Shares the invitation link: the share sheet on a phone, the clipboard elsewhere. */
-function InviteButton({ path, companion }: { path: string; companion: CompanionCopy }) {
+/** Shares a link to the app: the share sheet on a phone, the clipboard elsewhere. */
+function ShareButton({ path, label, companion }: { path: string; label: string; companion: CompanionCopy }) {
   const [copied, setCopied] = useState(false);
   return (
     <button
@@ -419,7 +431,7 @@ function InviteButton({ path, companion }: { path: string; companion: CompanionC
         } catch {}
       }}
     >
-      {copied ? "Link copied" : "Invite"}
+      {copied ? "Link copied" : label}
     </button>
   );
 }

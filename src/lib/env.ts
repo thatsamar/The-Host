@@ -3,8 +3,9 @@ import { z } from "zod";
 
 // Server-side configuration. Read lazily so `next build` works without secrets.
 const schema = z.object({
-  NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
-  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
+  // Only needed where sign-in is on (REQUIRE_SIGN_IN); the proxy checks them there.
+  NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1).optional(),
   // Printable ASCII only: catches the "●●●●" Vercel shows for a hidden value
   // being saved back as the key, which otherwise fails deep inside fetch.
   ANTHROPIC_API_KEY: z

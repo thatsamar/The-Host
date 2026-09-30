@@ -43,9 +43,15 @@ describe("POST /api/ask", () => {
     }
   });
 
-  it("requires sign-in", async () => {
+  it("is open by default, and asks for sign-in only where it's switched on", async () => {
     state.userId = null;
-    expect((await post({ turns: [{ role: "user", text: "Hi" }] })).status).toBe(401);
+    expect((await post({ turns: [{ role: "user", text: "Hi" }] })).status).toBe(200);
+    process.env.REQUIRE_SIGN_IN = "true";
+    try {
+      expect((await post({ turns: [{ role: "user", text: "Hi" }] })).status).toBe(401);
+    } finally {
+      delete process.env.REQUIRE_SIGN_IN;
+    }
   });
 
   it("rejects more than 10 photos, or photos that aren't images", async () => {
