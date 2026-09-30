@@ -22,7 +22,7 @@ The code is shared. Each companion is its own Vercel project with its own addres
 
 **By hand.** Supabase → **Authentication → Users → Add user → Create new user**. Enter their email and a password, and tick **Auto Confirm User**. Send them the address and their login.
 
-On a phone, **Share → Add to Home Screen** installs the app with its own icon. If both apps use the same Supabase project, one account opens both.
+On a phone, **Share → Add to Home Screen** installs the app with its own icon, opening full screen. On iPhone the Home Screen app keeps its own sign-in, apart from Safari, so the first time it opens it shows the sign-in page: people who joined by link tap **Joined with an invitation?**, paste the link (or its phrase) and their email, and stay signed in from then on. If both apps use the same Supabase project, one account opens both.
 
 Set a monthly spend limit at platform.claude.com → Settings → Limits; every tester's questions go on your Anthropic account.
 

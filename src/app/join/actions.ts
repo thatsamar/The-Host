@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { inviteCode, joinWithInvite, JOIN_UNAVAILABLE } from "@/lib/auth/invite";
+import { codeFromInput, inviteCode, joinWithInvite, JOIN_UNAVAILABLE } from "@/lib/auth/invite";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -13,7 +13,7 @@ export async function join(_prev: { error?: string } | undefined, formData: Form
   }
   const supabase = await createClient();
   const result = await joinWithInvite(
-    { code: String(formData.get("code") ?? ""), email: String(formData.get("email") ?? "") },
+    { code: codeFromInput(String(formData.get("code") ?? "")), email: String(formData.get("email") ?? "") },
     {
       expectedCode: inviteCode(),
       mintToken: async (email) => {

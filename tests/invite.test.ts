@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ACCOUNT_OFF, INVITE_EXPIRED, JOIN_UNAVAILABLE, inviteCode, isValidInvite, joinWithInvite, normalizeEmail } from "@/lib/auth/invite";
+import { ACCOUNT_OFF, INVITE_EXPIRED, JOIN_UNAVAILABLE, codeFromInput, inviteCode, isValidInvite, joinWithInvite, normalizeEmail } from "@/lib/auth/invite";
 
 describe("invite code", () => {
   it("is off unless INVITE_CODE is set and long enough", () => {
@@ -13,6 +13,12 @@ describe("invite code", () => {
     expect(isValidInvite(" late-light-ferry ", "late-light-ferry")).toBe(true);
     expect(isValidInvite("late-light-ferrY", "late-light-ferry")).toBe(false);
     expect(isValidInvite("anything", null)).toBe(false);
+  });
+
+  it("takes the code from a pasted link or the bare phrase", () => {
+    expect(codeFromInput("https://martini-style.vercel.app/join/olive-velvet-loafer")).toBe("olive-velvet-loafer");
+    expect(codeFromInput(" tony-ten-bay.vercel.app/join/fig%20lantern?x=1 ")).toBe("fig lantern");
+    expect(codeFromInput("  olive-velvet-loafer ")).toBe("olive-velvet-loafer");
   });
 
   it("normalizes emails", () => {
