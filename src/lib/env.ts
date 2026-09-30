@@ -3,9 +3,16 @@ import { z } from "zod";
 
 // Server-side configuration. Read lazily so `next build` works without secrets.
 const schema = z.object({
-  NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
-  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
-  ANTHROPIC_API_KEY: z.string().min(1),
+  // Only needed where sign-in is on (REQUIRE_SIGN_IN); the proxy checks them there.
+  NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1).optional(),
+  // Printable ASCII only: catches the "●●●●" Vercel shows for a hidden value
+  // being saved back as the key, which otherwise fails deep inside fetch.
+  ANTHROPIC_API_KEY: z
+    .string()
+    .trim()
+    .min(1)
+    .regex(/^[\x21-\x7e]+$/, "must be the key itself, not the dots Vercel shows in place of a hidden value"),
   ANTHROPIC_BASE_URL: z.string().url().optional(),
   CHAT_MODEL: z.string().min(1).default("claude-opus-5-5"),
   CHAT_EFFORT: z.enum(["low", "medium", "high", "xhigh", "max"]).default("high"),
@@ -30,8 +37,9 @@ export function serverEnv(): ServerEnv {
     WEB_SEARCH_MAX_USES: process.env.WEB_SEARCH_MAX_USES || process.env.GIO_WEB_SEARCH_MAX_USES || undefined,
   });
   if (!parsed.success) {
-    const missing = parsed.error.issues.map((i) => i.path.join(".")).join(", ");
-    throw new Error(`Missing settings in Vercel: ${missing}. Add them under Settings → Environment Variables, then redeploy.`);
+    // Names each setting and what's wrong with it, never its value.
+    const problems = parsed.error.issues.map((i) => `${i.path.join(".")} (${i.message})`).join(", ");
+    throw new Error(`Missing or invalid settings in Vercel: ${problems}. Fix them under Settings → Environment Variables, then redeploy.`);
   }
   cached = parsed.data;
   return cached;

@@ -1,12 +1,26 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { signInRequired } from "@/lib/auth/access";
 import { missingSupabaseConfig } from "@/lib/auth/sign-in-error";
 
 // Sign-in, plus what a logged-out browser or a link preview needs to show the app.
 const PUBLIC_PATHS = ["/login", "/join", "/icon", "/apple-icon", "/opengraph-image", "/manifest.webmanifest"];
 
-/** Refreshes the auth session on every request and gates the app behind login. */
+/** Refreshes the auth session on every request and, where sign-in is on, gates the app behind it. */
 export async function updateSession(request: NextRequest) {
+  // Open app (the default): no sign-in anywhere; the sign-in and invitation
+  // pages just lead to the start screen.
+  if (!signInRequired()) {
+    const path = request.nextUrl.pathname;
+    if (path === "/login" || path.startsWith("/join/")) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    return NextResponse.next({ request });
+  }
+
   // Without Supabase settings nobody can sign in; send everything to /login,
   // which says which setting is missing.
   if (missingSupabaseConfig().length) {

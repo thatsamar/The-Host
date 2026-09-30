@@ -4,7 +4,7 @@ Three private-beta companions on one engine. Each is one page: add up to 10 phot
 
 - **Gio** (design): *See with a designer's eye.* The custom GPT's design point of view, addressed to whoever is asking.
 - **Tony** (travel): *Travel like it matters.* A travel companion for going beneath the surface of a place, in Amar Lalvani's voice and taste.
-- **Martini** (style): *Dress like you mean it.* A personal style advisor for men's, women's and mixed wardrobes: outfit checks, shopping, packing, dress codes, invest / save / skip.
+- **Martini** (style): *Dress with confidence.* A personal style advisor for men's, women's and mixed wardrobes: outfit checks, shopping, packing, dress codes, invest / save / skip.
 
 The code is shared. Each companion is its own Vercel project with its own address, name, icon and link preview, chosen by one setting: `COMPANION=gio`, `tony` or `martini`.
 
@@ -13,18 +13,16 @@ The code is shared. Each companion is its own Vercel project with its own addres
 - **Live checks.** Gio searches the web for real listings and prices; Tony checks that places are still open and still worth it.
 - **Invitation only.** Each tester gets a login; strangers (and their questions on your Anthropic bill) stay out.
 
-## Inviting testers
+## Access
 
-**With a link (Tony uses this).** Set `INVITE_CODE` on the project to something long and hard to guess, then redeploy. The start screen gets an **Invite** button that opens the phone's share sheet with the link, `https://<address>/join/<INVITE_CODE>`. Whoever opens it enters an email and is in, with no password and no email sent. On a new device they open the link again. Joiners appear in Supabase → **Authentication → Users**.
-- **Remove someone:** in Supabase, open their user and **Ban** them. Deleting them isn't enough, because they could rejoin with the link.
-- **Stop a link spreading:** change `INVITE_CODE` and redeploy. Everyone already in stays in; new people need the new link.
-- **Anyone signed in can share the link.** Every question goes on your Anthropic bill, so set a spend limit.
+**Open by default.** Anyone with the address can use the app, with no sign-in. The start screen has a **Share** button that sends the address by Messages, Mail or WhatsApp. Each visitor can ask 40 questions an hour (`QUESTIONS_PER_HOUR`), and every question goes on your Anthropic account, so set a monthly spend limit at platform.claude.com → Settings → Limits. The pages are marked not-for-search-engines, but anyone you send the link to can forward it.
 
-**By hand.** Supabase → **Authentication → Users → Add user → Create new user**. Enter their email and a password, and tick **Auto Confirm User**. Send them the address and their login.
+**Sign-in, if you want it back:** set `REQUIRE_SIGN_IN=true` on a project and redeploy. Then:
+- **By hand.** Supabase → **Authentication → Users → Add user**, tick **Auto Confirm User**, and send them their login.
+- **By link.** Also set `INVITE_CODE` to something long and hard to guess. The start screen's button becomes **Invite**, sharing `https://<address>/join/<INVITE_CODE>`. Whoever opens it enters an email and is in, no password. Ban people in Supabase to remove them; change `INVITE_CODE` to retire the link.
+- **Home Screen.** On iPhone the Home Screen app keeps its own sign-in, apart from Safari: people who joined by link tap **Joined with an invitation?** on the sign-in page and paste the link and their email.
 
-On a phone, **Share → Add to Home Screen** installs the app with its own icon. If both apps use the same Supabase project, one account opens both.
-
-Set a monthly spend limit at platform.claude.com → Settings → Limits; every tester's questions go on your Anthropic account.
+On a phone, **Share → Add to Home Screen** installs the app with its own icon, opening full screen.
 
 ## When something goes wrong
 
@@ -93,12 +91,14 @@ Every variable is documented in [`.env.example`](.env.example).
 | Variable | Purpose |
 | --- | --- |
 | `COMPANION` | `gio` (default), `tony` or `martini`. Read at build time: redeploy after changing it |
-| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Sign-in. `NEXT_PUBLIC_SUPABASE_ANON_KEY` also works, as set by the Vercel Supabase integration |
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Sign-in, when it's on. `NEXT_PUBLIC_SUPABASE_ANON_KEY` also works, as set by the Vercel Supabase integration |
 | `ANTHROPIC_API_KEY` | Claude |
 | `CHAT_MODEL` | Defaults to `claude-opus-5-5` (`GIO_CHAT_MODEL` also works) |
 | `CHAT_EFFORT` | How much the companion thinks before answering. Defaults to `high` |
 | `WEB_SEARCH_MAX_USES` | Web searches allowed per answer. Defaults to Gio 5, Tony 8; `0` turns search off |
-| `INVITE_CODE` | Optional. Turns on link invitations (`/join/<code>`) and the Invite button |
+| `REQUIRE_SIGN_IN` | Optional. `true` requires sign-in; unset, the app is open to anyone with the address |
+| `QUESTIONS_PER_HOUR` | Optional. Per-visitor cap, default 40; `0` turns it off |
+| `INVITE_CODE` | Optional, with sign-in on. Turns on link invitations (`/join/<code>`) and the Invite button |
 | `SUPABASE_SERVICE_ROLE_KEY` | Needed for link invitations; server-side only. Set by the Vercel Supabase integration (`SUPABASE_SECRET_KEY` also works) |
 | `NEXT_TELEMETRY_DISABLED` | Set to `1` |
 

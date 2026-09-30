@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { getChatProvider } from "@/lib/ai";
 import { unavailable } from "@/lib/ai/anthropic";
+import { signInRequired } from "@/lib/auth/access";
+import { createRateLimiter, questionsPerHour, visitorKey } from "@/lib/ask/rate-limit";
 import { serverEnv } from "@/lib/env";
 import { ask, type AskEvent } from "@/lib/ask/ask";
 import { currentCompanion } from "@/lib/companions";
@@ -28,10 +30,22 @@ const bodySchema = z.object({
     .max(100),
 });
 
+const limiter = createRateLimiter({ limit: questionsPerHour() });
+
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  if (!(await getUserId(supabase))) {
-    return Response.json({ error: "You've been signed out. Reload the page to sign in again." }, { status: 401 });
+  if (signInRequired()) {
+    const supabase = await createClient();
+    if (!(await getUserId(supabase))) {
+      return Response.json({ error: "You've been signed out. Reload the page to sign in again." }, { status: 401 });
+    }
+  }
+
+  const allowed = limiter(visitorKey(request.headers));
+  if (!allowed.ok) {
+    return Response.json(
+      { error: "That's a lot of questions in a short time. Try again in a little while." },
+      { status: 429, headers: { "Retry-After": String(allowed.retryAfterSeconds) } },
+    );
   }
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));

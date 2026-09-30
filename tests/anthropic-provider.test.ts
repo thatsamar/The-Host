@@ -164,6 +164,9 @@ describe("describeAnthropicError", () => {
     expect(describeAnthropicError(apiError(429, "slow"), "Tony").message).toBe(busy("Tony"));
     expect(describeAnthropicError(apiError(529, "overloaded"), "Tony").message).toBe("Tony is busy right now. Try again in a minute.");
     expect(describeAnthropicError(new Anthropic.APIUserAbortError()).name).toBe("AbortError");
+    // e.g. a key saved as Vercel's "●●●●" placeholder fails inside fetch.
+    const mangled = new TypeError("Cannot convert argument to a ByteString because the character at index 0 has a value of 9679");
+    expect(describeAnthropicError(mangled, "Martini").message).toBe(unavailable("Martini"));
   });
 });
 

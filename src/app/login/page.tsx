@@ -1,4 +1,6 @@
+import { inviteCode } from "@/lib/auth/invite";
 import { currentCompanion } from "@/lib/companions";
+import { InviteSignIn } from "./invite-sign-in";
 import { LoginForm } from "./login-form";
 
 export default function LoginPage() {
@@ -13,6 +15,11 @@ export default function LoginPage() {
         <div className="mt-10">
           <LoginForm />
         </div>
+        {inviteCode() ? (
+          <div className="mt-8 border-t border-line pt-6 text-center">
+            <InviteSignIn />
+          </div>
+        ) : null}
         <p className="mt-8 text-center text-sm text-ink-muted">Private beta. Access is by invitation.</p>
       </div>
     </main>

@@ -12,6 +12,21 @@ export function inviteCode(value = process.env.INVITE_CODE): string | null {
   return code && code.length >= MIN_LENGTH ? code : null;
 }
 
+/**
+ * The code from whatever someone pasted: the whole invitation link
+ * (https://…/join/<code>) or just the phrase.
+ */
+export function codeFromInput(input: string): string {
+  const text = input.trim();
+  const match = text.match(/\/join\/([^/?#\s]+)/);
+  if (!match) return text;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
+
 const digest = (s: string) => createHash("sha256").update(s).digest();
 
 /** Compares in constant time, so the code can't be guessed a character at a time. */

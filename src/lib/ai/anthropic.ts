@@ -78,7 +78,11 @@ export function describeAnthropicError(err: unknown, name = "Gio"): Error {
     if (err.status === 413) return new Error("That's too much to send at once. Try fewer photos.");
     return new Error(unavailable(name));
   }
-  return err instanceof Error ? err : new Error(String(err));
+  if (err instanceof Error && err.name === "AbortError") return err;
+  // Anything else (a mangled key failing inside fetch, a bug) reads the same
+  // to the person asking; the specifics go to the server log.
+  console.error("Chat request failed:", err instanceof Error ? err.message : err);
+  return new Error(unavailable(name));
 }
 
 export class AnthropicChatProvider implements ChatProvider {

@@ -18,6 +18,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - Model access goes through `src/lib/ai/types.ts` interfaces. Model IDs come from env (`CHAT_MODEL`).
 - Assistant history is replayed as text only (no thinking blocks).
 - Requests carry the whole visit; `src/lib/ask/budget.ts` keeps them under Vercel's 4.5 MB body limit. Keep photo sizes in `photos.ts` and the budget in step.
-- Link invitations (`src/lib/auth/invite.ts`, `/join/[code]`) are on only where `INVITE_CODE` is set. They sign people in with an admin-minted one-time token redeemed by their own session, so no email or password. Keep the secret key server-side.
-- Supabase is used for sign-in only. The old migrations stay for existing projects; nothing reads those tables.
+- Access is open by default (no sign-in); `REQUIRE_SIGN_IN=true` turns sign-in back on (`src/lib/auth/access.ts`, checked in the proxy, the ask route and the page). `/api/ask` caps questions per visitor per hour (`src/lib/ask/rate-limit.ts`).
+- Link invitations (`src/lib/auth/invite.ts`, `/join/[code]`) apply only with sign-in on and where `INVITE_CODE` is set. They sign people in with an admin-minted one-time token redeemed by their own session, so no email or password. Keep the secret key server-side.
+- Supabase is used for sign-in only, and only where sign-in is on. The old migrations stay for existing projects; nothing reads those tables.
 - Checks: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`.
