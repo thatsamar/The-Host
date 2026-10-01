@@ -20,22 +20,12 @@ export default async function OpengraphImage() {
           flexDirection: "column",
           justifyContent: "center",
           alignItems: "center",
-          background: companion.palette === "night" ? "#0f0d0b" : BRAND.ground,
-          color: companion.palette === "night" ? "#ece4d6" : BRAND.ink,
+          background: BRAND.ground,
+          color: BRAND.ink,
         }}
       >
         <div style={{ fontFamily: "Schibsted Grotesk", fontWeight: 700, fontSize: 44, letterSpacing: "-0.04em" }}>{companion.name}</div>
-        <div
-          style={{
-            marginTop: 36,
-            maxWidth: 1040,
-            textAlign: "center",
-            fontFamily: "Newsreader",
-            fontSize: 104,
-            letterSpacing: "-0.025em",
-            lineHeight: 1,
-          }}
-        >
+        <div style={{ marginTop: 36, fontFamily: "Newsreader", fontSize: 104, letterSpacing: "-0.025em", lineHeight: 1 }}>
           {companion.tagline}
         </div>
       </div>

@@ -19,8 +19,6 @@ describe("currentCompanion", () => {
       expect(copy.systemPrompt).toBeUndefined();
       expect(copy.capabilities).toBeUndefined();
       expect(copy.tagline).toBe(companion.tagline);
-      for (const mode of (copy.modes ?? []) as Record<string, unknown>[]) expect(mode.instruction).toBeUndefined();
     }
-    expect(copyOf(currentCompanion("jack")).modes?.[0]).toEqual({ id: "hard-truth", label: "Hard Truth" });
   });
 });

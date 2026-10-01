@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ArrowUpIcon, CameraIcon, SquareIcon, XIcon } from "lucide-react";
@@ -13,12 +12,7 @@ import { fitToBudget } from "@/lib/ask/budget";
 import { readNdjson } from "@/lib/ask/ndjson";
 import { PHOTO_ACCEPT, preparePhoto, type PreparedPhoto } from "@/lib/ask/photos";
 import { MAX_PHOTOS_PER_TURN, type AskTurn } from "@/lib/ask/prompt";
-import { isCareful, splitNotes } from "@/lib/ask/notes";
-import { memoryFor } from "@/lib/journal/store";
-import { useJournal } from "@/lib/journal/use-journal";
 import { cn } from "@/lib/utils";
-import { CopyButton } from "./copy-button";
-import { Notes, type NotesContext } from "./notes";
 
 interface StagedPhoto {
   key: string;
@@ -27,7 +21,7 @@ interface StagedPhoto {
   error?: string;
 }
 
-export interface Turn {
+interface Turn {
   key: string;
   role: "user" | "assistant";
   text: string;
@@ -38,20 +32,7 @@ export interface Turn {
   searching?: boolean;
   sources?: WebSourceRef[];
   error?: string;
-  /** The mode it was asked in. */
-  mode?: string;
-  /** For a draft: what was asked for, and the tone it was rewritten to. */
-  context?: string;
-  tone?: string;
 }
-
-/** The pages a companion with a journal adds, in nav order. */
-export const JOURNAL_PAGES = [
-  { href: "/matchbook", label: "Matchbook" },
-  { href: "/patterns", label: "Patterns" },
-  { href: "/drafts", label: "Drafts" },
-  { href: "/settings", label: "Settings" },
-] as const;
 
 let counter = 0;
 const nextKey = () => `k${++counter}`;
@@ -72,15 +53,11 @@ export function Studio({
   const [staged, setStaged] = useState<StagedPhoto[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [mode, setMode] = useState(companion.modes?.[0]?.id);
-  const { journal, change } = useJournal(companion.id);
   const abortRef = useRef<AbortController | null>(null);
   const lastRequest = useRef<AbortController | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
-  // Follow the answer as it streams, unless the reader has scrolled up to read.
-  const following = useRef(true);
 
   const preparing = staged.some((p) => !p.photo && !p.error);
   const ready = staged.filter((p) => p.photo);
@@ -117,29 +94,12 @@ export function Studio({
 
   const update = (key: string, fn: (t: Turn) => Turn) => setThread((all) => all.map((t) => (t.key === key ? fn(t) : t)));
 
-  /** Sends what's in the composer, or a preset follow-up (a tone change on a draft). */
-  const ask = async (preset?: { text: string; mode?: string; context?: string; tone?: string }) => {
-    if (preset ? busy : !canSend) return;
-    const question = preset ? preset.text : text.trim();
-    const photos = preset ? [] : ready.map((p) => p.photo!);
-    const askedMode = preset?.mode ?? mode;
-    const userTurn: Turn = { key: nextKey(), role: "user", text: question, photos, mode: askedMode };
-    const answer: Turn = {
-      key: nextKey(),
-      role: "assistant",
-      text: "",
-      pending: true,
-      withPhotos: photos.length > 0,
-      mode: askedMode,
-      context: preset?.context ?? question,
-      tone: preset?.tone,
-    };
-    // A careful moment: the mode calls for it, or an earlier answer touched on safety.
-    const careful =
-      Boolean(companion.modes?.find((m) => m.id === askedMode)?.plain) ||
-      (companion.notes ? isCareful(thread.filter((t) => t.role === "assistant").map((t) => t.text)) : false);
-    const unreachable =
-      (!careful && companion.errors?.unavailable) || `Couldn't reach ${companion.name}. Check your connection and try again.`;
+  const ask = async () => {
+    if (!canSend) return;
+    const question = text.trim();
+    const photos = ready.map((p) => p.photo!);
+    const userTurn: Turn = { key: nextKey(), role: "user", text: question, photos };
+    const answer: Turn = { key: nextKey(), role: "assistant", text: "", pending: true, withPhotos: photos.length > 0 };
 
     // Earlier photos go along small; this question's photos go at full size.
     let turns: AskTurn[];
@@ -157,10 +117,8 @@ export function Studio({
 
     following.current = true;
     setThread((all) => [...all, userTurn, answer]);
-    if (!preset) {
-      setText("");
-      setStaged((s) => s.filter((p) => !p.photo));
-    }
+    setText("");
+    setStaged((s) => s.filter((p) => !p.photo));
     setNotice(null);
     setBusy(true);
     const controller = new AbortController();
@@ -172,18 +130,14 @@ export function Studio({
       const response = await fetch("/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          turns,
-          ...(askedMode ? { mode: askedMode } : {}),
-          ...(companion.journal ? { memory: memoryFor(journal) } : {}),
-          ...(careful ? { careful } : {}),
-        }),
+        body: JSON.stringify({ turns }),
         signal: controller.signal,
       });
       if (!response.ok || !response.body) {
         const body = await response.json().catch(() => ({}));
         throw new Error(
-          body.error ?? (response.status === 413 ? "Those photos are too large to send together. Try fewer." : unreachable),
+          body.error ??
+            (response.status === 413 ? "Those photos are too large to send together. Try fewer." : `Request failed (${response.status})`),
         );
       }
       for await (const event of readNdjson<AskEvent>(response.body)) {
@@ -198,16 +152,14 @@ export function Studio({
       }
     } catch (err) {
       const stopped = err instanceof DOMException && err.name === "AbortError";
-      // fetch itself failing (offline, dropped connection) throws a TypeError with a browser's wording.
-      const message = stopped ? "Stopped." : err instanceof Error && !(err instanceof TypeError) ? err.message : unreachable;
-      update(answer.key, (t) => ({ ...t, error: message }));
+      update(answer.key, (t) => ({ ...t, error: stopped ? "Stopped." : err instanceof Error ? err.message : "Something went wrong." }));
       failed = !stopped;
     } finally {
       update(answer.key, (t) => ({ ...t, pending: false, searching: false }));
       setBusy(false);
       abortRef.current = null;
       // Put the question back so it can be sent again with one tap.
-      if (failed && !preset && controller === lastRequest.current) {
+      if (failed && controller === lastRequest.current) {
         setText((current) => current || question);
         setStaged((current) =>
           current.length ? current : photos.map((photo) => ({ key: nextKey(), previewUrl: photo.previewUrl, photo })),
@@ -223,19 +175,14 @@ export function Studio({
     setText("");
     setStaged([]);
     setNotice(null);
-    setMode(companion.modes?.[0]?.id);
     inputRef.current?.focus();
   };
 
+  // Follow the answer as it streams, unless the reader has scrolled up to read.
+  const following = useRef(true);
   useEffect(() => {
     if (following.current) endRef.current?.scrollIntoView({ block: "end" });
   }, [thread]);
-
-  // Keep the picked mode in view in the scrolling row.
-  const modeRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    modeRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  }, [mode, started]);
 
   // Grow the text box with its content, up to a limit.
   useEffect(() => {
@@ -349,41 +296,6 @@ export function Studio({
 
   const hint = notice ? <p className="mt-3 px-4 text-center text-sm text-warn">{notice}</p> : null;
 
-  const modePicker = companion.modes?.length ? (
-    <div
-      role="radiogroup"
-      aria-label="Mode"
-      className="-mx-4 mb-3 flex gap-x-5 overflow-x-auto px-5 text-[13px] tracking-[0.02em] [scrollbar-width:none]"
-    >
-      {companion.modes.map((m) => (
-        <button
-          key={m.id}
-          ref={mode === m.id ? modeRef : undefined}
-          type="button"
-          role="radio"
-          aria-checked={mode === m.id}
-          onClick={() => setMode(m.id)}
-          className={cn(
-            "shrink-0 whitespace-nowrap border-b py-1.5 transition-colors",
-            mode === m.id ? "border-accent text-ink" : "border-transparent text-ink-muted hover:text-ink",
-          )}
-        >
-          {m.label}
-        </button>
-      ))}
-    </div>
-  ) : null;
-
-  const notesContext: NotesContext | null = companion.notes
-    ? {
-        journal: companion.journal ? journal : null,
-        change,
-        busy,
-        onTone: (turn, tone) =>
-          void ask({ text: `Rewrite the draft: ${tone.toLowerCase()}.`, mode: turn.mode, context: turn.context, tone }),
-      }
-    : null;
-
   if (!started) {
     return (
       <main className="flex min-h-dvh flex-col items-center justify-center px-4 pb-[max(2rem,env(safe-area-inset-bottom))] pt-8">
@@ -393,21 +305,11 @@ export function Studio({
             {companion.tagline}
           </h1>
           <p className="mt-5 text-center text-lg text-ink-muted">{companion.subtitle}</p>
-          <div className="mt-10">
-            {modePicker}
-            {composer}
-          </div>
+          <div className="mt-10">{composer}</div>
           {hint}
         </div>
-        <div className="fixed inset-x-0 bottom-0 flex flex-wrap justify-center gap-x-6 gap-y-2 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-sm text-ink-muted">
+        <div className="fixed inset-x-0 bottom-0 flex justify-center gap-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-sm text-ink-muted">
           {share ? <ShareButton path={share.path} label={share.label} companion={companion} /> : null}
-          {companion.journal
-            ? JOURNAL_PAGES.map((p) => (
-                <Link key={p.href} href={p.href} className="transition-colors hover:text-ink">
-                  {p.label}
-                </Link>
-              ))
-            : null}
           {signedIn ? (
             <form action={signOut}>
               <button type="submit" className="transition-colors hover:text-ink">
@@ -437,19 +339,12 @@ export function Studio({
         className="min-h-0 flex-1 overflow-y-auto"
       >
         <div className="mx-auto flex w-full max-w-[640px] flex-col gap-8 px-4 py-6">
-          {thread.map((t) =>
-            t.role === "user" ? (
-              <Question key={t.key} turn={t} />
-            ) : (
-              <Answer key={t.key} turn={t} status={companion.status} notes={notesContext} />
-            ),
-          )}
+          {thread.map((t) => (t.role === "user" ? <Question key={t.key} turn={t} /> : <Answer key={t.key} turn={t} status={companion.status} />))}
           <div ref={endRef} />
         </div>
       </main>
 
       <div className="mx-auto w-full max-w-[640px] shrink-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2">
-        {modePicker}
         {composer}
         {hint}
       </div>
@@ -477,21 +372,10 @@ function Question({ turn }: { turn: Turn }) {
   );
 }
 
-function Answer({
-  turn,
-  status,
-  notes: notesContext,
-}: {
-  turn: Turn;
-  status: CompanionCopy["status"];
-  notes: NotesContext | null;
-}) {
-  // With notes, the person sees the prose; the notes become cards once the answer is in.
-  const { prose, notes } = notesContext ? splitNotes(turn.text) : { prose: turn.text, notes: null };
+function Answer({ turn, status }: { turn: Turn; status: CompanionCopy["status"] }) {
   return (
     <div className="min-w-0">
-      {notes?.safety_flag === "high" && !turn.pending ? <SafetyPanel /> : null}
-      {prose ? (
+      {turn.text ? (
         <div className="gio-prose">
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
@@ -503,39 +387,22 @@ function Answer({
               ),
             }}
           >
-            {prose}
+            {turn.text}
           </ReactMarkdown>
         </div>
       ) : null}
-      {turn.pending && (!prose || turn.searching) ? (
-        <p className={cn("text-[15px] text-ink-muted", prose && "mt-4")}>
+      {turn.pending && (!turn.text || turn.searching) ? (
+        <p className={cn("text-[15px] text-ink-muted", turn.text && "mt-4")}>
           <span className="gio-dots">{turn.searching ? status.searching : turn.withPhotos ? status.looking : status.thinking}</span>
         </p>
       ) : null}
       {turn.error ? <p className="mt-2 text-[15px] text-warn">{turn.error}</p> : null}
-      {notes && notesContext && !turn.pending ? <Notes notes={notes} turn={turn} context={notesContext} /> : null}
-      {!turn.pending && prose.trim() ? (
+      {!turn.pending && turn.text.trim() ? (
         <div className="mt-4 flex flex-wrap items-start gap-x-5 gap-y-2 text-sm text-ink-muted">
-          <CopyButton text={prose} />
+          <CopyButton text={turn.text} />
           {turn.sources?.length ? <Sources sources={turn.sources} /> : null}
         </div>
       ) : null}
-    </div>
-  );
-}
-
-/** Plain words for a moment when someone may not be safe. No voice, no styling tricks. */
-function SafetyPanel() {
-  return (
-    <div role="note" className="mb-5 rounded-[var(--radius)] border border-line-strong bg-surface p-4 text-[15px] leading-relaxed text-ink">
-      <p>If you or someone else is in danger right now, call your local emergency number (911 in the US).</p>
-      <p className="mt-2">
-        If you&rsquo;re thinking about hurting yourself, call or text 988 in the US, any hour. Elsewhere,{" "}
-        <a href="https://findahelpline.com" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
-          findahelpline.com
-        </a>{" "}
-        lists free, confidential lines near you.
-      </p>
     </div>
   );
 }
@@ -565,6 +432,25 @@ function ShareButton({ path, label, companion }: { path: string; label: string; 
       }}
     >
       {copied ? "Link copied" : label}
+    </button>
+  );
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      className="self-start transition-colors hover:text-ink"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(text);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1600);
+        } catch {}
+      }}
+    >
+      {copied ? "Copied" : "Copy"}
     </button>
   );
 }

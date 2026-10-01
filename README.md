@@ -5,13 +5,14 @@ Four private-beta companions on one engine. Each is one page: add up to 10 photo
 - **Gio** (design): *See with a designer's eye.* The custom GPT's design point of view, addressed to whoever is asking.
 - **Tony** (travel): *Travel like it matters.* A travel companion for going beneath the surface of a place, in Amar Lalvani's voice and taste.
 - **Martini** (style): *Dress like you.* A personal style advisor for men's, women's and mixed wardrobes: outfit checks, shopping, packing, dress codes, invest / save / skip.
-- **Jack** (hard truths): *The truth, even when you can't handle it.* "What's the thing you don't want to admit?" Hard advice from the sharpest friend you have, in a dark bar at midnight. Seven modes (Hard Truth, Talk Me Off the Ledge, Career Bloodletting, Love, Lust & Wreckage, Family Ghosts, Make the Move, Write It for Me). Each answer ends with *the thing under the thing*, *the one sentence* and *the next move*, which can be saved to the **Matchbook**; Write It for Me gives a draft to send, with Softer / Sharper / Shorter / Warmer / More formal. Jack can suggest a pattern to remember; the person decides, and can edit or delete it on **Patterns**. In a safety moment Jack drops the act, and the page shows emergency and crisis-line numbers. Dark, whatever the phone is set to.
+- **Jack** (hard truths): *The truth, even when you can't handle it.* "What's the thing you don't want to admit?" Hard advice from the sharpest friend you have, in a dark bar at midnight: what's really going on, the hard truth, one next move. Drafts the message you can't bring yourself to write.
 
 The code is shared. Each companion is its own Vercel project with its own address, name, icon and link preview, chosen by one setting: `COMPANION=gio`, `tony`, `martini` or `jack`.
 
 - **No saved conversations.** A visit is one conversation. Follow-up questions work while the page is open; **New** or a reload starts fresh.
-- **Nothing stored.** Photos are shrunk in the browser and sent with the question. The app has no database tables of its own and keeps no files. Jack's Matchbook, Patterns and Drafts live in the visitor's own browser (export and delete on **Settings**); kept patterns go along with each question while memory is on.
+- **Nothing stored.** Photos are shrunk in the browser and sent with the question. The app has no database tables of its own and keeps no files.
 - **Live checks.** Gio searches the web for real listings and prices; Tony checks that places are still open and still worth it.
+- **Invitation only.** Each tester gets a login; strangers (and their questions on your Anthropic bill) stay out.
 
 ## Access
 
@@ -33,7 +34,7 @@ Testers see plain messages ("Tony isn't available right now", "Gio is busy right
 ## Privacy
 
 - **What leaves the browser.** Each question goes to the app on Vercel with the visit's conversation so far: the text, photos at 1280px for the new question, and smaller copies of earlier photos. The app passes it to **Anthropic** and streams the answer back. When a companion searches the web, the query goes through Anthropic's server-side web search tool.
-- **What's kept.** Nothing, by the app. Supabase is used only for sign-in. Vercel serves the app and doesn't store the content. Jack's saved lines, patterns and drafts stay in the browser that saved them.
+- **What's kept.** Nothing, by the app. Supabase is used only for sign-in. Vercel serves the app and doesn't store the content.
 - **No analytics, no telemetry.** No tracking scripts or error-reporting service. The npm scripts turn off Next.js build telemetry; set `NEXT_TELEMETRY_DISABLED=1` on Vercel too. Fonts are bundled at build time, so the browser never contacts Google. Leave Vercel Analytics and Speed Insights off.
 
 ---
@@ -47,12 +48,11 @@ Browser ──► Next.js on Vercel ──► Anthropic (claude-opus-5-5, web se
 ```
 
 - `src/components/studio.tsx` is the whole interface: the start screen, the conversation and the composer (camera button, optional text, send). A failed answer puts the question and photos back to resend; answers can be copied.
-- `src/lib/companions/` holds each companion: its system prompt (`gio-prompt.ts`, `tony-prompt.ts`, `martini-prompt.ts`, `jack-prompt.ts`), its capabilities, and the words the page shows (name, tagline, placeholder, status lines). Jack also has modes, error lines in his voice and a night palette. `currentCompanion()` picks one from `COMPANION`.
-- `src/lib/ask/notes.ts` reads the notes block Jack ends each answer with; `src/components/notes.tsx` shows it as cards. `src/lib/journal/` and `src/components/journal.tsx` are the Matchbook, Patterns, Drafts and Settings pages, stored in the browser.
+- `src/lib/companions/` holds each companion: its system prompt (`gio-prompt.ts`, `tony-prompt.ts`, `martini-prompt.ts`, `jack-prompt.ts`), its capabilities, and the words the page shows (name, tagline, placeholder, status lines). `currentCompanion()` picks one from `COMPANION`.
 - `src/app/icon.tsx`, `apple-icon.tsx`, `opengraph-image.tsx` and `manifest.ts` give each companion its home-screen icon (Gio black, Tony rust, Martini olive, Jack oxblood) and link preview, drawn at build time with the fonts in `assets/fonts` (SIL Open Font License).
 - `src/lib/ask/photos.ts` shrinks photos in the browser. `src/lib/ask/budget.ts` keeps each request under Vercel's 4.5 MB body limit by dropping the oldest photos from long visits first.
 - `src/app/api/ask/route.ts` checks the sign-in, validates the request and streams the answer as NDJSON.
-- `src/lib/ask/prompt.ts` assembles what the model sees, in order: the companion's system prompt, then an **app capabilities** block (what the app does, that it keeps nothing, that it doesn't know who's asking), then for Jack the picked **mode** and any **remembered patterns**, then the conversation.
+- `src/lib/ask/prompt.ts` assembles what the model sees, in order: the companion's system prompt, then an **app capabilities** block (what the app does, that it keeps nothing, that it doesn't know who's asking), then the conversation.
 - `src/lib/ai/anthropic.ts` streams from Claude with web search, resumes paused search turns, and falls back server-side when a request is refused.
 
 To change how a companion thinks, edit its `src/lib/companions/<name>-prompt.ts` and redeploy both projects' latest deployment (a merge does this automatically).
@@ -96,7 +96,7 @@ Every variable is documented in [`.env.example`](.env.example).
 | `ANTHROPIC_API_KEY` | Claude |
 | `CHAT_MODEL` | Defaults to `claude-opus-5-5` (`GIO_CHAT_MODEL` also works) |
 | `CHAT_EFFORT` | How much the companion thinks before answering. Defaults to `high` |
-| `WEB_SEARCH_MAX_USES` | Web searches allowed per answer. Defaults to Gio 5, Tony 8, Martini 5, Jack 0 (Jack works from what you tell him); `0` turns search off |
+| `WEB_SEARCH_MAX_USES` | Web searches allowed per answer. Defaults to Gio 5, Tony 8, Martini 5, Jack 0; `0` turns search off |
 | `REQUIRE_SIGN_IN` | Optional. `true` requires sign-in; unset, the app is open to anyone with the address |
 | `QUESTIONS_PER_HOUR` | Optional. Per-visitor cap, default 40; `0` turns it off |
 | `INVITE_CODE` | Optional, with sign-in on. Turns on link invitations (`/join/<code>`) and the Invite button |

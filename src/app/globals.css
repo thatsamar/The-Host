@@ -43,27 +43,6 @@
   }
 }
 
-/* A companion with palette "night" is dark whatever the device says: an old
-   hotel bar, a worn leather notebook, brass in low light. */
-:root[data-palette="night"] {
-  --ground: #0f0d0b;
-  --surface: #171411;
-  --sunk: #201b16;
-  --ink: #ece4d6;
-  --ink-soft: #cdbfa9;
-  --ink-muted: #8f8372;
-  --line: #2a241e;
-  --line-strong: #43392e;
-  --accent: #c49a5a;
-  --accent-ink: #140f09;
-  --accent-soft: #2e2417;
-  --ok: #9fbf8f;
-  --ok-soft: #1c2419;
-  --warn: #e3957f;
-  --warn-soft: #3a1e17;
-  color-scheme: dark;
-}
-
 @theme inline {
   --color-ground: var(--ground);
   --color-surface: var(--surface);

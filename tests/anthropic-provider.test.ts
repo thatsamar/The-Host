@@ -168,15 +168,6 @@ describe("describeAnthropicError", () => {
     const mangled = new TypeError("Cannot convert argument to a ByteString because the character at index 0 has a value of 9679");
     expect(describeAnthropicError(mangled, "Martini").message).toBe(unavailable("Martini"));
   });
-
-  it("speaks in the companion's voice when given one, but never for an abort or an oversized request", () => {
-    const voice = { unavailable: "Stepped out.", busy: "Coughed." };
-    expect(describeAnthropicError(apiError(401, "invalid x-api-key"), "Jack", voice).message).toBe("Stepped out.");
-    expect(describeAnthropicError(apiError(529, "overloaded"), "Jack", voice).message).toBe("Coughed.");
-    expect(describeAnthropicError(new TypeError("fetch failed"), "Jack", voice).message).toBe("Stepped out.");
-    expect(describeAnthropicError(apiError(413, "too big"), "Jack", voice).message).toMatch(/Try fewer photos/);
-    expect(describeAnthropicError(new Anthropic.APIUserAbortError(), "Jack", voice).message).toBe("Stopped.");
-  });
 });
 
 describe("toAnthropicSystem", () => {
@@ -185,14 +176,5 @@ describe("toAnthropicSystem", () => {
     expect(system[0].text).toBe("You are Gio.");
     expect(system[1].text.startsWith("<app_capabilities>\nAPP CAPABILITIES")).toBe(true);
     expect(system.map((b) => Boolean(b.cache_control))).toEqual([false, true]);
-  });
-
-  it("keeps the cache breakpoint before a mode or memory block, which change between turns", () => {
-    const system = toAnthropicSystem({
-      ...request,
-      system: [...request.system, { label: "mode", title: "MODE", body: "Hard Truth: Be direct." }],
-    });
-    expect(system.map((b) => Boolean(b.cache_control))).toEqual([false, true, false]);
-    expect(system[2].text.startsWith("<mode>\nMODE")).toBe(true);
   });
 });

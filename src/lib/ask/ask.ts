@@ -1,5 +1,5 @@
 import type { ChatProvider, WebSourceRef } from "@/lib/ai/types";
-import type { Companion, CompanionMode } from "@/lib/companions/types";
+import type { Companion } from "@/lib/companions/types";
 import { assemblePrompt, type AskTurn } from "./prompt";
 
 export type AskEvent =
@@ -14,18 +14,10 @@ export type AskEvent =
  * or written to storage: the conversation arrives whole with each request.
  */
 export async function* ask(
-  deps: {
-    provider: ChatProvider;
-    companion: Companion;
-    webSearch?: boolean;
-    mode?: CompanionMode;
-    memory?: string[];
-    signal?: AbortSignal;
-  },
+  deps: { provider: ChatProvider; companion: Companion; webSearch?: boolean; signal?: AbortSignal },
   turns: AskTurn[],
 ): AsyncGenerator<AskEvent> {
-  const { companion, webSearch, mode, memory } = deps;
-  const request = assemblePrompt({ companion, turns, webSearch, mode, memory });
+  const request = assemblePrompt({ companion: deps.companion, turns, webSearch: deps.webSearch });
   if (request.messages.at(-1)?.role !== "user") {
     yield { type: "error", message: "Add a photo or a question." };
     return;
