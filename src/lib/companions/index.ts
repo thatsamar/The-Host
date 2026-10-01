@@ -2,9 +2,10 @@ import { gio } from "./gio";
 import { jack } from "./jack";
 import { martini } from "./martini";
 import { tony } from "./tony";
+import { untangled } from "./untangled";
 import type { Companion, CompanionCopy, CompanionId } from "./types";
 
-export const COMPANIONS: Record<CompanionId, Companion> = { gio, tony, martini, jack };
+export const COMPANIONS: Record<CompanionId, Companion> = { gio, tony, martini, jack, untangled };
 
 /**
  * Which companion this deployment is. One codebase serves them all: each Vercel
