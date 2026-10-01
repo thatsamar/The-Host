@@ -16,12 +16,14 @@ function anthropic(): Anthropic {
   return client;
 }
 
-export function getChatProvider(companion: Companion): ChatProvider {
+/** `plain`: a careful moment, so errors read plainly rather than in the companion's voice. */
+export function getChatProvider(companion: Companion, options: { plain?: boolean } = {}): ChatProvider {
   const env = serverEnv();
   return new AnthropicChatProvider(anthropic(), env.CHAT_MODEL, {
     effort: env.CHAT_EFFORT,
     webSearchMaxUses: env.WEB_SEARCH_MAX_USES ?? companion.webSearchMaxUses,
     name: companion.name,
+    ...(companion.errors && !options.plain ? { errors: companion.errors } : {}),
   });
 }
 

@@ -122,6 +122,29 @@ function answerFor(body) {
   const images = body.messages.at(-1).content.filter?.((p) => p.type === "image").length ?? 0;
   const refs = system.find((b) => b.text.startsWith("<retrieved_references>"))?.text ?? "";
   const files = [...refs.matchAll(/file: ([^·\n]+)/g)].map((m) => m[1].trim());
+  if (system.some((b) => b.text.includes("<notes>\n{"))) {
+    // A companion that ends answers with notes: prose, then the block.
+    const mode = (system.find((b) => b.text.startsWith("<mode>"))?.text.match(/MODE\s+([^:]+):/) ?? [])[1] ?? "none";
+    const writing = mode === "Write It for Me" || /draft/i.test(text);
+    const notes = {
+      thing_under_the_thing: "You're not confused. You're afraid of what clarity will require.",
+      one_sentence: "Stop negotiating with a life you already know is too small.",
+      next_move: "Tonight, give your future self one clean hour.",
+      safety_flag: /hurt myself|kill myself/i.test(text) ? "high" : "none",
+      suggested_memory_pattern: "You confuse exhaustion with virtue.",
+      draft_message: writing ? "Hi Sam,\n\nI've decided to leave. My last day will be the 30th. Thank you for the last four years.\n\nAlex" : null,
+    };
+    return [
+      "You don't need more clarity. You need more courage.",
+      "",
+      `Mock answer. Mode: ${mode}. Context blocks: ${labels.join(" → ")}.`,
+      "",
+      "Tonight, update the résumé. Not tomorrow. Tonight.",
+      "<notes>",
+      JSON.stringify(notes),
+      "</notes>",
+    ].join("\n");
+  }
   return [
     "**THE CALL** — Mock Gio heard you.",
     "",

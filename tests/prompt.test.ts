@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { ChatContentPart } from "@/lib/ai/types";
-import { BLOCK_ORDER, assemblePrompt, capabilitiesBlock, toChatTurns } from "@/lib/ask/prompt";
+import { BLOCK_ORDER, MAX_PATTERNS, assemblePrompt, capabilitiesBlock, toChatTurns } from "@/lib/ask/prompt";
 import { COMPANIONS } from "@/lib/companions";
 import { gio } from "@/lib/companions/gio";
+import { jack } from "@/lib/companions/jack";
 import { martini } from "@/lib/companions/martini";
 import { tony } from "@/lib/companions/tony";
 
@@ -13,11 +14,35 @@ const img = (data = "aW1n") => ({ mediaType: "image/jpeg", data });
 describe("assemblePrompt", () => {
   it.each(Object.values(COMPANIONS))("puts $name's prompt first, verbatim, then its capabilities", (companion) => {
     const req = assemblePrompt({ companion, turns: [{ role: "user", text: "Hi" }] });
-    expect(req.system.map((b) => b.label)).toEqual([...BLOCK_ORDER]);
+    expect(req.system.map((b) => b.label)).toEqual(BLOCK_ORDER.slice(0, 2));
     expect(req.system[0].body).toBe(companion.systemPrompt);
     expect(req.system[1].body).toBe(companion.capabilities(true).join("\n"));
     expect(req.system.every((b) => b.cacheable)).toBe(true);
     expect(req.webSearch).toBe(true);
+  });
+
+  it("adds the mode, then remembered patterns, after the stable blocks and uncached", () => {
+    const req = assemblePrompt({
+      companion: jack,
+      turns: [{ role: "user", text: "I want to text my ex." }],
+      mode: jack.modes![3],
+      memory: ["You keep choosing unavailable people and calling it chemistry.", "  "],
+    });
+    expect(req.system.map((b) => b.label)).toEqual([...BLOCK_ORDER]);
+    expect(req.system[2]).toMatchObject({ title: "MODE", body: expect.stringMatching(/^Love, Lust & Wreckage: Focus on attachment/) });
+    expect(req.system[3].title).toBe("REMEMBERED PATTERNS");
+    expect(req.system[3].body).toMatch(/\n- You keep choosing unavailable people and calling it chemistry\.$/);
+    expect(req.system.slice(2).some((b) => b.cacheable)).toBe(false);
+  });
+
+  it("leaves out a mode the companion doesn't have, memory it doesn't keep, and empty memory", () => {
+    const labels = (input: Partial<Parameters<typeof assemblePrompt>[0]>) =>
+      assemblePrompt({ companion: jack, turns: [{ role: "user", text: "Hi" }], ...input }).system.map((b) => b.label);
+    expect(labels({ companion: gio, mode: jack.modes![0], memory: ["A pattern."] })).toEqual(BLOCK_ORDER.slice(0, 2));
+    expect(labels({ mode: { id: "x", label: "X", instruction: "Lie." } })).toEqual(BLOCK_ORDER.slice(0, 2));
+    expect(labels({ memory: ["", " "] })).toEqual(BLOCK_ORDER.slice(0, 2));
+    const many = assemblePrompt({ companion: jack, turns: [{ role: "user", text: "Hi" }], memory: Array(30).fill("p") });
+    expect(many.system[2].body.match(/^- p$/gm)).toHaveLength(MAX_PATTERNS);
   });
 });
 
@@ -92,6 +117,48 @@ describe("Martini", () => {
   it("gives an outfit check from photos alone", () => {
     const [turn] = toChatTurns([{ role: "user", text: "", images: [img()] }], martini.photosOnly);
     expect(textOf(turn.content)).toBe("(A photo, no question. Give the outfit check: the call, the highest-leverage move, and what not to do.)");
+  });
+});
+
+describe("Jack", () => {
+  it("carries the owner's core prompt, renamed, with the response pattern, safety and both examples", () => {
+    expect(jack.systemPrompt).toMatch(/^You are Jack: a worldly, irreverent, emotionally intelligent advisor/);
+    expect(jack.systemPrompt).not.toMatch(/Most Interesting Man/);
+    expect(jack.systemPrompt).toMatch(/You protect the user’s agency\./);
+    expect(jack.systemPrompt).toMatch(/1\. A direct opening[\s\S]*2\. A hard truth\.[\s\S]*4\. One concrete next move[\s\S]*5\. A memorable closing line\./);
+    expect(jack.systemPrompt).toMatch(/self-harm, suicide, abuse, violence, stalking, a medical emergency, psychosis, credible threats, legal exposure or financial catastrophe/);
+    expect(jack.systemPrompt).toMatch(/call or text 988/);
+    expect(jack.systemPrompt).toMatch(/never pretend to be one/);
+    expect(jack.systemPrompt).toMatch(/You don't want them to need you\./);
+    expect(jack.systemPrompt).toMatch(/No emoji unless they use emoji first\./);
+    expect(jack.systemPrompt).toContain("Stop negotiating with a life you already know is too small.");
+    expect(jack.systemPrompt).toContain("Do not hand matches to the part of you that misses the fire.");
+    expect(jack.systemPrompt).toMatch(/You are not that character\. Don't quote the film/);
+  });
+
+  it("has the owner's seven modes, with only the ledge marked careful", () => {
+    expect(jack.modes!.map((m) => m.label)).toEqual([
+      "Hard Truth",
+      "Talk Me Off the Ledge",
+      "Career Bloodletting",
+      "Love, Lust & Wreckage",
+      "Family Ghosts",
+      "Make the Move",
+      "Write It for Me",
+    ]);
+    expect(jack.modes!.filter((m) => m.plain).map((m) => m.id)).toEqual(["ledge"]);
+    expect(jack.modes![1].instruction).toMatch(/No swagger\. No theatrics\.$/);
+  });
+
+  it("knows what the app keeps, and how to write the notes the page reads", () => {
+    const body = capabilitiesBlock(jack, true).body;
+    expect(body).toMatch(/keeps no conversations/);
+    expect(body).toMatch(/REMEMBERED PATTERNS/);
+    expect(body).toMatch(/<notes>\n\{"thing_under_the_thing": "\.\.\.", "one_sentence": "\.\.\.", "next_move": "\.\.\.", "safety_flag": "none", "suggested_memory_pattern": null, "draft_message": null\}\n<\/notes>/);
+    expect(body).toMatch(/never write those in the answer itself/);
+    expect(body).toMatch(/softer, sharper, shorter, warmer or more formal/);
+    expect(body).not.toMatch(/web_search/);
+    expect(jack.webSearchMaxUses).toBe(0);
   });
 });
 

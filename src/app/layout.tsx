@@ -22,7 +22,11 @@ const companion = currentCompanion();
 export const metadata: Metadata = {
   title: companion.name,
   description: companion.description,
-  appleWebApp: { capable: true, title: companion.name, statusBarStyle: "default" },
+  appleWebApp: {
+    capable: true,
+    title: companion.name,
+    statusBarStyle: companion.palette === "night" ? "black-translucent" : "default",
+  },
   openGraph: { title: companion.name, description: companion.description, type: "website" },
   robots: { index: false, follow: false },
 };
@@ -31,15 +35,22 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f4f4f1" },
-    { media: "(prefers-color-scheme: dark)", color: "#121213" },
-  ],
+  themeColor:
+    companion.palette === "night"
+      ? "#0f0d0b"
+      : [
+          { media: "(prefers-color-scheme: light)", color: "#f4f4f1" },
+          { media: "(prefers-color-scheme: dark)", color: "#121213" },
+        ],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${serif.variable} ${sans.variable} h-full`}>
+    <html
+      lang="en"
+      data-palette={companion.palette}
+      className={`${serif.variable} ${sans.variable} h-full`}
+    >
       <body className="h-full">{children}</body>
     </html>
   );

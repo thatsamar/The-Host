@@ -15,6 +15,7 @@ import type {
   ChatStreamEvent,
   WebSourceRef,
 } from "./types";
+import type { CompanionErrors } from "@/lib/companions/types";
 
 type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 
@@ -62,34 +63,37 @@ function sourcesFrom(block: BetaContentBlock): WebSourceRef[] {
 export const unavailable = (name: string) => `${name} isn't available right now. Please try again a little later.`;
 export const busy = (name: string) => `${name} is busy right now. Try again in a minute.`;
 
-/** Turns SDK errors into short messages that are safe to show to anyone. */
-export function describeAnthropicError(err: unknown, name = "Gio"): Error {
+/**
+ * Turns SDK errors into short messages that are safe to show to anyone, in the
+ * companion's own voice when it has one and the moment isn't a careful one.
+ */
+export function describeAnthropicError(err: unknown, name = "Gio", voice?: CompanionErrors): Error {
   if (err instanceof Anthropic.APIUserAbortError) {
     const e = new Error("Stopped.");
     e.name = "AbortError";
     return e;
   }
   if (err instanceof Anthropic.APIConnectionError) {
-    return new Error(`Couldn't reach ${name}. Check your connection and try again.`);
+    return new Error(voice?.unavailable ?? `Couldn't reach ${name}. Check your connection and try again.`);
   }
-  if (err instanceof Anthropic.RateLimitError) return new Error(busy(name));
+  if (err instanceof Anthropic.RateLimitError) return new Error(voice?.busy ?? busy(name));
   if (err instanceof Anthropic.APIError) {
-    if (err.status === 529 || err.status === 503) return new Error(busy(name));
+    if (err.status === 529 || err.status === 503) return new Error(voice?.busy ?? busy(name));
     if (err.status === 413) return new Error("That's too much to send at once. Try fewer photos.");
-    return new Error(unavailable(name));
+    return new Error(voice?.unavailable ?? unavailable(name));
   }
   if (err instanceof Error && err.name === "AbortError") return err;
   // Anything else (a mangled key failing inside fetch, a bug) reads the same
   // to the person asking; the specifics go to the server log.
   console.error("Chat request failed:", err instanceof Error ? err.message : err);
-  return new Error(unavailable(name));
+  return new Error(voice?.unavailable ?? unavailable(name));
 }
 
 export class AnthropicChatProvider implements ChatProvider {
   constructor(
     private readonly client: Anthropic,
     private readonly model: string,
-    private readonly options: { effort: Effort; webSearchMaxUses: number; name?: string },
+    private readonly options: { effort: Effort; webSearchMaxUses: number; name?: string; errors?: CompanionErrors },
   ) {}
 
   async *streamChat(request: ChatRequest): AsyncIterable<ChatStreamEvent> {
@@ -98,7 +102,7 @@ export class AnthropicChatProvider implements ChatProvider {
     } catch (err) {
       // The person asking sees a plain message; this is where the reason goes.
       if (err instanceof Anthropic.APIError) console.error("Anthropic chat error", err.status, err.message);
-      throw describeAnthropicError(err, this.options.name);
+      throw describeAnthropicError(err, this.options.name, this.options.errors);
     }
   }
 

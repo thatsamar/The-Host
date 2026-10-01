@@ -5,8 +5,8 @@ import { signInRequired } from "@/lib/auth/access";
 import { createRateLimiter, questionsPerHour, visitorKey } from "@/lib/ask/rate-limit";
 import { serverEnv } from "@/lib/env";
 import { ask, type AskEvent } from "@/lib/ask/ask";
-import { currentCompanion } from "@/lib/companions";
-import { MAX_PHOTOS_PER_TURN } from "@/lib/ask/prompt";
+import { currentCompanion, modeOf } from "@/lib/companions";
+import { MAX_PATTERNS, MAX_PATTERN_LENGTH, MAX_PHOTOS_PER_TURN } from "@/lib/ask/prompt";
 import { createClient, getUserId } from "@/lib/supabase/server";
 
 // Long answers with web search can take a while.
@@ -28,6 +28,12 @@ const bodySchema = z.object({
     )
     .min(1)
     .max(100),
+  /** One of the companion's modes; anything else is ignored. */
+  mode: z.string().max(40).optional(),
+  /** Patterns the visitor kept, for companions with a journal. */
+  memory: z.array(z.string().max(MAX_PATTERN_LENGTH)).max(MAX_PATTERNS).optional(),
+  /** A careful moment (an earlier answer touched on safety): plain error copy. */
+  careful: z.boolean().optional(),
 });
 
 const limiter = createRateLimiter({ limit: questionsPerHour() });
@@ -52,17 +58,23 @@ export async function POST(request: Request) {
   if (!parsed.success) return Response.json({ error: "That didn't go through. Try again." }, { status: 400 });
 
   const companion = currentCompanion();
+  const mode = modeOf(companion, parsed.data.mode);
+  const plain = Boolean(parsed.data.careful || mode?.plain);
   let provider;
   try {
     serverEnv();
-    provider = getChatProvider(companion);
+    provider = getChatProvider(companion, { plain });
   } catch (err) {
     // Names the missing settings (never their values) in the server log.
     console.error(`${companion.name} is misconfigured:`, err instanceof Error ? err.message : err);
-    return Response.json({ error: unavailable(companion.name) }, { status: 503 });
+    const message = (!plain && companion.errors?.unavailable) || unavailable(companion.name);
+    return Response.json({ error: message }, { status: 503 });
   }
 
-  const events = ask({ provider, companion, signal: request.signal }, parsed.data.turns);
+  const events = ask(
+    { provider, companion, mode, memory: parsed.data.memory, signal: request.signal },
+    parsed.data.turns,
+  );
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
