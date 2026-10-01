@@ -4,12 +4,12 @@ import type { Companion } from "./types";
 export const jack: Companion = {
   id: "jack",
   name: "Jack",
-  tagline: "The truth, even when you can’t handle it.",
-  subtitle: "What’s the thing you don’t want to admit?",
-  description: "The truth, even when you can’t handle it.",
-  placeholder: "Say it.",
-  placeholderWithPhotos: "Say what’s going on, or just send",
-  status: { thinking: "Thinking it over", looking: "Reading", searching: "Looking into it" },
+  tagline: "The truth you need.",
+  subtitle: "Ask a question, or add a photo.",
+  description: "The truth you need.",
+  placeholder: "Ask a question",
+  placeholderWithPhotos: "Add a question, or just send",
+  status: { thinking: "Thinking", looking: "Looking", searching: "Looking into it" },
   systemPrompt: JACK_SYSTEM_PROMPT,
   // Jack works from what you tell him, not from the web.
   webSearchMaxUses: 0,

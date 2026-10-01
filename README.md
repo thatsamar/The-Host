@@ -5,7 +5,7 @@ Four private-beta companions on one engine. Each is one page: add up to 10 photo
 - **Gio** (design): *See with a designer's eye.* The custom GPT's design point of view, addressed to whoever is asking.
 - **Tony** (travel): *Travel like it matters.* A travel companion for going beneath the surface of a place, in Amar Lalvani's voice and taste.
 - **Martini** (style): *Dress like you.* A personal style advisor for men's, women's and mixed wardrobes: outfit checks, shopping, packing, dress codes, invest / save / skip.
-- **Jack** (hard truths): *The truth, even when you can't handle it.* "What's the thing you don't want to admit?" Hard advice from the sharpest friend you have, in a dark bar at midnight: what's really going on, the hard truth, one next move. Drafts the message you can't bring yourself to write.
+- **Jack** (hard truths): *The truth you need.* Hard advice from the sharpest friend you have, in a dark bar at midnight: what's really going on, the hard truth, one next move. Drafts the message you can't bring yourself to write.
 
 The code is shared. Each companion is its own Vercel project with its own address, name, icon and link preview, chosen by one setting: `COMPANION=gio`, `tony`, `martini` or `jack`.
 
