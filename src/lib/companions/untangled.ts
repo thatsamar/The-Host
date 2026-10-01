@@ -4,9 +4,9 @@ import type { Companion } from "./types";
 export const untangled: Companion = {
   id: "untangled",
   name: "Untangled",
-  tagline: "Clear decisions from complexity.",
+  tagline: "Untangled: bringing clarity to complexity.",
   subtitle: "Describe the situation, or add screenshots.",
-  description: "Clear decisions from complexity.",
+  description: "Untangled: bringing clarity to complexity.",
   placeholder: "What's keeping you up at night?",
   placeholderWithPhotos: "Add context, or just send",
   status: { thinking: "Untangling", looking: "Mapping", searching: "Parsing" },
