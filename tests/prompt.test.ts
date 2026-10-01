@@ -6,6 +6,7 @@ import { gio } from "@/lib/companions/gio";
 import { jack } from "@/lib/companions/jack";
 import { martini } from "@/lib/companions/martini";
 import { tony } from "@/lib/companions/tony";
+import { untangled } from "@/lib/companions/untangled";
 
 const textOf = (parts: ChatContentPart[]) =>
   parts.flatMap((p) => (p.type === "text" ? [p.text] : [])).join("\n");
@@ -114,6 +115,30 @@ describe("Jack", () => {
     expect(body).toMatch(/keeps nothing/);
     expect(body).toMatch(/Never assume their gender, age/);
     expect(jack.webSearchMaxUses).toBe(0);
+  });
+});
+
+describe("Untangled", () => {
+  it("separates facts from assumptions, control from non-control, labor from fruits", () => {
+    expect(untangled.systemPrompt).toMatch(/^You are Untangled: a thinking tool for consequential human situations/);
+    expect(untangled.systemPrompt).toMatch(/What's Actually Happening/);
+    expect(untangled.systemPrompt).toMatch(/The People Involved/);
+    expect(untangled.systemPrompt).toMatch(/The Facts/);
+    expect(untangled.systemPrompt).toMatch(/The Assumptions/);
+    expect(untangled.systemPrompt).toMatch(/The Noise/);
+    expect(untangled.systemPrompt).toMatch(/What You Control/);
+    expect(untangled.systemPrompt).toMatch(/What You Don't Control/);
+    expect(untangled.systemPrompt).toMatch(/The Ghosts/);
+    expect(untangled.systemPrompt).toMatch(/The Real Decision/);
+    expect(untangled.systemPrompt).toMatch(/You own the labor\. You do not own the fruits of the labor\./);
+  });
+
+  it("does not make the decision for the user", () => {
+    const body = capabilitiesBlock(untangled, true).body;
+    expect(body).toMatch(/not to tell people what to do/);
+    expect(body).toMatch(/restore their ability to decide/);
+    expect(body).toMatch(/not therapy, coaching, or an advice column/);
+    expect(untangled.webSearchMaxUses).toBe(0);
   });
 });
 

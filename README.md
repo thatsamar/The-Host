@@ -1,13 +1,14 @@
-# Gio, Tony, Martini and Jack
+# Gio, Tony, Martini, Jack and Untangled
 
-Four private-beta companions on one engine. Each is one page: add up to 10 photos, ask a question, or both, and get an answer with a point of view.
+Five private-beta companions on one engine. Each is one page: add up to 10 photos, ask a question, or both, and get an answer with a point of view.
 
 - **Gio** (design): *See with a designer's eye.* The custom GPT's design point of view, addressed to whoever is asking.
 - **Tony** (travel): *Travel like it matters.* A travel companion for going beneath the surface of a place, in Amar Lalvani's voice and taste.
 - **Martini** (style): *Dress like you.* A personal style advisor for men's, women's and mixed wardrobes: outfit checks, shopping, packing, dress codes, invest / save / skip.
 - **Jack** (hard truths): *The truth you need.* Hard advice from the sharpest friend you have, in a dark bar at midnight: what's really going on, the hard truth, one next move. Drafts the message you can't bring yourself to write.
+- **Untangled** (clarity): *Clear decisions from complexity.* Map a tangle of people, incentives, facts and assumptions. Separate signal from noise, control from non-control, labor from fruits. Restore your ability to decide.
 
-The code is shared. Each companion is its own Vercel project with its own address, name, icon and link preview, chosen by one setting: `COMPANION=gio`, `tony`, `martini` or `jack`.
+The code is shared. Each companion is its own Vercel project with its own address, name, icon and link preview, chosen by one setting: `COMPANION=gio`, `tony`, `martini`, `jack` or `untangled`.
 
 - **No saved conversations.** A visit is one conversation. Follow-up questions work while the page is open; **New** or a reload starts fresh.
 - **Nothing stored.** Photos are shrunk in the browser and sent with the question. The app has no database tables of its own and keeps no files.
