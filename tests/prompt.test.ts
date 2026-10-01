@@ -3,6 +3,7 @@ import type { ChatContentPart } from "@/lib/ai/types";
 import { BLOCK_ORDER, assemblePrompt, capabilitiesBlock, toChatTurns } from "@/lib/ask/prompt";
 import { COMPANIONS } from "@/lib/companions";
 import { gio } from "@/lib/companions/gio";
+import { jack } from "@/lib/companions/jack";
 import { martini } from "@/lib/companions/martini";
 import { tony } from "@/lib/companions/tony";
 
@@ -92,6 +93,27 @@ describe("Martini", () => {
   it("gives an outfit check from photos alone", () => {
     const [turn] = toChatTurns([{ role: "user", text: "", images: [img()] }], martini.photosOnly);
     expect(textOf(turn.content)).toBe("(A photo, no question. Give the outfit check: the call, the highest-leverage move, and what not to do.)");
+  });
+});
+
+describe("Jack", () => {
+  it("carries the owner's core prompt, renamed, with the response pattern, focus, safety and both examples", () => {
+    expect(jack.systemPrompt).toMatch(/^You are Jack: a worldly, irreverent, emotionally intelligent advisor/);
+    expect(jack.systemPrompt).not.toMatch(/Most Interesting Man/);
+    expect(jack.systemPrompt).toMatch(/1\. A direct opening[\s\S]*5\. A memorable closing line\./);
+    expect(jack.systemPrompt).toMatch(/Do not romanticize chaos\. Do not shame longing\./);
+    expect(jack.systemPrompt).toMatch(/the difference between love and obedience/);
+    expect(jack.systemPrompt).toMatch(/call or text 988/);
+    expect(jack.systemPrompt).toMatch(/You don't want them to need you\./);
+    expect(jack.systemPrompt).toContain("Stop negotiating with a life you already know is too small.");
+    expect(jack.systemPrompt).toContain("Do not hand matches to the part of you that misses the fire.");
+  });
+
+  it("knows the app keeps nothing and doesn't assume who is asking", () => {
+    const body = capabilitiesBlock(jack, true).body;
+    expect(body).toMatch(/keeps nothing/);
+    expect(body).toMatch(/Never assume their gender, age/);
+    expect(jack.webSearchMaxUses).toBe(0);
   });
 });
 

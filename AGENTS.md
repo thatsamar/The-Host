@@ -10,10 +10,10 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # Gio project notes
 
-- One engine, three companions: Gio (design), Tony (travel) and Martini (style). Each deployment picks one with `COMPANION`; everything companion-specific (prompt, capabilities, page words, icon tile) lives in `src/lib/companions/`. Keep the engine free of companion names.
+- One engine, four companions: Gio (design), Tony (travel), Martini (style) and Jack (hard truths). All four have the same features; a companion differs only in its prompt, capabilities, page words and icon. Each deployment picks one with `COMPANION`; everything companion-specific (prompt, capabilities, page words, icon tile) lives in `src/lib/companions/`. Keep the engine free of companion names.
 - The app is deliberately one page: photos (up to 10) and/or a question, one conversation per visit, nothing saved. Don't add features back without being asked.
 - Prompt assembly lives only in `src/lib/ask/prompt.ts`: companion system prompt → app capabilities → conversation. Keep block order and labels stable and covered by `tests/prompt.test.ts`.
-- Gio is for invited testers, not one household: keep names and personal references out of its prompt (tested). Tony's prompt is the owner's text and deliberately in Amar Lalvani's voice; its capabilities tell it the traveler isn't Amar. Martini's prompt is the owner's brief verbatim ("me"/"my" means whoever is asking; men's and women's style with equal weight). Keep each point of view as written.
+- Gio is for invited testers, not one household: keep names and personal references out of its prompt (tested). Tony's prompt is the owner's text and deliberately in Amar Lalvani's voice; its capabilities tell it the traveler isn't Amar. Martini's prompt is the owner's brief verbatim ("me"/"my" means whoever is asking; men's and women's style with equal weight). Jack's opens with the owner's core prompt, renamed Jack (not "The Most Interesting Man in the World", a beer slogan), and keeps the owner's mode instructions and tone examples as written, as guidance in the prompt rather than app features. Keep each point of view as written.
 - Testers see plain error messages; technical reasons go to the server log (`describeAnthropicError`, `signInErrorMessage`).
 - Model access goes through `src/lib/ai/types.ts` interfaces. Model IDs come from env (`CHAT_MODEL`).
 - Assistant history is replayed as text only (no thinking blocks).
