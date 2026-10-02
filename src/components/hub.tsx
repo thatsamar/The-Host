@@ -7,14 +7,14 @@ export function Hub() {
   const companions = Object.values(COMPANIONS);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="min-h-screen flex flex-col items-center justify-center p-6" style={{ backgroundColor: 'var(--ground)' }}>
       <div className="max-w-3xl w-full">
         <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-light mb-4 tracking-tight text-slate-900">
-            What do you need right now?
+          <h1 className="text-4xl md:text-5xl font-light mb-4 tracking-tight font-serif" style={{ color: 'var(--ink)' }}>
+            In your corner
           </h1>
-          <p className="text-lg text-slate-600">
-            Five tools. One conversation each. Pick what applies to your life today.
+          <p className="text-lg" style={{ color: 'var(--ink-muted)' }}>
+            Five advisors for the things you decide.
           </p>
         </div>
 
@@ -23,24 +23,33 @@ export function Hub() {
             <Link
               key={companion.id}
               href={`/${companion.id}`}
-              className="group block"
+              className="group block p-6 rounded-[22px] transition-all hover:scale-105"
+              style={{
+                backgroundColor: 'var(--surface)',
+                border: '1px solid var(--line)',
+                minHeight: '84px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+              }}
             >
-              <div
-                className="h-40 rounded-lg mb-4 transition-transform group-hover:scale-105"
-                style={{ backgroundColor: companion.iconTile }}
-              />
-              <h2 className="text-xl font-semibold text-slate-900 mb-2 group-hover:text-slate-700">
-                {companion.name}
-              </h2>
-              <p className="text-slate-600 mb-3">{companion.tagline}</p>
-              <p className="text-sm text-slate-500 line-clamp-2">
-                {companion.description}
+              <div className="flex items-center gap-4 mb-2">
+                <div
+                  className="w-3 h-3 rounded-full"
+                  style={{ backgroundColor: companion.iconTile }}
+                />
+                <h2 className="text-lg font-serif" style={{ color: 'var(--ink)' }}>
+                  {companion.name}
+                </h2>
+              </div>
+              <p className="text-sm" style={{ color: 'var(--ink-muted)' }}>
+                {companion.tagline}
               </p>
             </Link>
           ))}
         </div>
 
-        <div className="text-center text-sm text-slate-500 mt-12">
+        <div className="text-center text-sm mt-12" style={{ color: 'var(--ink-muted)' }}>
           <p>No saved conversations. Each visit is fresh. No database. Your questions stay with you.</p>
         </div>
       </div>

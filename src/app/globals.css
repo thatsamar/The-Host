@@ -1,45 +1,52 @@
 @import "tailwindcss";
 
-/* Gio: one quiet ground, soft black ink, hairline rules, and a single cobalt
-   accent. Newsreader is Gio's voice; Schibsted Grotesk is the interface. */
+/* Warm light palette for all advisors: Tony, Martini, Gio, Jack, Untangled.
+   Newsreader (light) for names and headings; Instrument Sans for small text. */
 :root {
-  --ground: #f4f4f1;
-  --surface: #ffffff;
-  --sunk: #eae9e5;
-  --ink: #18181a;
-  --ink-soft: #3d3c39;
-  --ink-muted: #6b6a66;
-  --line: #dcdbd6;
-  --line-strong: #c3c2bc;
-  --accent: #2536c9;
-  --accent-ink: #ffffff;
-  --accent-soft: #e5e7f8;
+  --ground: #F5EEE4;
+  --surface: #FFFBF6;
+  --sunk: #F5EEE4;
+  --ink: #2B2320;
+  --ink-soft: #5A4F47;
+  --ink-muted: #75695F;
+  --line: #EADFD1;
+  --line-strong: #DFD3C5;
+  --accent: #2B2320;
+  --accent-ink: #F5EEE4;
+  --accent-soft: #F0E8DF;
   --ok: #3b6b47;
   --ok-soft: #e1ece3;
   --warn: #a33a2a;
   --warn-soft: #f5e3df;
-  --radius: 0.75rem;
+  --radius: 1.375rem;
   color-scheme: light;
+
+  /* Advisor dots */
+  --tony-dot: #3E9C8A;
+  --martini-dot: #D9667F;
+  --gio-dot: #E0A04A;
+  --jack-dot: #8A7B6B;
+  --untangled-dot: #7B8DD9;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --ground: #121213;
-    --surface: #1b1b1d;
-    --sunk: #232326;
-    --ink: #edece8;
-    --ink-soft: #cfcec9;
-    --ink-muted: #9a9993;
-    --line: #2e2e31;
-    --line-strong: #46464b;
-    --accent: #8c98ff;
-    --accent-ink: #0e0f1f;
-    --accent-soft: #23264a;
-    --ok: #8cc79c;
-    --ok-soft: #1d2a21;
-    --warn: #f08f7e;
-    --warn-soft: #3a211c;
-    color-scheme: dark;
+    --ground: #F5EEE4;
+    --surface: #FFFBF6;
+    --sunk: #F5EEE4;
+    --ink: #2B2320;
+    --ink-soft: #5A4F47;
+    --ink-muted: #75695F;
+    --line: #EADFD1;
+    --line-strong: #DFD3C5;
+    --accent: #2B2320;
+    --accent-ink: #F5EEE4;
+    --accent-soft: #F0E8DF;
+    --ok: #3b6b47;
+    --ok-soft: #e1ece3;
+    --warn: #a33a2a;
+    --warn-soft: #f5e3df;
+    color-scheme: light;
   }
 }
 

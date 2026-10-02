@@ -13,7 +13,7 @@ export const tony: Companion = {
   systemPrompt: TONY_SYSTEM_PROMPT,
   // Hours, closures and who's cooking change; travel answers lean on search.
   webSearchMaxUses: 8,
-  iconTile: "#7a2f1d",
+  iconTile: "#3E9C8A",
   photosOnly: (count) =>
     `(${count === 1 ? "A photo" : `${count} photos`}, no question. Read the place: what it is, whether it's worth it, and what to do here or next.)`,
   capabilities: (webSearch) => [
