@@ -6,11 +6,11 @@ import { ChevronDownIcon } from "lucide-react";
 import { useState } from "react";
 
 const ADVISOR_URLS: Record<string, string> = {
-  tony: "https://tony.vercel.app",
-  martini: "https://martini.vercel.app",
-  gio: "https://gio.vercel.app",
-  jack: "https://jack.vercel.app",
-  goldie: "https://untangled.vercel.app",
+  tony: "https://tony-ten-bay.vercel.app",
+  martini: "https://the-host-8xye.vercel.app",
+  gio: "https://gio-chi.vercel.app",
+  jack: "https://jack-fawn-iota.vercel.app",
+  goldie: "https://untangled-hazel.vercel.app",
 };
 
 const HUB_URL = "https://thehub-chi.vercel.app";
