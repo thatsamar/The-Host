@@ -4,9 +4,9 @@ import type { Companion } from "./types";
 export const gio: Companion = {
   id: "gio",
   name: "Gio",
-  tagline: "for seeing with a designer’s eye.",
+  tagline: "seeing with a designer’s eye.",
   subtitle: "Upload a picture or ask a question.",
-  description: "for seeing with a designer’s eye.",
+  description: "seeing with a designer’s eye.",
   placeholder: "Ask a question",
   placeholderWithPhotos: "Add a question, or just send",
   status: { thinking: "Thinking", looking: "Looking", searching: "Checking real listings" },

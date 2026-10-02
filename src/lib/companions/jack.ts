@@ -4,9 +4,9 @@ import type { Companion } from "./types";
 export const jack: Companion = {
   id: "jack",
   name: "Jack",
-  tagline: "for the truth you need.",
+  tagline: "the truth you need.",
   subtitle: "Ask a question, or add a photo.",
-  description: "for the truth you need.",
+  description: "the truth you need.",
   placeholder: "Ask a question",
   placeholderWithPhotos: "Add a question, or just send",
   status: { thinking: "Thinking", looking: "Looking", searching: "Looking into it" },
