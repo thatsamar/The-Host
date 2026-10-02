@@ -1,20 +1,20 @@
 import { UNTANGLED_SYSTEM_PROMPT } from "./untangled-prompt";
 import type { Companion } from "./types";
 
-export const untangled: Companion = {
-  id: "untangled",
-  name: "Untangled",
-  tagline: "Yes, it's complicated.",
+export const goldie: Companion = {
+  id: "goldie",
+  name: "Goldie",
+  tagline: "untangling complicated situations.",
   subtitle: "Describe the situation, or add screenshots.",
-  description: "Yes, it's complicated.",
+  description: "untangling complicated situations.",
   placeholder: "What's keeping you up at night?",
   placeholderWithPhotos: "Add context, or just send",
   status: { thinking: "Untangling", looking: "Mapping", searching: "Parsing" },
   systemPrompt: UNTANGLED_SYSTEM_PROMPT,
-  // Untangled does not need the web to understand human situations.
+  // Goldie does not need the web to understand human situations.
   webSearchMaxUses: 0,
   // Slate: the color of thought made visible.
-  iconTile: "#2a3a3a",
+  iconTile: "#7B8DD9",
   photosOnly: (count) =>
     `(${count === 1 ? "A screenshot or document" : `${count} screenshots or documents`}, no words. Map the situation: the people, their positions, the facts you can see, and the noise you can hear.)`,
   capabilities: () => [

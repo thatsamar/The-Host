@@ -4,17 +4,17 @@ import type { Companion } from "./types";
 export const jack: Companion = {
   id: "jack",
   name: "Jack",
-  tagline: "The truth you need.",
+  tagline: "the truth you need.",
   subtitle: "Ask a question, or add a photo.",
-  description: "The truth you need.",
+  description: "the truth you need.",
   placeholder: "Ask a question",
   placeholderWithPhotos: "Add a question, or just send",
   status: { thinking: "Thinking", looking: "Looking", searching: "Looking into it" },
   systemPrompt: JACK_SYSTEM_PROMPT,
   // Jack works from what you tell him, not from the web.
   webSearchMaxUses: 0,
-  // Oxblood: a leather banquette in a hotel bar.
-  iconTile: "#3a1512",
+  // Warm brown
+  iconTile: "#8A7B6B",
   photosOnly: (count) =>
     `(${count === 1 ? "A screenshot or photo" : `${count} screenshots or photos`}, no words. Read it closely, tell them what's really going on, and give them the next move.)`,
   capabilities: () => [

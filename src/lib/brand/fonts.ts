@@ -15,4 +15,4 @@ export async function brandFonts() {
   ];
 }
 
-export const BRAND = { ground: "#f4f4f1", ink: "#18181a", muted: "#6b6a66" };
+export const BRAND = { ground: "#F5EEE4", ink: "#2B2320", muted: "#75695F" };

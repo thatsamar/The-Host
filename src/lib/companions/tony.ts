@@ -4,16 +4,16 @@ import type { Companion } from "./types";
 export const tony: Companion = {
   id: "tony",
   name: "Tony",
-  tagline: "Travel like it matters.",
+  tagline: "traveling like it matters.",
   subtitle: "Ask about a place, or add a photo.",
-  description: "Travel like it matters.",
+  description: "traveling like it matters.",
   placeholder: "Where are you going?",
   placeholderWithPhotos: "Add a question, or just send",
   status: { thinking: "Thinking", looking: "Looking", searching: "Checking what's still open" },
   systemPrompt: TONY_SYSTEM_PROMPT,
   // Hours, closures and who's cooking change; travel answers lean on search.
   webSearchMaxUses: 8,
-  iconTile: "#7a2f1d",
+  iconTile: "#3E9C8A",
   photosOnly: (count) =>
     `(${count === 1 ? "A photo" : `${count} photos`}, no question. Read the place: what it is, whether it's worth it, and what to do here or next.)`,
   capabilities: (webSearch) => [
