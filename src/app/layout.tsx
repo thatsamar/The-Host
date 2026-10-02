@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Newsreader, Schibsted_Grotesk } from "next/font/google";
-import { currentCompanion } from "@/lib/companions";
 import "./globals.css";
 
 // next/font downloads these at build time and serves them from this app, so
@@ -17,13 +16,15 @@ const sans = Schibsted_Grotesk({
   subsets: ["latin"],
 });
 
-const companion = currentCompanion();
-
 export const metadata: Metadata = {
-  title: companion.name,
-  description: companion.description,
-  appleWebApp: { capable: true, title: companion.name, statusBarStyle: "default" },
-  openGraph: { title: companion.name, description: companion.description, type: "website" },
+  title: "Five ways to think better",
+  description: "Design, travel, style, hard truths, and clarity. Pick what your life needs right now.",
+  appleWebApp: { capable: true, title: "The Host", statusBarStyle: "default" },
+  openGraph: {
+    title: "Five ways to think better",
+    description: "Design, travel, style, hard truths, and clarity. Pick what your life needs right now.",
+    type: "website",
+  },
   robots: { index: false, follow: false },
 };
 
@@ -37,7 +38,7 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${serif.variable} ${sans.variable} h-full`}>
       <body className="h-full">{children}</body>
