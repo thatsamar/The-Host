@@ -1,3 +1,4 @@
+import { AdvisorNav } from "@/components/advisor-nav";
 import { Hub } from "@/components/hub";
 import { Studio } from "@/components/studio";
 import { signInRequired } from "@/lib/auth/access";
@@ -12,8 +13,14 @@ export default function Home() {
 
   // Otherwise, show the advisor studio
   const companion = copyOf(currentCompanion());
-  if (!signInRequired()) return <Studio companion={companion} share={{ path: "/", label: "Share" }} />;
-  const code = inviteCode();
-  const share = code ? { path: `/join/${encodeURIComponent(code)}`, label: "Invite" } : null;
-  return <Studio companion={companion} share={share} signedIn />;
+  const studioProps = !signInRequired()
+    ? { companion, share: { path: "/", label: "Share" } }
+    : { companion, share: inviteCode() ? { path: `/join/${encodeURIComponent(inviteCode()!)}`, label: "Invite" } : null, signedIn: true };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+      <AdvisorNav currentAdvisorId={companion.id} />
+      <Studio {...studioProps} />
+    </div>
+  );
 }
