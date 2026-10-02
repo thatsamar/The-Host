@@ -1,10 +1,17 @@
 "use client";
 
-import Link from "next/link";
 import { COMPANIONS } from "@/lib/companions";
 
+const ADVISOR_URLS: Record<string, string> = {
+  tony: "https://tony.vercel.app",
+  martini: "https://martini.vercel.app",
+  gio: "https://gio.vercel.app",
+  jack: "https://jack.vercel.app",
+  untangled: "https://untangled.vercel.app",
+};
+
 export function Hub() {
-  const companions = Object.values(COMPANIONS);
+  const ordered = ["tony", "martini", "gio", "jack", "untangled"].map((id) => COMPANIONS[id as keyof typeof COMPANIONS]);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6" style={{ backgroundColor: 'var(--ground)' }}>
@@ -18,34 +25,34 @@ export function Hub() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-          {companions.map((companion) => (
-            <Link
+        <div className="grid grid-cols-1 gap-6 mb-12">
+          {ordered.map((companion) => (
+            <a
               key={companion.id}
-              href={`/${companion.id}`}
-              className="group block p-6 rounded-[22px] transition-all hover:scale-105"
+              href={ADVISOR_URLS[companion.id]}
+              className="group block p-6 rounded-[22px] transition-all hover:scale-105 active:scale-100"
               style={{
                 backgroundColor: 'var(--surface)',
                 border: '1px solid var(--line)',
                 minHeight: '84px',
                 display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'center',
+                alignItems: 'center',
+                gap: '1rem',
               }}
             >
-              <div className="flex items-center gap-4 mb-2">
-                <div
-                  className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: companion.iconTile }}
-                />
+              <div
+                className="w-3 h-3 rounded-full flex-shrink-0"
+                style={{ backgroundColor: companion.iconTile }}
+              />
+              <div className="flex-1">
                 <h2 className="text-lg font-serif" style={{ color: 'var(--ink)' }}>
                   {companion.name}
                 </h2>
+                <p className="text-sm" style={{ color: 'var(--ink-muted)' }}>
+                  For {companion.tagline.toLowerCase()}
+                </p>
               </div>
-              <p className="text-sm" style={{ color: 'var(--ink-muted)' }}>
-                {companion.tagline}
-              </p>
-            </Link>
+            </a>
           ))}
         </div>
 

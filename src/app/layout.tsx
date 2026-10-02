@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Newsreader, Schibsted_Grotesk } from "next/font/google";
+import { currentCompanion } from "@/lib/companions";
 import "./globals.css";
 
 // next/font downloads these at build time and serves them from this app, so
@@ -16,25 +17,36 @@ const sans = Schibsted_Grotesk({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "Five ways to think better",
-  description: "Design, travel, style, hard truths, and clarity. Pick what your life needs right now.",
-  appleWebApp: { capable: true, title: "The Host", statusBarStyle: "default" },
-  openGraph: {
-    title: "Five ways to think better",
-    description: "Design, travel, style, hard truths, and clarity. Pick what your life needs right now.",
-    type: "website",
-  },
-  robots: { index: false, follow: false },
-};
+const isHub = process.env.COMPANION === "hub";
+const companion = isHub ? null : currentCompanion();
+
+export const metadata: Metadata = isHub
+  ? {
+      title: "In your corner",
+      description: "Five advisors for the things you decide.",
+      appleWebApp: { capable: true, title: "In your corner", statusBarStyle: "default" },
+      openGraph: {
+        title: "In your corner",
+        description: "Five advisors for the things you decide.",
+        type: "website",
+      },
+      robots: { index: false, follow: false },
+    }
+  : {
+      title: companion!.name,
+      description: companion!.description,
+      appleWebApp: { capable: true, title: companion!.name, statusBarStyle: "default" },
+      openGraph: { title: companion!.name, description: companion!.description, type: "website" },
+      robots: { index: false, follow: false },
+    };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f4f4f1" },
-    { media: "(prefers-color-scheme: dark)", color: "#121213" },
+    { media: "(prefers-color-scheme: light)", color: "#F5EEE4" },
+    { media: "(prefers-color-scheme: dark)", color: "#F5EEE4" },
   ],
 };
 
