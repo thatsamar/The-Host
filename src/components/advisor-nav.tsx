@@ -33,7 +33,7 @@ export function AdvisorNav({ currentAdvisorId }: AdvisorNavProps) {
             className="text-sm hover:opacity-70 transition-opacity"
             style={{ color: "var(--ink-muted)" }}
           >
-            ← Back to hub
+            ← Back to your corner
           </a>
 
           <div className="flex items-center gap-4">
