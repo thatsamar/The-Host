@@ -4,16 +4,16 @@ import type { Companion } from "./types";
 export const martini: Companion = {
   id: "martini",
   name: "Martini",
-  tagline: "Dress like you.",
+  tagline: "for dressing like you.",
   subtitle: "Show me the outfit, or ask a question.",
-  description: "Dress like you.",
+  description: "for dressing like you.",
   placeholder: "What's the occasion?",
   placeholderWithPhotos: "Add the occasion, or just send",
   status: { thinking: "Thinking", looking: "Looking", searching: "Checking what's out there" },
   systemPrompt: MARTINI_SYSTEM_PROMPT,
   webSearchMaxUses: 5,
-  // Olive: the one thing a martini is garnished with.
-  iconTile: "#3f4a2a",
+  // Coral pink
+  iconTile: "#D9667F",
   photosOnly: (count) =>
     `(${count === 1 ? "A photo" : `${count} photos`}, no question. Give the outfit check: the call, the highest-leverage move, and what not to do.)`,
   capabilities: (webSearch) => [

@@ -7,34 +7,31 @@ const ADVISOR_URLS: Record<string, string> = {
   martini: "https://martini.vercel.app",
   gio: "https://gio.vercel.app",
   jack: "https://jack.vercel.app",
-  untangled: "https://untangled.vercel.app",
+  goldie: "https://untangled.vercel.app",
 };
 
 export function Hub() {
-  const ordered = ["tony", "martini", "gio", "jack", "untangled"].map((id) => COMPANIONS[id as keyof typeof COMPANIONS]);
+  const ordered = ["tony", "martini", "gio", "jack", "goldie"].map((id) => COMPANIONS[id as keyof typeof COMPANIONS]);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6" style={{ backgroundColor: 'var(--ground)' }}>
       <div className="max-w-3xl w-full">
-        <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-light mb-4 tracking-tight font-serif" style={{ color: 'var(--ink)' }}>
+        <div className="text-center mb-6">
+          <h1 className="text-4xl md:text-5xl font-light tracking-tight font-serif" style={{ color: 'var(--ink)' }}>
             In your corner
           </h1>
-          <p className="text-lg" style={{ color: 'var(--ink-muted)' }}>
-            Five advisors for the things you decide.
-          </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 mb-12">
+        <div className="grid grid-cols-1 gap-4 mb-6">
           {ordered.map((companion) => (
             <a
               key={companion.id}
               href={ADVISOR_URLS[companion.id]}
-              className="group block p-6 rounded-[22px] transition-all hover:scale-105 active:scale-100"
+              className="group block p-4 rounded-[22px] transition-all hover:scale-105 active:scale-100"
               style={{
                 backgroundColor: 'var(--surface)',
                 border: '1px solid var(--line)',
-                minHeight: '84px',
+                minHeight: '68px',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '1rem',

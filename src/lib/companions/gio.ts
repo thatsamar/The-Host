@@ -4,15 +4,15 @@ import type { Companion } from "./types";
 export const gio: Companion = {
   id: "gio",
   name: "Gio",
-  tagline: "See with a designer’s eye.",
+  tagline: "for seeing with a designer’s eye.",
   subtitle: "Upload a picture or ask a question.",
-  description: "See with a designer's eye.",
+  description: "for seeing with a designer’s eye.",
   placeholder: "Ask a question",
   placeholderWithPhotos: "Add a question, or just send",
   status: { thinking: "Thinking", looking: "Looking", searching: "Checking real listings" },
   systemPrompt: GIO_SYSTEM_PROMPT,
   webSearchMaxUses: 5,
-  iconTile: "#18181a",
+  iconTile: "#E0A04A",
   photosOnly: (count) => `(${count === 1 ? "A photo" : `${count} photos`}, no question. Assess what you see.)`,
   capabilities: (webSearch) => [
     "People use this app for design questions about their own homes. A message may carry up to 10 photos, a question, or both. With photos and no question, assess what you see: what's working, what isn't, and what to change first.",

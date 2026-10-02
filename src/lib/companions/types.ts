@@ -11,7 +11,7 @@ export interface CompanionCopy {
   status: { thinking: string; looking: string; searching: string };
 }
 
-export type CompanionId = "gio" | "tony" | "martini" | "jack" | "untangled";
+export type CompanionId = "gio" | "tony" | "martini" | "jack" | "goldie";
 
 /** One character on the shared engine: what it's told, and how it looks. */
 export interface Companion extends CompanionCopy {
