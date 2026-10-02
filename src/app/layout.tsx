@@ -25,6 +25,7 @@ export const metadata: Metadata = isHub
       title: "In your corner",
       description: "Five advisors for the things you decide.",
       appleWebApp: { capable: true, title: "In your corner", statusBarStyle: "default" },
+      manifest: "/manifest.json",
       openGraph: {
         title: "In your corner",
         description: "Five advisors for the things you decide.",
