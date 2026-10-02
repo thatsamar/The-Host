@@ -17,14 +17,16 @@ const sans = Schibsted_Grotesk({
   subsets: ["latin"],
 });
 
-const isHub = process.env.COMPANION === "hub";
+const companionValue = process.env.COMPANION?.toLowerCase().trim();
+const validCompanions = ["gio", "tony", "martini", "jack", "goldie"];
+const isHub = companionValue === "hub" || !companionValue || !validCompanions.includes(companionValue);
 const companion = isHub ? null : currentCompanion();
 
 export const metadata: Metadata = isHub
   ? {
-      title: "In your corner",
+      title: "Your Corner",
       description: "Five advisors for the things you decide.",
-      appleWebApp: { capable: true, title: "In your corner", statusBarStyle: "default" },
+      appleWebApp: { capable: true, title: "Your Corner", statusBarStyle: "default" },
       manifest: "/manifest.json",
       openGraph: {
         title: "In your corner",
