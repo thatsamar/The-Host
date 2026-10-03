@@ -76,6 +76,7 @@ export function Hub() {
                 justifyContent: 'space-between',
                 gap: '1rem',
                 boxShadow: '0 1px 2px rgba(0, 0, 0, 0.02)',
+                paddingTop: '0.875rem',
               }}
             >
               {/* Left: Category Name */}
