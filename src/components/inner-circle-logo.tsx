@@ -8,7 +8,15 @@ export function InnerCircleLogo({ size = 120 }: { size?: number }) {
         fill="none"
         style={{ display: "inline-block", marginBottom: "8px" }}
       >
-        {/* Charcoal brush circle */}
+        {/* Charcoal brush circle with organic, irregular edges */}
+        <defs>
+          <filter id="brushTexture">
+            <feTurbulence type="fractalNoise" baseFrequency="0.08" numOctaves="4" result="noise" seed="42" />
+            <feDisplacementMap in="SourceGraphic" in2="noise" scale="2" xChannelSelector="R" yChannelSelector="G" />
+          </filter>
+        </defs>
+
+        {/* Primary brush stroke circle with irregular edges */}
         <circle
           cx="60"
           cy="60"
@@ -16,12 +24,16 @@ export function InnerCircleLogo({ size = 120 }: { size?: number }) {
           fill="none"
           stroke="currentColor"
           strokeWidth="12"
-          opacity="0.8"
+          opacity="0.85"
+          filter="url(#brushTexture)"
           style={{
-            filter: "drop-shadow(0 0 0.5px rgba(0,0,0,0.1))",
+            filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.08))",
+            strokeLinecap: "round",
+            strokeLinejoin: "round",
           }}
         />
-        {/* Add slight texture with overlapping strokes */}
+
+        {/* Secondary texture layer for depth */}
         <circle
           cx="60"
           cy="60"
@@ -29,7 +41,18 @@ export function InnerCircleLogo({ size = 120 }: { size?: number }) {
           fill="none"
           stroke="currentColor"
           strokeWidth="1"
-          opacity="0.3"
+          opacity="0.25"
+        />
+
+        {/* Subtle pigment variation */}
+        <circle
+          cx="60"
+          cy="60"
+          r="52"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="0.5"
+          opacity="0.15"
         />
       </svg>
       <div
