@@ -203,7 +203,7 @@ export function Studio({
         e.preventDefault();
         if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
       }}
-      className="w-full rounded-[26px] border border-line bg-surface p-2 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-colors focus-within:border-line-strong"
+      className="w-full rounded-3xl bg-surface p-3 shadow-[0_2px_8px_rgba(0,0,0,0.08)] transition-all focus-within:shadow-[0_4px_12px_rgba(0,0,0,0.12)]"
     >
       {staged.length ? (
         <div className="flex gap-2 overflow-x-auto px-1 pb-2 pt-1 [scrollbar-width:none]">
@@ -301,11 +301,11 @@ export function Studio({
       <main className="flex min-h-dvh flex-col items-center justify-center px-4 pb-[max(2rem,env(safe-area-inset-bottom))] pt-8">
         <div className="w-full max-w-[640px]">
           <p className="text-center text-[22px] font-bold leading-none tracking-[-0.04em] text-ink">{companion.name}</p>
-          <h1 className="mt-6 text-center font-serif text-[clamp(40px,10vw,64px)] font-normal leading-[1.02] tracking-[-0.025em] text-ink [text-wrap:balance]">
+          <h1 className="mt-8 text-center font-serif text-[clamp(40px,10vw,64px)] font-normal leading-[1.1] tracking-[-0.025em] text-ink [text-wrap:balance]">
             For {companion.tagline}
           </h1>
-          <p className="mt-5 text-center text-lg text-ink-muted">{companion.subtitle}</p>
-          <div className="mt-10">{composer}</div>
+          <p className="mt-6 text-center text-lg leading-relaxed text-ink-muted">{companion.subtitle}</p>
+          <div className="mt-12">{composer}</div>
           {hint}
         </div>
         <div className="fixed inset-x-0 bottom-0 flex justify-center gap-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-sm text-ink-muted">
@@ -338,13 +338,13 @@ export function Studio({
         }}
         className="min-h-0 flex-1 overflow-y-auto"
       >
-        <div className="mx-auto flex w-full max-w-[640px] flex-col gap-8 px-4 py-6">
+        <div className="mx-auto flex w-full max-w-[640px] flex-col gap-6 px-4 py-8">
           {thread.map((t) => (t.role === "user" ? <Question key={t.key} turn={t} /> : <Answer key={t.key} turn={t} status={companion.status} />))}
           <div ref={endRef} />
         </div>
       </main>
 
-      <div className="mx-auto w-full max-w-[640px] shrink-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2">
+      <div className="mx-auto w-full max-w-[640px] shrink-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4">
         {composer}
         {hint}
       </div>
@@ -364,7 +364,7 @@ function Question({ turn }: { turn: Turn }) {
         </div>
       ) : null}
       {turn.text ? (
-        <p className="max-w-[85%] whitespace-pre-wrap rounded-[20px] rounded-br-md bg-ink px-4 py-2.5 text-[15px] leading-relaxed text-ground [overflow-wrap:anywhere]">
+        <p className="max-w-[85%] whitespace-pre-wrap rounded-3xl rounded-br-sm bg-ink px-5 py-3 text-[15px] leading-relaxed text-ground shadow-[0_2px_6px_rgba(0,0,0,0.12)] [overflow-wrap:anywhere]">
           {turn.text}
         </p>
       ) : null}
@@ -392,13 +392,13 @@ function Answer({ turn, status }: { turn: Turn; status: CompanionCopy["status"] 
         </div>
       ) : null}
       {turn.pending && (!turn.text || turn.searching) ? (
-        <p className={cn("text-[15px] text-ink-muted", turn.text && "mt-4")}>
+        <p className={cn("text-[15px] leading-relaxed text-ink-muted", turn.text && "mt-5")}>
           <span className="gio-dots">{turn.searching ? status.searching : turn.withPhotos ? status.looking : status.thinking}</span>
         </p>
       ) : null}
-      {turn.error ? <p className="mt-2 text-[15px] text-warn">{turn.error}</p> : null}
+      {turn.error ? <p className="mt-3 text-[15px] text-warn">{turn.error}</p> : null}
       {!turn.pending && turn.text.trim() ? (
-        <div className="mt-4 flex flex-wrap items-start gap-x-5 gap-y-2 text-sm text-ink-muted">
+        <div className="mt-5 flex flex-wrap items-start gap-x-5 gap-y-2 text-sm text-ink-muted">
           <CopyButton text={turn.text} />
           {turn.sources?.length ? <Sources sources={turn.sources} /> : null}
         </div>
