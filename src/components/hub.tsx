@@ -53,10 +53,13 @@ const CATEGORIES: Card[] = [
 export function Hub() {
   return (
     <div className="w-screen min-h-screen flex flex-col items-center justify-between p-4 sm:p-6" style={{ backgroundColor: 'var(--ground)' }}>
-      <div className="w-full max-w-sm pt-12 sm:pt-16" style={{ paddingTop: 'max(3rem, 2.5vh + env(safe-area-inset-top))' }}>
+      <div className="w-full max-w-sm" style={{ paddingTop: 'max(0.75rem, 0.5vh + env(safe-area-inset-top))' }}>
         {/* Logo */}
-        <div className="text-center" style={{ color: 'var(--ink)', marginBottom: '28px' }}>
-          <InnerCircleLogo size={100} />
+        <div className="text-center sm:hidden" style={{ color: 'var(--ink)', marginBottom: '36px' }}>
+          <InnerCircleLogo size={200} />
+        </div>
+        <div className="text-center hidden sm:block" style={{ color: 'var(--ink)', marginBottom: '36px' }}>
+          <InnerCircleLogo size={220} />
         </div>
 
         {/* Cards - pure navigation */}

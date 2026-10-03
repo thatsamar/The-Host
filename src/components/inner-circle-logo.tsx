@@ -1,4 +1,4 @@
-export function InnerCircleLogo({ size = 120 }: { size?: number }) {
+export function InnerCircleLogo({ size = 150 }: { size?: number }) {
   return (
     <div style={{ textAlign: "center" }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -9,7 +9,8 @@ export function InnerCircleLogo({ size = 120 }: { size?: number }) {
         height={size}
         style={{
           display: "inline-block",
-          marginBottom: "8px",
+          width: size,
+          height: size,
           objectFit: "contain",
         }}
       />
