@@ -301,11 +301,11 @@ export function Studio({
       <main className="flex min-h-dvh flex-col items-center justify-center px-4 pb-[max(2rem,env(safe-area-inset-bottom))] pt-8">
         <div className="w-full max-w-[640px]">
           <p className="text-center text-[22px] font-bold leading-none tracking-[-0.04em] text-ink">{companion.name}</p>
-          <h1 className="mt-6 text-center font-serif text-[clamp(40px,10vw,64px)] font-normal leading-[1.02] tracking-[-0.025em] text-ink [text-wrap:balance]">
-            For {companion.tagline}
+          <h1 className="mt-8 text-center font-serif text-[clamp(40px,10vw,64px)] font-normal leading-[1.1] tracking-[-0.025em] text-ink [text-wrap:balance]">
+            {companion.tagline}
           </h1>
-          <p className="mt-5 text-center text-lg text-ink-muted">{companion.subtitle}</p>
-          <div className="mt-10">{composer}</div>
+          <p className="mt-6 text-center text-lg leading-relaxed text-ink-muted">{companion.subtitle}</p>
+          <div className="mt-12">{composer}</div>
           {hint}
         </div>
         <div className="fixed inset-x-0 bottom-0 flex justify-center gap-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-sm text-ink-muted">
@@ -418,7 +418,7 @@ function ShareButton({ path, label, companion }: { path: string; label: string; 
         const url = new URL(path, window.location.origin).toString();
         if (navigator.share) {
           try {
-            await navigator.share({ title: companion.name, text: `${companion.name}. For ${companion.tagline}`, url });
+            await navigator.share({ title: companion.name, text: `${companion.name}. ${companion.tagline}`, url });
             return;
           } catch (err) {
             if (err instanceof DOMException && err.name === "AbortError") return; // closed the sheet
