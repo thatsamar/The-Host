@@ -9,7 +9,7 @@ export const tony: Companion = {
   description: "Travel like it matters.",
   placeholder: "Where to?",
   placeholderWithPhotos: "Add a question, or just send",
-  status: { thinking: "Thinking", looking: "Looking", searching: "Checking what's still open" },
+  status: { thinking: "Considering… Don't leave this page.", looking: "Considering… Don't leave this page.", searching: "Considering… Don't leave this page." },
   systemPrompt: TONY_SYSTEM_PROMPT,
   // Hours, closures and who's cooking change; travel answers lean on search.
   webSearchMaxUses: 8,

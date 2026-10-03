@@ -9,7 +9,7 @@ export const martini: Companion = {
   description: "Dress like you.",
   placeholder: "Show me your outfit.",
   placeholderWithPhotos: "Add the occasion, or just send",
-  status: { thinking: "Thinking", looking: "Looking", searching: "Checking what's out there" },
+  status: { thinking: "Assessing… Don't leave this page.", looking: "Assessing… Don't leave this page.", searching: "Assessing… Don't leave this page." },
   systemPrompt: MARTINI_SYSTEM_PROMPT,
   webSearchMaxUses: 5,
   // Coral pink
