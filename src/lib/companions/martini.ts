@@ -7,7 +7,7 @@ export const martini: Companion = {
   tagline: "Dress like you.",
   subtitle: "How do you want to feel?",
   description: "Dress like you.",
-  placeholder: "How do you want to feel?",
+  placeholder: "Show me your outfit.",
   placeholderWithPhotos: "Add the occasion, or just send",
   status: { thinking: "Thinking", looking: "Looking", searching: "Checking what's out there" },
   systemPrompt: MARTINI_SYSTEM_PROMPT,

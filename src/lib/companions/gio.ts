@@ -7,7 +7,7 @@ export const gio: Companion = {
   tagline: "See with a designer’s eye.",
   subtitle: "What do you want to make better?",
   description: "See with a designer’s eye.",
-  placeholder: "Ask a question",
+  placeholder: "Show me the room.",
   placeholderWithPhotos: "Add a question, or just send",
   status: { thinking: "Thinking", looking: "Looking", searching: "Checking real listings" },
   systemPrompt: GIO_SYSTEM_PROMPT,

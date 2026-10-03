@@ -7,7 +7,7 @@ export const tony: Companion = {
   tagline: "Travel like it matters.",
   subtitle: "Where are you thinking of going?",
   description: "Travel like it matters.",
-  placeholder: "Where are you going?",
+  placeholder: "Where to?",
   placeholderWithPhotos: "Add a question, or just send",
   status: { thinking: "Thinking", looking: "Looking", searching: "Checking what's still open" },
   systemPrompt: TONY_SYSTEM_PROMPT,

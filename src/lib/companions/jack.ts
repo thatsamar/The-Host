@@ -7,7 +7,7 @@ export const jack: Companion = {
   tagline: "The Truth You Need.",
   subtitle: "Ask a question, and add screenshots.",
   description: "The Truth You Need.",
-  placeholder: "Let's talk.",
+  placeholder: "What is it time to address?",
   placeholderWithPhotos: "Add a question, or just send",
   status: { thinking: "Thinking", looking: "Looking", searching: "Looking into it" },
   systemPrompt: JACK_SYSTEM_PROMPT,
