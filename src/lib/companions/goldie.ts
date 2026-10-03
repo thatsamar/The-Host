@@ -9,7 +9,7 @@ export const goldie: Companion = {
   description: "Untangle what's complicated.",
   placeholder: "What's keeping you up at night?",
   placeholderWithPhotos: "Add context, or just send",
-  status: { thinking: "Untangling", looking: "Mapping", searching: "Parsing" },
+  status: { thinking: "Untangling… Don't leave this page.", looking: "Untangling… Don't leave this page.", searching: "Untangling… Don't leave this page." },
   systemPrompt: UNTANGLED_SYSTEM_PROMPT,
   // Goldie does not need the web to understand human situations.
   webSearchMaxUses: 0,

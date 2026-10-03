@@ -9,7 +9,7 @@ export const gio: Companion = {
   description: "See with a designer’s eye.",
   placeholder: "Show me the room.",
   placeholderWithPhotos: "Add a question, or just send",
-  status: { thinking: "Thinking", looking: "Looking", searching: "Checking real listings" },
+  status: { thinking: "Assessing… Don't leave this page.", looking: "Assessing… Don't leave this page.", searching: "Assessing… Don't leave this page." },
   systemPrompt: GIO_SYSTEM_PROMPT,
   webSearchMaxUses: 5,
   iconTile: "#E0A04A",

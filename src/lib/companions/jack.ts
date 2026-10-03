@@ -9,7 +9,7 @@ export const jack: Companion = {
   description: "The Truth You Need.",
   placeholder: "What is it time to address?",
   placeholderWithPhotos: "Add a question, or just send",
-  status: { thinking: "Thinking", looking: "Looking", searching: "Looking into it" },
+  status: { thinking: "Thinking… Don't leave this page.", looking: "Thinking… Don't leave this page.", searching: "Thinking… Don't leave this page." },
   systemPrompt: JACK_SYSTEM_PROMPT,
   // Jack works from what you tell him, not from the web.
   webSearchMaxUses: 0,

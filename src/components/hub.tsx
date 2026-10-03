@@ -50,10 +50,10 @@ const CATEGORIES: Card[] = [
 
 export function Hub() {
   return (
-    <div className="w-screen min-h-screen flex flex-col items-center justify-start p-4 sm:p-6" style={{ backgroundColor: 'var(--ground)' }}>
-      <div className="w-full max-w-sm pt-4 sm:pt-6">
+    <div className="w-screen min-h-screen flex flex-col items-center justify-between p-4 sm:p-6" style={{ backgroundColor: 'var(--ground)' }}>
+      <div className="w-full max-w-sm pt-3 sm:pt-4">
         {/* Stacked Wordmark */}
-        <div className="text-center mb-5 sm:mb-6">
+        <div className="text-center mb-4 sm:mb-5">
           <h1 className="text-4xl sm:text-5xl font-light font-serif leading-none tracking-tight" style={{ color: 'var(--ink)' }}>
             <div>Inner</div>
             <div>Circle</div>
@@ -76,7 +76,6 @@ export function Hub() {
                 justifyContent: 'space-between',
                 gap: '1rem',
                 boxShadow: '0 1px 2px rgba(0, 0, 0, 0.02)',
-                paddingTop: '0.875rem',
               }}
             >
               {/* Left: Category Name */}
@@ -90,6 +89,11 @@ export function Hub() {
             </a>
           ))}
         </div>
+      </div>
+
+      {/* Footer */}
+      <div className="text-center text-xs sm:text-sm font-light" style={{ color: 'var(--ink-muted)' }}>
+        <p>Speak freely. Every conversation starts anew.</p>
       </div>
     </div>
   );
