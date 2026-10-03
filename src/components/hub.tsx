@@ -13,7 +13,6 @@ interface Card {
   category: string;
   promiseLine: string;
   advisorName: string;
-  iconTile: string;
   url: string;
 }
 
@@ -23,7 +22,6 @@ const CATEGORIES: Card[] = [
     category: "Travel",
     promiseLine: "Travel like it matters.",
     advisorName: "Tony",
-    iconTile: "#3E9C8A",
     url: ADVISOR_URLS.tony,
   },
   {
@@ -31,7 +29,6 @@ const CATEGORIES: Card[] = [
     category: "Style",
     promiseLine: "Dress like you.",
     advisorName: "Martini",
-    iconTile: "#D9667F",
     url: ADVISOR_URLS.martini,
   },
   {
@@ -39,15 +36,13 @@ const CATEGORIES: Card[] = [
     category: "Design",
     promiseLine: "See with a designer's eye.",
     advisorName: "Gio",
-    iconTile: "#E0A04A",
     url: ADVISOR_URLS.gio,
   },
   {
     id: "jack",
     category: "Truth",
-    promiseLine: "The Truth You Need.",
+    promiseLine: "The truth you need.",
     advisorName: "Jack",
-    iconTile: "#8A7B6B",
     url: ADVISOR_URLS.jack,
   },
   {
@@ -55,66 +50,53 @@ const CATEGORIES: Card[] = [
     category: "Strategy",
     promiseLine: "Untangle what's complicated.",
     advisorName: "Goldie",
-    iconTile: "#7B8DD9",
     url: ADVISOR_URLS.goldie,
   },
 ];
 
 export function Hub() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6" style={{ backgroundColor: 'var(--ground)' }}>
-      <div className="max-w-3xl w-full">
-        <div className="text-center mb-12 relative">
-          <div
-            className="absolute inset-0 rounded-full blur-3xl -z-10 mx-auto"
-            style={{
-              backgroundColor: 'var(--ink)',
-              opacity: 0.06,
-              width: '280px',
-              height: '280px',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-            }}
-          />
-          <h1 className="text-5xl md:text-6xl font-light tracking-tight font-serif leading-tight" style={{ color: 'var(--ink)' }}>
-            Inner Circle
+    <div className="w-screen min-h-screen flex flex-col items-center justify-between p-4 sm:p-6" style={{ backgroundColor: 'var(--ground)' }}>
+      <div className="w-full max-w-sm">
+        {/* Stacked Wordmark */}
+        <div className="text-center mb-6 sm:mb-8">
+          <h1 className="text-4xl sm:text-5xl font-light font-serif leading-none tracking-tight" style={{ color: 'var(--ink)' }}>
+            <div>Inner</div>
+            <div>Circle</div>
           </h1>
         </div>
 
-        <div className="grid grid-cols-1 gap-2 mb-16">
+        {/* Cards */}
+        <div className="grid grid-cols-1 gap-3 sm:gap-3 mb-auto">
           {CATEGORIES.map((card) => (
             <a
               key={card.id}
               href={card.url}
-              className="group block p-4 rounded-2xl transition-all hover:shadow-sm active:shadow-xs"
+              className="group block p-3 sm:p-4 rounded-lg sm:rounded-xl transition-all hover:shadow-sm active:shadow-xs"
               style={{
                 backgroundColor: 'var(--surface)',
                 border: '1px solid var(--line)',
-                minHeight: '60px',
+                minHeight: '72px',
                 display: 'flex',
-                alignItems: 'center',
-                gap: '1.25rem',
+                alignItems: 'flex-start',
+                justifyContent: 'space-between',
+                gap: '1rem',
                 boxShadow: '0 1px 2px rgba(0, 0, 0, 0.02)',
+                paddingTop: '0.875rem',
               }}
             >
-              <div
-                className="rounded-full flex-shrink-0 transition-transform group-hover:scale-110"
-                style={{
-                  backgroundColor: 'transparent',
-                  border: `1.5px solid ${card.iconTile}`,
-                  width: '10px',
-                  height: '10px',
-                }}
-              />
+              {/* Left: Category and Promise */}
               <div className="flex-1 min-w-0">
-                <h2 className="text-lg font-serif leading-tight" style={{ color: 'var(--ink)' }}>
+                <h2 className="text-base sm:text-lg font-serif font-medium leading-tight" style={{ color: 'var(--ink)' }}>
                   {card.category}
                 </h2>
-                <p className="text-sm leading-relaxed mt-0.5" style={{ color: 'var(--ink-muted)' }}>
+                <p className="text-sm sm:text-sm leading-snug mt-0.5" style={{ color: 'var(--ink-muted)' }}>
                   {card.promiseLine}
                 </p>
-                <p className="text-xs leading-relaxed mt-1" style={{ color: 'var(--ink-muted)' }}>
+              </div>
+              {/* Right: Advisor Name */}
+              <div className="flex-shrink-0 text-right">
+                <p className="text-xs sm:text-sm font-serif" style={{ color: 'var(--ink-muted)' }}>
                   {card.advisorName}
                 </p>
               </div>
@@ -122,8 +104,9 @@ export function Hub() {
           ))}
         </div>
 
-        <div className="text-center text-xs mt-16 pt-8 font-light" style={{ borderTop: '1px solid var(--line)', color: 'var(--ink-muted)' }}>
-          <p className="leading-relaxed">Speak freely. Every conversation starts anew. Nothing is retained.</p>
+        {/* Footer - hide on very short screens */}
+        <div className="text-center text-xs mt-4 pt-4 font-light hidden sm:block" style={{ borderTop: '1px solid var(--line)', color: 'var(--ink-muted)' }}>
+          <p className="leading-relaxed">Speak freely. Every conversation starts anew.</p>
         </div>
       </div>
     </div>
