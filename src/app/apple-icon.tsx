@@ -7,5 +7,6 @@ export const contentType = "image/png";
 
 // iOS rounds the corners and shows the name under it on the home screen.
 export default async function AppleIcon() {
-  return new ImageResponse(<Mark size={180} />, { ...size, fonts: await brandFonts() });
+  const isHub = process.env.COMPANION === "hub";
+  return new ImageResponse(<Mark size={180} isHub={isHub} />, { ...size, fonts: await brandFonts() });
 }

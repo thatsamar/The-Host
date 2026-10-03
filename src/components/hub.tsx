@@ -1,5 +1,7 @@
 "use client";
 
+import { InnerCircleLogo } from "./inner-circle-logo";
+
 const ADVISOR_URLS: Record<string, string> = {
   tony: "https://tony-ten-bay.vercel.app",
   martini: "https://the-host-8xye.vercel.app",
@@ -52,12 +54,9 @@ export function Hub() {
   return (
     <div className="w-screen min-h-screen flex flex-col items-center justify-between p-4 sm:p-6" style={{ backgroundColor: 'var(--ground)' }}>
       <div className="w-full max-w-sm pt-3 sm:pt-4">
-        {/* Stacked Wordmark */}
-        <div className="text-center mb-4 sm:mb-5">
-          <h1 className="text-4xl sm:text-5xl font-light font-serif leading-none tracking-tight" style={{ color: 'var(--ink)' }}>
-            <div>Inner</div>
-            <div>Circle</div>
-          </h1>
+        {/* Logo */}
+        <div className="text-center mb-6 sm:mb-8" style={{ color: 'var(--ink)' }}>
+          <InnerCircleLogo size={100} />
         </div>
 
         {/* Cards - pure navigation */}
