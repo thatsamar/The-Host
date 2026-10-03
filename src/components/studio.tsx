@@ -301,11 +301,10 @@ export function Studio({
       <main className="flex min-h-dvh flex-col items-center justify-center px-4 pb-[max(2rem,env(safe-area-inset-bottom))] pt-4">
         <div className="w-full max-w-[640px]">
           <p className="text-center text-[22px] font-bold leading-none tracking-[-0.04em] text-ink">{companion.name}</p>
-          <h1 className="mt-4 text-center font-serif text-[clamp(40px,10vw,64px)] font-normal leading-[1.1] tracking-[-0.025em] text-ink [text-wrap:balance]">
+          <h1 className="mt-3 text-center font-serif text-[clamp(40px,10vw,64px)] font-normal leading-[1.1] tracking-[-0.025em] text-ink [text-wrap:balance]">
             {companion.tagline}
           </h1>
-          <p className="mt-4 text-center text-lg leading-relaxed text-ink-muted">{companion.subtitle}</p>
-          <div className="mt-10">{composer}</div>
+          <div className="mt-8">{composer}</div>
           {hint}
         </div>
         <div className="fixed inset-x-0 bottom-0 flex justify-center gap-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-sm text-ink-muted">
@@ -326,7 +325,7 @@ export function Studio({
     <div className="flex h-dvh flex-col">
       <header className="mx-auto flex w-full max-w-[640px] shrink-0 items-center justify-between px-4 pb-2 pt-[max(1rem,env(safe-area-inset-top))]">
         <a href="/" className="text-sm text-ink-muted transition-colors hover:text-ink">
-          ← Inner Circle
+          ← Back
         </a>
         <p className="text-[22px] font-bold leading-none tracking-[-0.04em] text-ink">{companion.name}</p>
         <button type="button" onClick={startOver} className="text-sm text-ink-muted transition-colors hover:text-ink">
