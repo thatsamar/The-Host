@@ -298,15 +298,22 @@ export function Studio({
 
   if (!started) {
     return (
-      <main className="flex min-h-dvh flex-col items-center px-4 pb-[max(2rem,env(safe-area-inset-bottom))] pt-12 sm:pt-16">
-        <div className="w-full max-w-[640px]">
-          <p className="text-center text-[22px] font-bold leading-none tracking-[-0.04em] text-ink">{companion.name}</p>
-          <h1 className="mt-3 text-center font-serif text-[clamp(40px,10vw,64px)] font-normal leading-[1.1] tracking-[-0.025em] text-ink [text-wrap:balance]">
-            {companion.tagline}
-          </h1>
-          <div className="mt-8">{composer}</div>
-          {hint}
-        </div>
+      <div className="flex min-h-dvh flex-col">
+        <header className="mx-auto flex w-full max-w-[640px] shrink-0 items-center px-4 pb-2 pt-[max(1rem,env(safe-area-inset-top))]">
+          <a href="/" className="text-sm text-ink-muted transition-colors hover:text-ink">
+            ← Back
+          </a>
+        </header>
+        <main className="flex flex-1 flex-col items-center px-4 pb-[max(2rem,env(safe-area-inset-bottom))]">
+          <div className="w-full max-w-[640px]">
+            <p className="text-center text-[22px] font-bold leading-none tracking-[-0.04em] text-ink">{companion.name}</p>
+            <h1 className="mt-3 text-center font-serif text-[clamp(40px,10vw,64px)] font-normal leading-[1.1] tracking-[-0.025em] text-ink [text-wrap:balance]">
+              {companion.tagline}
+            </h1>
+            <div className="mt-8">{composer}</div>
+            {hint}
+          </div>
+        </main>
         <div className="fixed inset-x-0 bottom-0 flex justify-center gap-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-sm text-ink-muted">
           {share ? <ShareButton path={share.path} label={share.label} companion={companion} /> : null}
           {signedIn ? (
@@ -317,7 +324,7 @@ export function Studio({
             </form>
           ) : null}
         </div>
-      </main>
+      </div>
     );
   }
 
