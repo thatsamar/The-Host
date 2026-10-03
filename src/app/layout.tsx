@@ -19,7 +19,8 @@ const sans = Schibsted_Grotesk({
 
 const companionValue = process.env.COMPANION?.toLowerCase().trim();
 const validCompanions = ["gio", "tony", "martini", "jack", "goldie"];
-const isHub = process.env.IS_HUB === "true" || companionValue === "hub" || !companionValue || !validCompanions.includes(companionValue);
+const isHubProject = process.env.VERCEL_URL?.includes("hub") || process.env.VERCEL_URL?.includes("fresh");
+const isHub = process.env.IS_HUB === "true" || companionValue === "hub" || !companionValue || !validCompanions.includes(companionValue) || isHubProject;
 const companion = isHub ? null : currentCompanion();
 
 export const metadata: Metadata = isHub
