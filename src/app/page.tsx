@@ -1,4 +1,3 @@
-import { AdvisorNav } from "@/components/advisor-nav";
 import { Hub } from "@/components/hub";
 import { Studio } from "@/components/studio";
 import { signInRequired } from "@/lib/auth/access";
@@ -17,10 +16,5 @@ export default function Home() {
     ? { companion, share: { path: "/", label: "Share" } }
     : { companion, share: inviteCode() ? { path: `/join/${encodeURIComponent(inviteCode()!)}`, label: "Invite" } : null, signedIn: true };
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
-      <AdvisorNav currentAdvisorId={companion.id} />
-      <Studio {...studioProps} />
-    </div>
-  );
+  return <Studio {...studioProps} />;
 }
