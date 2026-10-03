@@ -304,13 +304,13 @@ export function Studio({
             ← Back
           </a>
         </header>
-        <main className="flex flex-1 flex-col items-center px-4 pb-[max(2rem,env(safe-area-inset-bottom))]">
+        <main className="flex flex-1 flex-col items-center justify-center px-4 pb-[max(2rem,env(safe-area-inset-bottom))]">
           <div className="w-full max-w-[640px]">
             <p className="text-center text-[22px] font-bold leading-none tracking-[-0.04em] text-ink">{companion.name}</p>
-            <h1 className="mt-3 text-center font-serif text-[clamp(40px,10vw,64px)] font-normal leading-[1.1] tracking-[-0.025em] text-ink [text-wrap:balance]">
+            <h1 className="mt-4 text-center font-serif text-[clamp(40px,10vw,64px)] font-normal leading-[1.1] tracking-[-0.025em] text-ink [text-wrap:balance]">
               {companion.tagline}
             </h1>
-            <div className="mt-8">{composer}</div>
+            <div className="mt-10">{composer}</div>
             {hint}
           </div>
         </main>
