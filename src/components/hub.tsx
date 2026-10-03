@@ -16,7 +16,7 @@ export function Hub() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6" style={{ backgroundColor: 'var(--ground)' }}>
       <div className="max-w-3xl w-full">
-        <div className="text-center mb-16">
+        <div className="text-center mb-8">
           <h1 className="text-5xl md:text-6xl font-light tracking-tight font-serif leading-tight" style={{ color: 'var(--ink)' }}>
             In your corner
           </h1>
@@ -27,15 +27,15 @@ export function Hub() {
             <a
               key={companion.id}
               href={ADVISOR_URLS[companion.id]}
-              className="group block p-5 rounded-3xl transition-all hover:shadow-md active:shadow-sm"
+              className="group block p-4 rounded-2xl transition-all hover:shadow-sm active:shadow-xs"
               style={{
                 backgroundColor: 'var(--surface)',
                 border: '1px solid var(--line)',
-                minHeight: '72px',
+                minHeight: '60px',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '1.25rem',
-                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
+                boxShadow: '0 1px 2px rgba(0, 0, 0, 0.02)',
               }}
             >
               <div
@@ -51,15 +51,15 @@ export function Hub() {
                   {companion.name}
                 </h2>
                 <p className="text-sm leading-relaxed mt-0.5" style={{ color: 'var(--ink-muted)' }}>
-                  For {companion.tagline.toLowerCase()}
+                  {companion.tagline}
                 </p>
               </div>
             </a>
           ))}
         </div>
 
-        <div className="text-center text-sm mt-16 pt-8" style={{ borderTop: '1px solid var(--line)', color: 'var(--ink-muted)' }}>
-          <p className="italic font-light leading-relaxed">Speak freely. Nothing discussed is saved, reviewed, or retained.</p>
+        <div className="text-center text-xs mt-16 pt-8 font-light" style={{ borderTop: '1px solid var(--line)', color: 'var(--ink-muted)' }}>
+          <p className="leading-relaxed">Speak freely. Every visit starts fresh.</p>
         </div>
       </div>
     </div>
