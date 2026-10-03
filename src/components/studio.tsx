@@ -299,14 +299,12 @@ export function Studio({
   if (!started) {
     return (
       <div className="flex min-h-dvh flex-col">
-        <header className="mx-auto flex w-full max-w-[640px] shrink-0 items-center px-4 pb-2 pt-[max(1rem,env(safe-area-inset-top))]">
-          <a href="/" className="text-sm text-ink-muted transition-colors hover:text-ink">
-            ← Back
-          </a>
-        </header>
-        <main className="flex flex-1 flex-col items-center px-4 pb-[max(2rem,env(safe-area-inset-bottom))] pt-8 sm:pt-12">
+        <main className="flex flex-1 flex-col items-center px-4 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))]">
           <div className="w-full max-w-[640px]">
-            <p className="text-center text-[22px] font-bold leading-none tracking-[-0.04em] text-ink">{companion.name}</p>
+            <a href="/" className="text-sm text-ink-muted transition-colors hover:text-ink">
+              ← Back
+            </a>
+            <p className="mt-8 text-center text-[22px] font-bold leading-none tracking-[-0.04em] text-ink">{companion.name}</p>
             <h1 className="mt-4 text-center font-serif text-[clamp(40px,10vw,64px)] font-normal leading-[1.1] tracking-[-0.025em] text-ink [text-wrap:balance]">
               {companion.tagline}
             </h1>
