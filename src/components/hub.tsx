@@ -72,7 +72,7 @@ export function Hub() {
         </div>
 
         <div className="text-center text-xs mt-16 pt-8 font-light" style={{ borderTop: '1px solid var(--line)', color: 'var(--ink-muted)' }}>
-          <p className="leading-relaxed">Speak freely. Every visit starts fresh.</p>
+          <p className="leading-relaxed">Speak freely. Every conversation starts anew. Nothing is retained.</p>
         </div>
       </div>
     </div>

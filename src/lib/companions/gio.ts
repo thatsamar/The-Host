@@ -5,7 +5,7 @@ export const gio: Companion = {
   id: "gio",
   name: "Gio",
   tagline: "See with a designer’s eye.",
-  subtitle: "Upload a picture or ask a question.",
+  subtitle: "What do you want to make better?",
   description: "See with a designer’s eye.",
   placeholder: "Ask a question",
   placeholderWithPhotos: "Add a question, or just send",

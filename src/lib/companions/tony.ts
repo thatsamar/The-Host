@@ -5,7 +5,7 @@ export const tony: Companion = {
   id: "tony",
   name: "Tony",
   tagline: "Travel like it matters.",
-  subtitle: "Ask about a place, or add a photo.",
+  subtitle: "Where are you thinking of going?",
   description: "Travel like it matters.",
   placeholder: "Where are you going?",
   placeholderWithPhotos: "Add a question, or just send",
