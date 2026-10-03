@@ -66,6 +66,7 @@ export function Hub() {
           </h1>
         </div>
 
+<<<<<<< HEAD
         {/* Cards */}
         <div className="grid grid-cols-1 gap-3 sm:gap-3 mb-auto">
           {CATEGORIES.map((card) => (
@@ -104,6 +105,7 @@ export function Hub() {
           ))}
         </div>
 
+<<<<<<< HEAD
         {/* Footer - hide on very short screens */}
         <div className="text-center text-xs mt-4 pt-4 font-light hidden sm:block" style={{ borderTop: '1px solid var(--line)', color: 'var(--ink-muted)' }}>
           <p className="leading-relaxed">Speak freely. Every conversation starts anew.</p>
