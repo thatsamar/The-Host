@@ -16,13 +16,25 @@ export function Hub() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6" style={{ backgroundColor: 'var(--ground)' }}>
       <div className="max-w-3xl w-full">
-        <div className="text-center mb-8">
+        <div className="text-center mb-12 relative">
+          <div
+            className="absolute inset-0 rounded-full blur-3xl -z-10 mx-auto"
+            style={{
+              backgroundColor: 'var(--ink)',
+              opacity: 0.06,
+              width: '280px',
+              height: '280px',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+            }}
+          />
           <h1 className="text-5xl md:text-6xl font-light tracking-tight font-serif leading-tight" style={{ color: 'var(--ink)' }}>
-            In your corner
+            Inner Circle
           </h1>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 mb-16">
+        <div className="grid grid-cols-1 gap-2 mb-16">
           {ordered.map((companion) => (
             <a
               key={companion.id}
@@ -41,9 +53,10 @@ export function Hub() {
               <div
                 className="rounded-full flex-shrink-0 transition-transform group-hover:scale-110"
                 style={{
-                  backgroundColor: companion.iconTile,
-                  width: '8px',
-                  height: '8px',
+                  backgroundColor: 'transparent',
+                  border: `1.5px solid ${companion.iconTile}`,
+                  width: '10px',
+                  height: '10px',
                 }}
               />
               <div className="flex-1 min-w-0">
