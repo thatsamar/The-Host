@@ -16,36 +16,41 @@ export function Hub() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6" style={{ backgroundColor: 'var(--ground)' }}>
       <div className="max-w-3xl w-full">
-        <div className="text-center mb-6">
-          <h1 className="text-4xl md:text-5xl font-light tracking-tight font-serif" style={{ color: 'var(--ink)' }}>
+        <div className="text-center mb-16">
+          <h1 className="text-5xl md:text-6xl font-light tracking-tight font-serif leading-tight" style={{ color: 'var(--ink)' }}>
             In your corner
           </h1>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 mb-6">
+        <div className="grid grid-cols-1 gap-3 mb-16">
           {ordered.map((companion) => (
             <a
               key={companion.id}
               href={ADVISOR_URLS[companion.id]}
-              className="group block p-4 rounded-[22px] transition-all hover:scale-105 active:scale-100"
+              className="group block p-5 rounded-3xl transition-all hover:shadow-md active:shadow-sm"
               style={{
                 backgroundColor: 'var(--surface)',
                 border: '1px solid var(--line)',
-                minHeight: '68px',
+                minHeight: '72px',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '1rem',
+                gap: '1.25rem',
+                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
               }}
             >
               <div
-                className="w-3 h-3 rounded-full flex-shrink-0"
-                style={{ backgroundColor: companion.iconTile }}
+                className="rounded-full flex-shrink-0 transition-transform group-hover:scale-110"
+                style={{
+                  backgroundColor: companion.iconTile,
+                  width: '8px',
+                  height: '8px',
+                }}
               />
-              <div className="flex-1">
-                <h2 className="text-lg font-serif" style={{ color: 'var(--ink)' }}>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-lg font-serif leading-tight" style={{ color: 'var(--ink)' }}>
                   {companion.name}
                 </h2>
-                <p className="text-sm" style={{ color: 'var(--ink-muted)' }}>
+                <p className="text-sm leading-relaxed mt-0.5" style={{ color: 'var(--ink-muted)' }}>
                   For {companion.tagline.toLowerCase()}
                 </p>
               </div>
@@ -53,8 +58,8 @@ export function Hub() {
           ))}
         </div>
 
-        <div className="text-center text-sm mt-12" style={{ color: 'var(--ink-muted)' }}>
-          <p>No saved conversations. Each visit is fresh. No database. Your questions stay with you.</p>
+        <div className="text-center text-sm mt-16 pt-8" style={{ borderTop: '1px solid var(--line)', color: 'var(--ink-muted)' }}>
+          <p className="italic font-light leading-relaxed">Speak freely. Nothing discussed is saved, reviewed, or retained.</p>
         </div>
       </div>
     </div>
