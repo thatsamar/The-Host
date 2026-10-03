@@ -1,7 +1,5 @@
 "use client";
 
-import { COMPANIONS } from "@/lib/companions";
-
 const ADVISOR_URLS: Record<string, string> = {
   tony: "https://tony-ten-bay.vercel.app",
   martini: "https://the-host-8xye.vercel.app",
