@@ -21,7 +21,7 @@ export function AdvisorNav({ currentAdvisorId }: AdvisorNavProps) {
             className="text-sm hover:opacity-70 transition-opacity"
             style={{ color: "var(--ink-muted)" }}
           >
-            ← Back to Inner Circle
+            ← Back
           </a>
 
           <span className="text-sm font-serif" style={{ color: "var(--ink)" }}>
