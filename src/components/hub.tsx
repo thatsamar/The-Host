@@ -55,7 +55,7 @@ export function Hub() {
     <div className="w-screen min-h-screen flex flex-col items-center justify-between p-4 sm:p-6" style={{ backgroundColor: 'var(--ground)' }}>
       <div className="w-full max-w-sm pt-12 sm:pt-16" style={{ paddingTop: 'max(3rem, 2.5vh + env(safe-area-inset-top))' }}>
         {/* Logo */}
-        <div className="text-center mb-6 sm:mb-8" style={{ color: 'var(--ink)' }}>
+        <div className="text-center" style={{ color: 'var(--ink)', marginBottom: '28px' }}>
           <InnerCircleLogo size={100} />
         </div>
 

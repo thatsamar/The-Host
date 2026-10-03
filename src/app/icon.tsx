@@ -1,3 +1,4 @@
+import { readFile } from "fs/promises";
 import { ImageResponse } from "next/og";
 import { BRAND, brandFonts } from "@/lib/brand/fonts";
 import { currentCompanion } from "@/lib/companions";
@@ -7,7 +8,15 @@ export const contentType = "image/png";
 
 export default async function Icon() {
   const isHub = process.env.COMPANION === "hub";
-  return new ImageResponse(<Mark size={512} isHub={isHub} />, { ...size, fonts: await brandFonts() });
+
+  if (isHub) {
+    const buffer = await readFile("public/icon-512-new.png");
+    return new Response(buffer, {
+      headers: { "Content-Type": "image/png" },
+    });
+  }
+
+  return new ImageResponse(<Mark size={512} isHub={false} />, { ...size, fonts: await brandFonts() });
 }
 
 export function Mark({ size, isHub = false }: { size: number; isHub?: boolean }) {
