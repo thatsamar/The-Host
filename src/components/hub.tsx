@@ -55,10 +55,11 @@ export function Hub() {
     <div className="w-screen min-h-screen flex flex-col items-center justify-between p-4 sm:p-6" style={{ backgroundColor: 'var(--ground)' }}>
       <div className="w-full max-w-sm" style={{ paddingTop: 'max(1.5rem, 1vh + env(safe-area-inset-top))' }}>
         {/* Logo */}
-        <div className="text-center" style={{ color: 'var(--ink)', marginBottom: '36px' }}>
-          <div style={{ fontSize: 'clamp(110px, 28vw, 150px)', lineHeight: 1 }}>
-            <InnerCircleLogo size={undefined} />
-          </div>
+        <div className="text-center sm:hidden" style={{ color: 'var(--ink)', marginBottom: '36px' }}>
+          <InnerCircleLogo size={130} />
+        </div>
+        <div className="text-center hidden sm:block" style={{ color: 'var(--ink)', marginBottom: '36px' }}>
+          <InnerCircleLogo size={150} />
         </div>
 
         {/* Cards - pure navigation */}

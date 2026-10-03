@@ -1,6 +1,4 @@
-export function InnerCircleLogo({ size }: { size?: number }) {
-  const displaySize = size !== undefined ? size : "1em";
-
+export function InnerCircleLogo({ size = 150 }: { size?: number }) {
   return (
     <div style={{ textAlign: "center" }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -11,8 +9,8 @@ export function InnerCircleLogo({ size }: { size?: number }) {
         height={size}
         style={{
           display: "inline-block",
-          width: displaySize,
-          height: displaySize,
+          width: size,
+          height: size,
           objectFit: "contain",
         }}
       />
