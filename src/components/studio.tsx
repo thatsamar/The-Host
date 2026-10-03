@@ -325,6 +325,9 @@ export function Studio({
   return (
     <div className="flex h-dvh flex-col">
       <header className="mx-auto flex w-full max-w-[640px] shrink-0 items-center justify-between px-4 pb-2 pt-[max(1rem,env(safe-area-inset-top))]">
+        <a href="/" className="text-sm text-ink-muted transition-colors hover:text-ink">
+          ← Inner Circle
+        </a>
         <p className="text-[22px] font-bold leading-none tracking-[-0.04em] text-ink">{companion.name}</p>
         <button type="button" onClick={startOver} className="text-sm text-ink-muted transition-colors hover:text-ink">
           New
