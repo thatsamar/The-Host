@@ -3,7 +3,7 @@ import type { Companion } from "./types";
 
 export const martini: Companion = {
   id: "martini",
-  name: "Martini",
+  name: "Martine",
   tagline: "Dress like you.",
   subtitle: "How do you want to feel?",
   description: "Dress like you.",

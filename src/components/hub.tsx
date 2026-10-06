@@ -11,7 +11,6 @@ const ADVISOR_URLS: Record<string, string> = {
 interface Card {
   id: string;
   category: string;
-  promiseLine: string;
   advisorName: string;
   url: string;
 }
@@ -20,94 +19,95 @@ const CATEGORIES: Card[] = [
   {
     id: "tony",
     category: "Travel",
-    promiseLine: "Travel like it matters.",
     advisorName: "Tony",
     url: ADVISOR_URLS.tony,
   },
   {
     id: "martini",
     category: "Style",
-    promiseLine: "Dress like you.",
-    advisorName: "Martini",
+    advisorName: "Martine",
     url: ADVISOR_URLS.martini,
   },
   {
     id: "gio",
     category: "Design",
-    promiseLine: "See with a designer's eye.",
     advisorName: "Gio",
     url: ADVISOR_URLS.gio,
   },
   {
     id: "jack",
-    category: "Truth",
-    promiseLine: "The truth you need.",
+    category: "Reality check",
     advisorName: "Jack",
     url: ADVISOR_URLS.jack,
   },
   {
     id: "goldie",
-    category: "Strategy",
-    promiseLine: "Untangle what's complicated.",
+    category: "Sounding board",
     advisorName: "Goldie",
     url: ADVISOR_URLS.goldie,
   },
 ];
 
 export function Hub() {
+  const bgColor = "#FAF9F6";
+  const textDark = "#191816";
+  const textMuted = "#55514D";
+  const borderColor = "#C9C4BC";
+
   return (
-    <div className="w-screen min-h-screen flex flex-col items-center justify-between p-4 sm:p-6" style={{ backgroundColor: 'var(--ground)' }}>
-      <div className="w-full max-w-sm">
-        {/* Stacked Wordmark */}
-        <div className="text-center mb-6 sm:mb-8">
-          <h1 className="text-4xl sm:text-5xl font-light font-serif leading-none tracking-tight" style={{ color: 'var(--ink)' }}>
-            <div>Inner</div>
-            <div>Circle</div>
+    <div className="w-screen min-h-screen flex flex-col items-center justify-between p-4 sm:p-6" style={{ backgroundColor: bgColor }}>
+      <div className="w-full max-w-sm" style={{ paddingTop: 'max(0.5rem, 0.5vh + env(safe-area-inset-top))' }}>
+        {/* Wordmark and Definitions */}
+        <div className="text-center" style={{ marginBottom: '1.75rem' }}>
+          <h1 className="font-serif text-5xl sm:text-6xl font-normal leading-none tracking-tight" style={{ color: textDark, marginBottom: '0.875rem' }}>
+            Cinq
           </h1>
+          <div className="font-serif text-sm sm:text-base font-normal leading-relaxed" style={{ color: textMuted }}>
+            <p style={{ marginBottom: '0.5rem' }}>
+              /sɛ̃k/ <span style={{ fontStyle: 'italic' }}>n. pl.</span> five trusted advisors.
+            </p>
+            <p>
+              /sɪŋk/ <span style={{ fontStyle: 'italic' }}>v.</span> to make life better.
+            </p>
+          </div>
         </div>
 
-        {/* Cards */}
-        <div className="grid grid-cols-1 gap-3 sm:gap-3 mb-auto">
+        {/* Cards - pure navigation */}
+        <div className="grid grid-cols-1 gap-3 sm:gap-3">
           {CATEGORIES.map((card) => (
             <a
               key={card.id}
               href={card.url}
-              className="group block p-3 sm:p-4 rounded-lg sm:rounded-xl transition-all hover:shadow-sm active:shadow-xs"
+              className="group block p-4 sm:p-4 rounded-2xl transition-all hover:shadow-sm active:shadow-xs"
               style={{
-                backgroundColor: 'var(--surface)',
-                border: '1px solid var(--line)',
-                minHeight: '72px',
+                backgroundColor: 'transparent',
+                border: `1px solid ${borderColor}`,
+                minHeight: '56px',
                 display: 'flex',
-                alignItems: 'flex-start',
+                alignItems: 'center',
                 justifyContent: 'space-between',
                 gap: '1rem',
-                boxShadow: '0 1px 2px rgba(0, 0, 0, 0.02)',
-                paddingTop: '0.875rem',
               }}
             >
-              {/* Left: Category and Promise */}
-              <div className="flex-1 min-w-0">
-                <h2 className="text-base sm:text-lg font-serif font-medium leading-tight" style={{ color: 'var(--ink)' }}>
-                  {card.category}
-                </h2>
-                <p className="text-sm sm:text-sm leading-snug mt-0.5" style={{ color: 'var(--ink-muted)' }}>
-                  {card.promiseLine}
-                </p>
-              </div>
-              {/* Right: Advisor Name */}
-              <div className="flex-shrink-0 text-right">
-                <p className="text-xs sm:text-sm font-serif" style={{ color: 'var(--ink-muted)' }}>
+              {/* Left: Category Name */}
+              <h2 className="text-lg sm:text-lg font-serif font-normal leading-tight" style={{ color: textDark }}>
+                {card.category}
+              </h2>
+              {/* Right: Advisor Name with Chevron */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <p className="text-sm sm:text-sm font-serif" style={{ color: textMuted }}>
                   {card.advisorName}
                 </p>
+                <span style={{ color: textMuted }}>›</span>
               </div>
             </a>
           ))}
         </div>
+      </div>
 
-        {/* Footer - hide on very short screens */}
-        <div className="text-center text-xs mt-4 pt-4 font-light hidden sm:block" style={{ borderTop: '1px solid var(--line)', color: 'var(--ink-muted)' }}>
-          <p className="leading-relaxed">Speak freely. Every conversation starts anew.</p>
-        </div>
+      {/* Footer */}
+      <div className="text-center text-xs sm:text-sm font-light" style={{ color: textMuted }}>
+        <p>Speak freely. Every conversation starts anew.</p>
       </div>
     </div>
   );
