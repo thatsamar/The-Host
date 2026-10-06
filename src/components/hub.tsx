@@ -58,8 +58,8 @@ export function Hub() {
     <div className="w-screen min-h-screen flex flex-col items-center justify-between p-4 sm:p-6" style={{ backgroundColor: bgColor }}>
       <div className="w-full max-w-sm" style={{ paddingTop: 'max(0.5rem, 0.5vh + env(safe-area-inset-top))' }}>
         {/* Wordmark and Definitions */}
-        <div className="text-center" style={{ marginBottom: '2.5rem' }}>
-          <h1 className="font-serif text-7xl sm:text-8xl font-normal leading-none tracking-tight" style={{ color: textDark, marginBottom: '1.25rem' }}>
+        <div className="text-center" style={{ marginBottom: '1.75rem' }}>
+          <h1 className="font-serif text-5xl sm:text-6xl font-normal leading-none tracking-tight" style={{ color: textDark, marginBottom: '0.875rem' }}>
             Cinq
           </h1>
           <div className="font-serif text-sm sm:text-base font-normal leading-relaxed" style={{ color: textMuted }}>
