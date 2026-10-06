@@ -1,18 +1,18 @@
 @import "tailwindcss";
 
-/* Warm light palette for all advisors: Tony, Martini, Gio, Jack, Untangled.
+/* Cinq palette for all advisors: Tony, Martine, Gio, Jack, Goldie.
    Newsreader (light) for names and headings; Instrument Sans for small text. */
 :root {
-  --ground: #F5EEE4;
-  --surface: #FFFBF6;
-  --sunk: #F5EEE4;
-  --ink: #2B2320;
-  --ink-soft: #5A4F47;
-  --ink-muted: #75695F;
-  --line: #EADFD1;
-  --line-strong: #DFD3C5;
-  --accent: #2B2320;
-  --accent-ink: #F5EEE4;
+  --ground: #FAF9F6;
+  --surface: #FAF9F6;
+  --sunk: #FAF9F6;
+  --ink: #191816;
+  --ink-soft: #4A4540;
+  --ink-muted: #55514D;
+  --line: #C9C4BC;
+  --line-strong: #9B8F85;
+  --accent: #191816;
+  --accent-ink: #FAF9F6;
   --accent-soft: #F0E8DF;
   --ok: #3b6b47;
   --ok-soft: #e1ece3;
@@ -31,16 +31,16 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --ground: #F5EEE4;
-    --surface: #FFFBF6;
-    --sunk: #F5EEE4;
-    --ink: #2B2320;
-    --ink-soft: #5A4F47;
-    --ink-muted: #75695F;
-    --line: #EADFD1;
-    --line-strong: #DFD3C5;
-    --accent: #2B2320;
-    --accent-ink: #F5EEE4;
+    --ground: #FAF9F6;
+    --surface: #FAF9F6;
+    --sunk: #FAF9F6;
+    --ink: #191816;
+    --ink-soft: #4A4540;
+    --ink-muted: #55514D;
+    --line: #C9C4BC;
+    --line-strong: #9B8F85;
+    --accent: #191816;
+    --accent-ink: #FAF9F6;
     --accent-soft: #F0E8DF;
     --ok: #3b6b47;
     --ok-soft: #e1ece3;

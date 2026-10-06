@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
 
   if (isHub) {
     return {
-      name: "Inner Circle",
-      short_name: "Inner Circle",
+      name: "Cinq",
+      short_name: "Cinq",
       description: "A collective of trusted advisors.",
       start_url: "/",
       display: "standalone",
