@@ -5,6 +5,7 @@ import { signInRequired } from "@/lib/auth/access";
 import { createRateLimiter, questionsPerHour, visitorKey } from "@/lib/ask/rate-limit";
 import { serverEnv } from "@/lib/env";
 import { ask, type AskEvent } from "@/lib/ask/ask";
+import { persistentAsk } from "@/lib/ask/persistent-ask";
 import { currentCompanion } from "@/lib/companions";
 import { MAX_PHOTOS_PER_TURN } from "@/lib/ask/prompt";
 import { createClient, getUserId } from "@/lib/supabase/server";
@@ -28,6 +29,7 @@ const bodySchema = z.object({
     )
     .min(1)
     .max(100),
+  sessionId: z.string().uuid().optional(),
 });
 
 const limiter = createRateLimiter({ limit: questionsPerHour() });
@@ -62,6 +64,30 @@ export async function POST(request: Request) {
     return Response.json({ error: unavailable(companion.name) }, { status: 503 });
   }
 
+  // Persistent mode: return immediately and generate in background
+  if (parsed.data.sessionId) {
+    try {
+      const question = parsed.data.turns.at(-1)?.text || "";
+      const { userMessageId, assistantMessageId } = await persistentAsk(
+        parsed.data.sessionId,
+        { provider, companion },
+        parsed.data.turns,
+        question,
+      );
+
+      return Response.json(
+        { userMessageId, assistantMessageId },
+        {
+          headers: { "Cache-Control": "no-store" },
+        },
+      );
+    } catch (err) {
+      console.error("Persistent ask failed:", err);
+      return Response.json({ error: "That didn't go through. Try again." }, { status: 500 });
+    }
+  }
+
+  // Streaming mode: for backwards compatibility
   const events = ask({ provider, companion, signal: request.signal }, parsed.data.turns);
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
