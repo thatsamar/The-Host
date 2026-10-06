@@ -40,7 +40,7 @@ async function generateInBackground(
     }
 
     let fullContent = "";
-    let hasError = false;
+    let lastUpdateTime = Date.now();
 
     try {
       // Generate response without depending on request signal
@@ -48,15 +48,18 @@ async function generateInBackground(
       for await (const event of deps.provider.streamChat({ ...request, signal: abortController.signal })) {
         if (event.type === "text") {
           fullContent += event.text;
-          // Periodically update the message as content streams in
-          await updateAssistantMessage(messageId, { content: fullContent, status: "pending" });
+          // Update at most every 2 seconds to avoid overwhelming the database
+          const now = Date.now();
+          if (now - lastUpdateTime > 2000) {
+            await updateAssistantMessage(messageId, { content: fullContent, status: "pending" });
+            lastUpdateTime = now;
+          }
         }
       }
 
-      // Mark as completed
+      // Mark as completed with final content
       await updateAssistantMessage(messageId, { content: fullContent, status: "completed" });
     } catch (err) {
-      hasError = true;
       const error = errorMessage(err);
       await updateAssistantMessage(messageId, {
         status: "failed",
