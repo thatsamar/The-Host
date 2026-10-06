@@ -25,7 +25,7 @@ const CATEGORIES: Card[] = [
   {
     id: "martini",
     category: "Style",
-    advisorName: "Martine",
+    advisorName: "Martine", // matches companion.name in martini.ts
     url: ADVISOR_URLS.martini,
   },
   {
