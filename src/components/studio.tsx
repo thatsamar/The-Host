@@ -220,7 +220,7 @@ export function Studio({
       const response = await fetch("/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ turns, sessionId }),
+        body: JSON.stringify({ turns }),
         signal: controller.signal,
       });
       if (!response.ok) {
@@ -231,29 +231,16 @@ export function Studio({
         );
       }
 
-      // Check content-type to determine response format
-      const contentType = response.headers.get("content-type") || "";
-      if (contentType.includes("application/json")) {
-        // Persistent mode: JSON response with message IDs
-        const data = await response.json();
-        if (data.assistantMessageId) {
-          const messageId = data.assistantMessageId;
-          messageIdRef.current = messageId;
-          update(answer.key, (t) => ({ ...t, messageId }));
-          await refetchMessage(answer.key, messageId);
-        }
-      } else {
-        // Streaming mode: NDJSON response
-        if (response.body) {
-          for await (const event of readNdjson<AskEvent>(response.body)) {
-            if (event.type === "text") update(answer.key, (t) => ({ ...t, text: t.text + event.text, searching: false }));
-            else if (event.type === "searching") update(answer.key, (t) => ({ ...t, searching: true }));
-            else if (event.type === "sources")
-              update(answer.key, (t) => ({ ...t, sources: [...(t.sources ?? []), ...event.sources] }));
-            else if (event.type === "error") {
-              update(answer.key, (t) => ({ ...t, error: event.message }));
-              failed = event.message !== "Stopped.";
-            }
+      // Streaming mode only (persistent mode will be enabled once database is ready)
+      if (response.body) {
+        for await (const event of readNdjson<AskEvent>(response.body)) {
+          if (event.type === "text") update(answer.key, (t) => ({ ...t, text: t.text + event.text, searching: false }));
+          else if (event.type === "searching") update(answer.key, (t) => ({ ...t, searching: true }));
+          else if (event.type === "sources")
+            update(answer.key, (t) => ({ ...t, sources: [...(t.sources ?? []), ...event.sources] }));
+          else if (event.type === "error") {
+            update(answer.key, (t) => ({ ...t, error: event.message }));
+            failed = event.message !== "Stopped.";
           }
         }
       }
