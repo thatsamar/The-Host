@@ -14,6 +14,17 @@ import { PHOTO_ACCEPT, preparePhoto, type PreparedPhoto } from "@/lib/ask/photos
 import { MAX_PHOTOS_PER_TURN, type AskTurn } from "@/lib/ask/prompt";
 import { cn } from "@/lib/utils";
 
+interface EphemeralMessage {
+  id: string;
+  session_id: string;
+  role: "user" | "assistant";
+  status: "pending" | "completed" | "failed";
+  content: string;
+  error?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 interface StagedPhoto {
   key: string;
   previewUrl: string;
@@ -32,10 +43,25 @@ interface Turn {
   searching?: boolean;
   sources?: WebSourceRef[];
   error?: string;
+  /** For persistent generation: the server message ID. */
+  messageId?: string;
 }
 
 let counter = 0;
 const nextKey = () => `k${++counter}`;
+
+function generateSessionId(): string {
+  return crypto.randomUUID();
+}
+
+function getOrCreateSessionId(): string {
+  if (typeof window === "undefined") return "";
+  const stored = localStorage.getItem("advisor-session-id");
+  if (stored) return stored;
+  const newId = generateSessionId();
+  localStorage.setItem("advisor-session-id", newId);
+  return newId;
+}
 
 export function Studio({
   companion,
@@ -53,11 +79,75 @@ export function Studio({
   const [staged, setStaged] = useState<StagedPhoto[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [sessionId, setSessionId] = useState<string>("");
   const abortRef = useRef<AbortController | null>(null);
   const lastRequest = useRef<AbortController | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const messageIdRef = useRef<string | null>(null);
+
+  // Initialize session ID on mount
+  useEffect(() => {
+    setSessionId(getOrCreateSessionId());
+  }, []);
+
+  // Refetch generation status when page becomes visible
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (!document.hidden) {
+        // Find the most recent pending assistant message and refetch it
+        const lastAnswer = [...thread].reverse().find((t) => t.role === "assistant" && t.messageId);
+        if (lastAnswer?.messageId) {
+          await refetchMessage(lastAnswer.key, lastAnswer.messageId);
+        }
+      }
+    };
+
+    const handleFocus = async () => {
+      // Find the most recent pending assistant message and refetch it
+      const lastAnswer = [...thread].reverse().find((t) => t.role === "assistant" && t.messageId);
+      if (lastAnswer?.messageId) {
+        await refetchMessage(lastAnswer.key, lastAnswer.messageId);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [thread]);
+
+  const refetchMessage = async (turnKey: string, messageId: string) => {
+    try {
+      const res = await fetch(`/api/generations/${messageId}`);
+      if (!res.ok) return;
+      const message: EphemeralMessage = await res.json();
+
+      // Update the answer turn with the latest content and status
+      update(turnKey, (t) => ({
+        ...t,
+        text: message.content,
+        pending: message.status === "pending",
+        error: message.status === "failed" ? message.error : undefined,
+      }));
+
+      // If still pending, schedule another fetch
+      if (message.status === "pending") {
+        if (pollingRef.current) clearTimeout(pollingRef.current);
+        pollingRef.current = setTimeout(() => refetchMessage(turnKey, messageId), 1000);
+      } else {
+        if (pollingRef.current) clearTimeout(pollingRef.current);
+        pollingRef.current = null;
+      }
+    } catch (err) {
+      console.error("Failed to refetch message:", err);
+    }
+  };
 
   const preparing = staged.some((p) => !p.photo && !p.error);
   const ready = staged.filter((p) => p.photo);
@@ -95,7 +185,7 @@ export function Studio({
   const update = (key: string, fn: (t: Turn) => Turn) => setThread((all) => all.map((t) => (t.key === key ? fn(t) : t)));
 
   const ask = async () => {
-    if (!canSend) return;
+    if (!canSend || !sessionId) return;
     const question = text.trim();
     const photos = ready.map((p) => p.photo!);
     const userTurn: Turn = { key: nextKey(), role: "user", text: question, photos };
@@ -130,24 +220,39 @@ export function Studio({
       const response = await fetch("/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ turns }),
+        body: JSON.stringify({ turns, sessionId }),
         signal: controller.signal,
       });
-      if (!response.ok || !response.body) {
+      if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         throw new Error(
           body.error ??
             (response.status === 413 ? "Those photos are too large to send together. Try fewer." : `Request failed (${response.status})`),
         );
       }
-      for await (const event of readNdjson<AskEvent>(response.body)) {
-        if (event.type === "text") update(answer.key, (t) => ({ ...t, text: t.text + event.text, searching: false }));
-        else if (event.type === "searching") update(answer.key, (t) => ({ ...t, searching: true }));
-        else if (event.type === "sources")
-          update(answer.key, (t) => ({ ...t, sources: [...(t.sources ?? []), ...event.sources] }));
-        else if (event.type === "error") {
-          update(answer.key, (t) => ({ ...t, error: event.message }));
-          failed = event.message !== "Stopped.";
+
+      const data = await response.json();
+      if (data.assistantMessageId) {
+        // Persistent mode: store message ID and start polling
+        const messageId = data.assistantMessageId;
+        messageIdRef.current = messageId;
+
+        // Store the messageId on the turn and begin polling
+        update(answer.key, (t) => ({ ...t, messageId }));
+
+        // Initial fetch to get any already-generated content
+        await refetchMessage(answer.key, messageId);
+      } else if (response.body) {
+        // Streaming mode fallback
+        for await (const event of readNdjson<AskEvent>(response.body)) {
+          if (event.type === "text") update(answer.key, (t) => ({ ...t, text: t.text + event.text, searching: false }));
+          else if (event.type === "searching") update(answer.key, (t) => ({ ...t, searching: true }));
+          else if (event.type === "sources")
+            update(answer.key, (t) => ({ ...t, sources: [...(t.sources ?? []), ...event.sources] }));
+          else if (event.type === "error") {
+            update(answer.key, (t) => ({ ...t, error: event.message }));
+            failed = event.message !== "Stopped.";
+          }
         }
       }
     } catch (err) {
@@ -171,12 +276,21 @@ export function Studio({
   const startOver = () => {
     lastRequest.current = null;
     abortRef.current?.abort();
+    messageIdRef.current = null;
+    if (pollingRef.current) clearTimeout(pollingRef.current);
     setThread([]);
     setText("");
     setStaged([]);
     setNotice(null);
     inputRef.current?.focus();
   };
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) clearTimeout(pollingRef.current);
+    };
+  }, []);
 
   // Follow the answer as it streams, unless the reader has scrolled up to read.
   const following = useRef(true);
