@@ -82,8 +82,8 @@ export async function POST(request: Request) {
         },
       );
     } catch (err) {
-      console.error("Persistent ask failed:", err);
-      return Response.json({ error: "That didn't go through. Try again." }, { status: 500 });
+      console.error("Persistent ask failed, falling back to streaming:", err);
+      // Fall through to streaming mode if persistent mode fails
     }
   }
 
