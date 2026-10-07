@@ -6,11 +6,11 @@ import { inviteCode } from "@/lib/auth/invite";
 import { copyOf, currentCompanion } from "@/lib/companions";
 
 export const metadata: Metadata = {
-  title: process.env.COMPANION === "hub" ? "Inner Circle" : undefined,
+  title: process.env.COMPANION === "hub" ? "Cinq" : undefined,
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: process.env.COMPANION === "hub" ? "Inner Circle" : undefined,
+    title: process.env.COMPANION === "hub" ? "Cinq" : undefined,
   },
 };
 
