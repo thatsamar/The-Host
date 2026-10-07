@@ -404,7 +404,7 @@ export function Studio({
       <div className="flex min-h-dvh flex-col">
         <div className="flex-shrink-0 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-2">
           <div className="mx-auto w-full max-w-[640px]">
-            <a href="https://thehub-chi.vercel.app" className="text-sm text-ink-muted transition-colors hover:text-ink">
+            <a href="https://fresh2-pi.vercel.app" className="text-sm text-ink-muted transition-colors hover:text-ink">
               ← Back
             </a>
           </div>
@@ -436,7 +436,7 @@ export function Studio({
   return (
     <div className="flex h-dvh flex-col">
       <header className="mx-auto flex w-full max-w-[640px] shrink-0 items-center justify-between px-4 pb-2 pt-[max(1rem,env(safe-area-inset-top))]">
-        <a href="https://thehub-chi.vercel.app" className="text-sm text-ink-muted transition-colors hover:text-ink">
+        <a href="https://fresh2-pi.vercel.app" className="text-sm text-ink-muted transition-colors hover:text-ink">
           ← Back
         </a>
         <p className="text-[22px] font-bold leading-none tracking-[-0.04em] text-ink">{companion.name}</p>
