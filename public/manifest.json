@@ -1,13 +1,13 @@
 {
-  "name": "Inner Circle",
-  "short_name": "Inner Circle",
+  "name": "Cinq",
+  "short_name": "Cinq",
   "description": "Five advisors for the things you decide.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "theme_color": "#F5EEE4",
-  "background_color": "#F5EEE4",
+  "theme_color": "#FAF9F6",
+  "background_color": "#FAF9F6",
   "icons": [
     {
       "src": "/icon-192-new.png",
