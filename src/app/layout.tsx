@@ -24,12 +24,12 @@ const companion = isHub ? null : currentCompanion();
 
 export const metadata: Metadata = isHub
   ? {
-      title: "Inner Circle",
+      title: "Cinq",
       description: "Five advisors for the things you decide.",
-      appleWebApp: { capable: true, title: "Inner Circle", statusBarStyle: "default" },
+      appleWebApp: { capable: true, title: "Cinq", statusBarStyle: "default" },
       manifest: "/manifest.json",
       openGraph: {
-        title: "Inner Circle",
+        title: "Cinq",
         description: "Five advisors for the things you decide.",
         type: "website",
       },

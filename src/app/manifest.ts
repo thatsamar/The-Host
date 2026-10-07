@@ -7,13 +7,13 @@ export default function manifest(): MetadataRoute.Manifest {
 
   if (isHub) {
     return {
-      name: "Inner Circle",
-      short_name: "Inner Circle",
+      name: "Cinq",
+      short_name: "Cinq",
       description: "A collective of trusted advisors.",
       start_url: "/",
       display: "standalone",
-      background_color: "#f5f1ed",
-      theme_color: "#f5f1ed",
+      background_color: "#FAF9F6",
+      theme_color: "#FAF9F6",
       icons: [
         { src: "/icon-192-new.png", sizes: "192x192", type: "image/png" },
         { src: "/icon-512-new.png", sizes: "512x512", type: "image/png" },
