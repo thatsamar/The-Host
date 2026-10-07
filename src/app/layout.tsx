@@ -25,12 +25,12 @@ const companion = isHub ? null : currentCompanion();
 export const metadata: Metadata = isHub
   ? {
       title: "Cinq",
-      description: "Five advisors for the things you decide.",
+      description: "Five trusted advisors.",
       appleWebApp: { capable: true, title: "Cinq", statusBarStyle: "default" },
       manifest: "/manifest.json",
       openGraph: {
         title: "Cinq",
-        description: "Five advisors for the things you decide.",
+        description: "Five trusted advisors.",
         type: "website",
       },
       robots: { index: false, follow: false },
