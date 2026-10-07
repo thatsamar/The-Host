@@ -1,15 +1,22 @@
+import { readFile } from "fs/promises";
 import { ImageResponse } from "next/og";
 import { BRAND, brandFonts } from "@/lib/brand/fonts";
 import { currentCompanion } from "@/lib/companions";
 
+const isHub = process.env.COMPANION === "hub";
 const companion = currentCompanion();
 
-export const alt = `${companion.name}. ${companion.description}`;
+export const alt = isHub ? "Cinq. Five trusted advisors." : `${companion.name}. ${companion.description}`;
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
 // The preview shown when the link is shared in Messages, Mail or Slack.
 export default async function OpengraphImage() {
+  if (isHub) {
+    const buffer = await readFile("public/cinq-link-preview.png");
+    return new Response(buffer, { headers: { "Content-Type": "image/png" } });
+  }
+
   return new ImageResponse(
     (
       <div
