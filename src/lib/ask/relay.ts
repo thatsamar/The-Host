@@ -23,16 +23,23 @@ const SAVE_INTERVAL_MS = 1000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export const isAnswerId = (id: unknown): id is string => typeof id === "string" && UUID.test(id);
 
+/**
+ * Where saved answers live for this request: Vercel's Runtime Cache, shared by
+ * every instance in the region, or (off Vercel, or if it's missing) this
+ * instance's own memory, which another instance can't read.
+ */
+export function answerStore(): "shared" | "instance-memory" {
+  const context = (globalThis as Record<symbol, { get?: () => { cache?: unknown } } | undefined>)[
+    Symbol.for("@vercel/request-context")
+  ]?.get?.();
+  return context?.cache ? "shared" : "instance-memory";
+}
+
 let warned = false;
 function store() {
-  if (process.env.VERCEL && !warned) {
-    const context = (globalThis as Record<symbol, { get?: () => { cache?: unknown } } | undefined>)[
-      Symbol.for("@vercel/request-context")
-    ]?.get?.();
-    if (!context?.cache) {
-      warned = true;
-      console.warn("Answer recovery is using this instance's memory: Vercel Runtime Cache isn't available.");
-    }
+  if (process.env.VERCEL && !warned && answerStore() === "instance-memory") {
+    warned = true;
+    console.error("Answer recovery is using this instance's memory: Vercel Runtime Cache isn't available.");
   }
   // The key is the visitor's random answer id, used as is: the default 32-bit
   // key hash could let two visitors' answers collide.

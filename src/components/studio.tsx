@@ -68,7 +68,12 @@ const LOST_MESSAGE = "The connection dropped before the answer arrived. Try agai
 
 let counter = 0;
 const nextKey = () => `k${++counter}`;
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+/** Resolves after `ms`, or at once when `signal` aborts. */
+const wait = (ms: number, signal: AbortSignal) =>
+  new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener("abort", () => (clearTimeout(timer), resolve()), { once: true });
+  });
 
 export function Studio({
   companion,
@@ -176,6 +181,7 @@ export function Studio({
     }
     try {
       for await (const event of readNdjson<AskEvent>(response.body!)) {
+        if (live.stopped) return "stopped";
         live.lastEvent = Date.now();
         apply(key, event);
         if (event.type === "done") return "answered";
@@ -202,6 +208,7 @@ export function Studio({
           else if (res.ok) {
             misses = 0;
             const saved: AnswerSnapshot = await res.json();
+            if (live.stopped) break;
             // The saved copy can trail what already arrived live; keep whichever is further along.
             update(key, (t) => ({
               ...t,
@@ -219,7 +226,7 @@ export function Studio({
           // Still offline or just resumed; try again shortly.
         }
       }
-      await wait(RECOVERY_POLL_MS);
+      await wait(RECOVERY_POLL_MS, live.controller.signal);
     }
     if (live.stopped) return "stopped";
     update(key, (t) => ({ ...t, error: LOST_MESSAGE }));
@@ -268,8 +275,11 @@ export function Studio({
 
     if (outcome === "stopped") update(answer.key, (t) => ({ ...t, error: t.error ?? "Stopped." }));
     update(answer.key, (t) => ({ ...t, pending: false, progress: undefined }));
-    setBusy(false);
-    if (inFlight.current === live) inFlight.current = null;
+    // After New, a fresh question may already be in flight; leave its state alone.
+    if (inFlight.current === live) {
+      inFlight.current = null;
+      setBusy(false);
+    }
     // Put the question back so it can be sent again with one tap.
     if (outcome === "failed" && live === lastRequest.current) {
       setText((current) => current || question);

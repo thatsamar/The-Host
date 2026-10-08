@@ -1,5 +1,5 @@
 import { signInRequired } from "@/lib/auth/access";
-import { isAnswerId, loadAnswer, requestStop } from "@/lib/ask/relay";
+import { answerStore, isAnswerId, loadAnswer, requestStop } from "@/lib/ask/relay";
 import { createClient, getUserId } from "@/lib/supabase/server";
 
 const NO_STORE = { "Cache-Control": "no-store" };
@@ -15,8 +15,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (!isAnswerId(id) || !(await allowed())) return Response.json({ error: "Not found" }, { status: 404, headers: NO_STORE });
   try {
     const answer = await loadAnswer(id);
-    if (!answer) return Response.json({ error: "Not found" }, { status: 404, headers: NO_STORE });
-    return Response.json(answer, { headers: NO_STORE });
+    // Which store served this, so a deployment can be checked without saving anything.
+    const headers = { ...NO_STORE, "X-Answer-Store": answerStore() };
+    if (!answer) return Response.json({ error: "Not found", store: answerStore() }, { status: 404, headers });
+    return Response.json(answer, { headers });
   } catch (err) {
     console.error("Couldn't read a saved answer:", err instanceof Error ? err.message : err);
     return Response.json({ error: "Try again." }, { status: 503, headers: NO_STORE });

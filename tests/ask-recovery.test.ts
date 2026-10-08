@@ -105,6 +105,15 @@ describe("answer recovery", () => {
     expect(body!.text.length).toBeLessThan(pieces.join("").length);
   });
 
+  it("says which store answered, so a deployment can be checked", async () => {
+    const id = crypto.randomUUID();
+    const res = await GET(new Request(`http://localhost/api/ask/${id}`), params(id));
+    expect(res.status).toBe(404);
+    // Outside Vercel there's no Runtime Cache, so this is the instance's own memory.
+    expect(res.headers.get("X-Answer-Store")).toBe("instance-memory");
+    expect(await res.json()).toEqual({ error: "Not found", store: "instance-memory" });
+  });
+
   it("has nothing for unknown or malformed ids", async () => {
     expect((await collect(crypto.randomUUID())).status).toBe(404);
     expect((await collect("not-an-id")).status).toBe(404);
