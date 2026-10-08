@@ -102,6 +102,29 @@ describe("AnthropicChatProvider", () => {
     expect(messages[0].content[0]).toEqual({ type: "image", source: { type: "base64", media_type: "image/png", data: "aW1n" } });
   });
 
+  it("reports progress phases in the order the model works", async () => {
+    const { client } = fakeClient([
+      {
+        stop_reason: "end_turn",
+        content: [
+          { type: "thinking", thinking: "", signature: "s" },
+          { type: "server_tool_use", id: "s1", name: "web_search", input: { query: "chair" } },
+          { type: "web_search_tool_result", tool_use_id: "s1", content: [] },
+          { type: "thinking", thinking: "", signature: "s" },
+          { type: "text", text: "Here it is." },
+        ],
+      },
+    ]);
+    const provider = new AnthropicChatProvider(client, "claude-opus-5-5", options);
+    const events = await collect(provider.streamChat(request));
+    expect(events.filter((e) => e.type === "phase").map((e) => (e as { phase: string }).phase)).toEqual([
+      "thinking",
+      "searching",
+      "thinking",
+      "writing",
+    ]);
+  });
+
   it("resumes a paused server-tool turn by sending the partial assistant turn back", async () => {
     const { client, calls } = fakeClient([
       { stop_reason: "pause_turn", content: [{ type: "text", text: "Searching. " }] },

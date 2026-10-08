@@ -137,7 +137,12 @@ export class AnthropicChatProvider implements ChatProvider {
       );
 
       for await (const event of stream) {
-        if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+        if (event.type === "content_block_start") {
+          const kind = event.content_block.type;
+          if (kind === "thinking" || kind === "redacted_thinking") yield { type: "phase", phase: "thinking" };
+          else if (kind === "server_tool_use") yield { type: "phase", phase: "searching" };
+          else if (kind === "text") yield { type: "phase", phase: "writing" };
+        } else if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
           text += event.delta.text;
           yield { type: "text", text: event.delta.text };
         } else if (event.type === "content_block_stop") {

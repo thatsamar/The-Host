@@ -35,7 +35,7 @@ Testers see plain messages ("Tony isn't available right now", "Gio is busy right
 ## Privacy
 
 - **What leaves the browser.** Each question goes to the app on Vercel with the visit's conversation so far: the text, photos at 1280px for the new question, and smaller copies of earlier photos. The app passes it to **Anthropic** and streams the answer back. When a companion searches the web, the query goes through Anthropic's server-side web search tool.
-- **What's kept.** Nothing, by the app. Supabase is used only for sign-in. Vercel serves the app and doesn't store the content.
+- **What's kept.** No conversations. While each answer is written, and briefly afterwards, the answer alone (never the question or photos) is kept in Vercel's Runtime Cache under a random id only that browser tab knows, so a phone that switches apps mid-answer can collect it on return. It expires 15 minutes after its last update, or sooner if Vercel evicts it. Stop leaves only a marker saying the answer was stopped, which expires the same way. Supabase is used only for sign-in.
 - **No analytics, no telemetry.** No tracking scripts or error-reporting service. The npm scripts turn off Next.js build telemetry; set `NEXT_TELEMETRY_DISABLED=1` on Vercel too. Fonts are bundled at build time, so the browser never contacts Google. Leave Vercel Analytics and Speed Insights off.
 
 ---

@@ -6,24 +6,14 @@ import remarkGfm from "remark-gfm";
 import { ArrowUpIcon, CameraIcon, SquareIcon, XIcon } from "lucide-react";
 import { signOut } from "@/app/login/actions";
 import type { CompanionCopy } from "@/lib/companions/types";
-import type { WebSourceRef } from "@/lib/ai/types";
+import type { AnswerPhase, WebSourceRef } from "@/lib/ai/types";
 import type { AskEvent } from "@/lib/ask/ask";
+import type { AnswerSnapshot } from "@/lib/ask/relay";
 import { fitToBudget } from "@/lib/ask/budget";
 import { readNdjson } from "@/lib/ask/ndjson";
 import { PHOTO_ACCEPT, preparePhoto, type PreparedPhoto } from "@/lib/ask/photos";
 import { MAX_PHOTOS_PER_TURN, type AskTurn } from "@/lib/ask/prompt";
 import { cn } from "@/lib/utils";
-
-interface EphemeralMessage {
-  id: string;
-  session_id: string;
-  role: "user" | "assistant";
-  status: "pending" | "completed" | "failed";
-  content: string;
-  error?: string;
-  created_at: string;
-  updated_at: string;
-}
 
 interface StagedPhoto {
   key: string;
@@ -38,30 +28,52 @@ interface Turn {
   text: string;
   photos?: PreparedPhoto[];
   pending?: boolean;
-  /** The question this answers had photos. */
-  withPhotos?: boolean;
-  searching?: boolean;
+  /** What's happening while the answer is pending, from the server's own events. */
+  progress?: Progress;
   sources?: WebSourceRef[];
   error?: string;
-  /** For persistent generation: the server message ID. */
-  messageId?: string;
 }
+
+type Progress = "sending" | AnswerPhase | "reconnecting";
+
+const PROGRESS_LABEL: Record<Progress, string> = {
+  sending: "Sending your question",
+  thinking: "Thinking through your question",
+  searching: "Checking sources",
+  writing: "Writing your answer",
+  reconnecting: "Reconnecting",
+};
+
+/** One question in flight. The id lets the page collect the answer if the connection drops. */
+interface InFlight {
+  id: string;
+  controller: AbortController;
+  stopped: boolean;
+  /** Collecting the answer from the server rather than streaming it live. */
+  recovering: boolean;
+  lastEvent: number;
+}
+
+type Outcome = "answered" | "failed" | "stopped" | "lost";
+
+// After returning to the page, a stream that has said nothing for this long is
+// treated as dropped and the answer is collected from the server instead.
+const STALL_MS = 2500;
+const RECOVERY_POLL_MS = 1200;
+// A little longer than the server's own limit on one answer.
+const RECOVERY_WINDOW_MS = 6 * 60_000;
+// Consecutive "not found" replies before deciding the question never arrived.
+const RECOVERY_MISSES = 5;
+const LOST_MESSAGE = "The connection dropped before the answer arrived. Try again.";
 
 let counter = 0;
 const nextKey = () => `k${++counter}`;
-
-function generateSessionId(): string {
-  return crypto.randomUUID();
-}
-
-function getOrCreateSessionId(): string {
-  if (typeof window === "undefined") return "";
-  const stored = localStorage.getItem("advisor-session-id");
-  if (stored) return stored;
-  const newId = generateSessionId();
-  localStorage.setItem("advisor-session-id", newId);
-  return newId;
-}
+/** Resolves after `ms`, or at once when `signal` aborts. */
+const wait = (ms: number, signal: AbortSignal) =>
+  new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener("abort", () => (clearTimeout(timer), resolve()), { once: true });
+  });
 
 export function Studio({
   companion,
@@ -79,75 +91,29 @@ export function Studio({
   const [staged, setStaged] = useState<StagedPhoto[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [sessionId, setSessionId] = useState<string>("");
-  const abortRef = useRef<AbortController | null>(null);
-  const lastRequest = useRef<AbortController | null>(null);
+  const inFlight = useRef<InFlight | null>(null);
+  const lastRequest = useRef<InFlight | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
-  const pollingRef = useRef<NodeJS.Timeout | null>(null);
-  const messageIdRef = useRef<string | null>(null);
 
-  // Initialize session ID on mount
+  // A phone suspends the page when its owner switches apps, which can leave the
+  // answer's connection dead. On return, if nothing has arrived, collect the
+  // answer from the server instead.
   useEffect(() => {
-    setSessionId(getOrCreateSessionId());
-  }, []);
-
-  // Refetch generation status when page becomes visible
-  useEffect(() => {
-    const handleVisibilityChange = async () => {
-      if (!document.hidden) {
-        // Find the most recent pending assistant message and refetch it
-        const lastAnswer = [...thread].reverse().find((t) => t.role === "assistant" && t.messageId);
-        if (lastAnswer?.messageId) {
-          await refetchMessage(lastAnswer.key, lastAnswer.messageId);
+    const onVisibility = () => {
+      const live = inFlight.current;
+      if (document.visibilityState !== "visible" || !live || live.recovering) return;
+      const returnedAt = Date.now();
+      setTimeout(() => {
+        if (inFlight.current === live && !live.stopped && !live.recovering && live.lastEvent < returnedAt) {
+          live.controller.abort();
         }
-      }
+      }, STALL_MS);
     };
-
-    const handleFocus = async () => {
-      // Find the most recent pending assistant message and refetch it
-      const lastAnswer = [...thread].reverse().find((t) => t.role === "assistant" && t.messageId);
-      if (lastAnswer?.messageId) {
-        await refetchMessage(lastAnswer.key, lastAnswer.messageId);
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("focus", handleFocus);
-
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("focus", handleFocus);
-    };
-  }, [thread]);
-
-  const refetchMessage = async (turnKey: string, messageId: string) => {
-    try {
-      const res = await fetch(`/api/generations/${messageId}`);
-      if (!res.ok) return;
-      const message: EphemeralMessage = await res.json();
-
-      // Update the answer turn with the latest content and status
-      update(turnKey, (t) => ({
-        ...t,
-        text: message.content,
-        pending: message.status === "pending",
-        error: message.status === "failed" ? message.error : undefined,
-      }));
-
-      // If still pending, schedule another fetch
-      if (message.status === "pending") {
-        if (pollingRef.current) clearTimeout(pollingRef.current);
-        pollingRef.current = setTimeout(() => refetchMessage(turnKey, messageId), 1000);
-      } else {
-        if (pollingRef.current) clearTimeout(pollingRef.current);
-        pollingRef.current = null;
-      }
-    } catch (err) {
-      console.error("Failed to refetch message:", err);
-    }
-  };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
 
   const preparing = staged.some((p) => !p.photo && !p.error);
   const ready = staged.filter((p) => p.photo);
@@ -184,12 +150,95 @@ export function Studio({
 
   const update = (key: string, fn: (t: Turn) => Turn) => setThread((all) => all.map((t) => (t.key === key ? fn(t) : t)));
 
+  const apply = (key: string, event: AskEvent) => {
+    if (event.type === "phase") update(key, (t) => ({ ...t, progress: event.phase }));
+    else if (event.type === "searching") update(key, (t) => ({ ...t, progress: "searching" }));
+    else if (event.type === "text") update(key, (t) => ({ ...t, text: t.text + event.text }));
+    else if (event.type === "sources") update(key, (t) => ({ ...t, sources: [...(t.sources ?? []), ...event.sources] }));
+    else if (event.type === "error") update(key, (t) => ({ ...t, error: event.message }));
+  };
+
+  /** Streams the answer live; "lost" means the connection went before the answer finished. */
+  const stream = async (live: InFlight, key: string, turns: AskTurn[]): Promise<Outcome> => {
+    let response: Response;
+    try {
+      response = await fetch("/api/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: live.id, turns }),
+        signal: live.controller.signal,
+      });
+    } catch {
+      return live.stopped ? "stopped" : "lost";
+    }
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      const message =
+        body.error ??
+        (response.status === 413 ? "Those photos are too large to send together. Try fewer." : `Request failed (${response.status})`);
+      update(key, (t) => ({ ...t, error: message }));
+      return "failed";
+    }
+    try {
+      for await (const event of readNdjson<AskEvent>(response.body!)) {
+        if (live.stopped) return "stopped";
+        live.lastEvent = Date.now();
+        apply(key, event);
+        if (event.type === "done") return "answered";
+        if (event.type === "error") return event.message === "Stopped." ? "stopped" : "failed";
+      }
+    } catch {
+      if (live.stopped) return "stopped";
+    }
+    return "lost";
+  };
+
+  /** Collects an answer the server kept writing while the page was away. */
+  const recover = async (live: InFlight, key: string): Promise<Outcome> => {
+    update(key, (t) => ({ ...t, progress: "reconnecting" }));
+    live.recovering = true;
+    live.controller = new AbortController();
+    const giveUpAt = Date.now() + RECOVERY_WINDOW_MS;
+    let misses = 0;
+    while (!live.stopped && Date.now() < giveUpAt && misses < RECOVERY_MISSES) {
+      if (document.visibilityState === "visible") {
+        try {
+          const res = await fetch(`/api/ask/${live.id}`, { cache: "no-store", signal: live.controller.signal });
+          if (res.status === 404) misses++;
+          else if (res.ok) {
+            misses = 0;
+            const saved: AnswerSnapshot = await res.json();
+            if (live.stopped) break;
+            // The saved copy can trail what already arrived live; keep whichever is further along.
+            update(key, (t) => ({
+              ...t,
+              text: saved.text.length > t.text.length ? saved.text : t.text,
+              sources: saved.sources.length > (t.sources?.length ?? 0) ? saved.sources : t.sources,
+              progress: saved.phase ?? t.progress,
+            }));
+            if (saved.done) {
+              if (!saved.error) return "answered";
+              update(key, (t) => ({ ...t, error: saved.error }));
+              return saved.error === "Stopped." ? "stopped" : "failed";
+            }
+          }
+        } catch {
+          // Still offline or just resumed; try again shortly.
+        }
+      }
+      await wait(RECOVERY_POLL_MS, live.controller.signal);
+    }
+    if (live.stopped) return "stopped";
+    update(key, (t) => ({ ...t, error: LOST_MESSAGE }));
+    return "failed";
+  };
+
   const ask = async () => {
-    if (!canSend || !sessionId) return;
+    if (!canSend) return;
     const question = text.trim();
     const photos = ready.map((p) => p.photo!);
     const userTurn: Turn = { key: nextKey(), role: "user", text: question, photos };
-    const answer: Turn = { key: nextKey(), role: "assistant", text: "", pending: true, withPhotos: photos.length > 0 };
+    const answer: Turn = { key: nextKey(), role: "assistant", text: "", pending: true, progress: "sending" };
 
     // Earlier photos go along small; this question's photos go at full size.
     let turns: AskTurn[];
@@ -211,75 +260,53 @@ export function Studio({
     setStaged((s) => s.filter((p) => !p.photo));
     setNotice(null);
     setBusy(true);
-    const controller = new AbortController();
-    abortRef.current = controller;
-    lastRequest.current = controller;
-    let failed = false;
+    const live: InFlight = { id: crypto.randomUUID(), controller: new AbortController(), stopped: false, recovering: false, lastEvent: Date.now() };
+    inFlight.current = live;
+    lastRequest.current = live;
 
+    let outcome: Outcome;
     try {
-      const response = await fetch("/api/ask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ turns }),
-        signal: controller.signal,
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(
-          body.error ??
-            (response.status === 413 ? "Those photos are too large to send together. Try fewer." : `Request failed (${response.status})`),
-        );
-      }
-
-      // Streaming mode only (persistent mode will be enabled once database is ready)
-      if (response.body) {
-        for await (const event of readNdjson<AskEvent>(response.body)) {
-          if (event.type === "text") update(answer.key, (t) => ({ ...t, text: t.text + event.text, searching: false }));
-          else if (event.type === "searching") update(answer.key, (t) => ({ ...t, searching: true }));
-          else if (event.type === "sources")
-            update(answer.key, (t) => ({ ...t, sources: [...(t.sources ?? []), ...event.sources] }));
-          else if (event.type === "error") {
-            update(answer.key, (t) => ({ ...t, error: event.message }));
-            failed = event.message !== "Stopped.";
-          }
-        }
-      }
+      outcome = await stream(live, answer.key, turns);
+      if (outcome === "lost") outcome = await recover(live, answer.key);
     } catch (err) {
-      const stopped = err instanceof DOMException && err.name === "AbortError";
-      update(answer.key, (t) => ({ ...t, error: stopped ? "Stopped." : err instanceof Error ? err.message : "Something went wrong." }));
-      failed = !stopped;
-    } finally {
-      update(answer.key, (t) => ({ ...t, pending: false, searching: false }));
-      setBusy(false);
-      abortRef.current = null;
-      // Put the question back so it can be sent again with one tap.
-      if (failed && controller === lastRequest.current) {
-        setText((current) => current || question);
-        setStaged((current) =>
-          current.length ? current : photos.map((photo) => ({ key: nextKey(), previewUrl: photo.previewUrl, photo })),
-        );
-      }
+      update(answer.key, (t) => ({ ...t, error: err instanceof Error ? err.message : "Something went wrong." }));
+      outcome = "failed";
     }
+
+    if (outcome === "stopped") update(answer.key, (t) => ({ ...t, error: t.error ?? "Stopped." }));
+    update(answer.key, (t) => ({ ...t, pending: false, progress: undefined }));
+    // After New, a fresh question may already be in flight; leave its state alone.
+    if (inFlight.current === live) {
+      inFlight.current = null;
+      setBusy(false);
+    }
+    // Put the question back so it can be sent again with one tap.
+    if (outcome === "failed" && live === lastRequest.current) {
+      setText((current) => current || question);
+      setStaged((current) =>
+        current.length ? current : photos.map((photo) => ({ key: nextKey(), previewUrl: photo.previewUrl, photo })),
+      );
+    }
+  };
+
+  /** Stops the answer here and on the server, so it isn't written for no one. */
+  const stop = () => {
+    const live = inFlight.current;
+    if (!live) return;
+    live.stopped = true;
+    live.controller.abort();
+    void fetch(`/api/ask/${live.id}`, { method: "DELETE", keepalive: true }).catch(() => {});
   };
 
   const startOver = () => {
     lastRequest.current = null;
-    abortRef.current?.abort();
-    messageIdRef.current = null;
-    if (pollingRef.current) clearTimeout(pollingRef.current);
+    stop();
     setThread([]);
     setText("");
     setStaged([]);
     setNotice(null);
     inputRef.current?.focus();
   };
-
-  // Cleanup polling on unmount
-  useEffect(() => {
-    return () => {
-      if (pollingRef.current) clearTimeout(pollingRef.current);
-    };
-  }, []);
 
   // Follow the answer as it streams, unless the reader has scrolled up to read.
   const following = useRef(true);
@@ -377,7 +404,7 @@ export function Studio({
         {busy ? (
           <button
             type="button"
-            onClick={() => abortRef.current?.abort()}
+            onClick={stop}
             aria-label="Stop"
             className="grid size-10 shrink-0 place-items-center rounded-full bg-ink text-ground"
           >
@@ -453,7 +480,7 @@ export function Studio({
         className="min-h-0 flex-1 overflow-y-auto"
       >
         <div className="mx-auto flex w-full max-w-[640px] flex-col gap-6 px-4 py-8">
-          {thread.map((t) => (t.role === "user" ? <Question key={t.key} turn={t} /> : <Answer key={t.key} turn={t} status={companion.status} />))}
+          {thread.map((t) => (t.role === "user" ? <Question key={t.key} turn={t} /> : <Answer key={t.key} turn={t} />))}
           <div ref={endRef} />
         </div>
       </main>
@@ -486,7 +513,7 @@ function Question({ turn }: { turn: Turn }) {
   );
 }
 
-function Answer({ turn, status }: { turn: Turn; status: CompanionCopy["status"] }) {
+function Answer({ turn }: { turn: Turn }) {
   return (
     <div className="min-w-0">
       {turn.text ? (
@@ -505,9 +532,9 @@ function Answer({ turn, status }: { turn: Turn; status: CompanionCopy["status"] 
           </ReactMarkdown>
         </div>
       ) : null}
-      {turn.pending && (!turn.text || turn.searching) ? (
-        <p className={cn("text-[15px] leading-relaxed text-ink-muted", turn.text && "mt-5")}>
-          <span className="gio-dots">{turn.searching ? status.searching : turn.withPhotos ? status.looking : status.thinking}</span>
+      {turn.pending ? (
+        <p role="status" className={cn("leading-relaxed text-ink-muted", turn.text ? "mt-4 text-sm" : "text-[15px]")}>
+          <span className="gio-dots">{PROGRESS_LABEL[turn.progress ?? "sending"]}</span>
         </p>
       ) : null}
       {turn.error ? <p className="mt-3 text-[15px] text-warn">{turn.error}</p> : null}

@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { z } from "zod";
 import { getChatProvider } from "@/lib/ai";
 import { unavailable } from "@/lib/ai/anthropic";
@@ -5,6 +6,7 @@ import { signInRequired } from "@/lib/auth/access";
 import { createRateLimiter, questionsPerHour, visitorKey } from "@/lib/ask/rate-limit";
 import { serverEnv } from "@/lib/env";
 import { ask, type AskEvent } from "@/lib/ask/ask";
+import { AnswerRelay, isAnswerId } from "@/lib/ask/relay";
 import { currentCompanion } from "@/lib/companions";
 import { MAX_PHOTOS_PER_TURN } from "@/lib/ask/prompt";
 import { createClient, getUserId } from "@/lib/supabase/server";
@@ -18,6 +20,8 @@ const imageSchema = z.object({
 });
 
 const bodySchema = z.object({
+  /** The page's random id for this answer, so it can be collected after a disconnect. */
+  id: z.string().refine(isAnswerId).optional(),
   turns: z
     .array(
       z.object({
@@ -62,29 +66,79 @@ export async function POST(request: Request) {
     return Response.json({ error: unavailable(companion.name) }, { status: 503 });
   }
 
-  const events = ask({ provider, companion, signal: request.signal }, parsed.data.turns);
+  const { id, turns } = parsed.data;
   const encoder = new TextEncoder();
+  const encode = (event: AskEvent) => encoder.encode(`${JSON.stringify(event)}\n`);
+
+  if (!id) {
+    // Without an answer id there's nothing to resume, so stop when the visitor goes.
+    const events = ask({ provider, companion, signal: request.signal }, turns);
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        try {
+          for await (const event of events) controller.enqueue(encode(event));
+        } catch (err) {
+          controller.enqueue(encode({ type: "error", message: err instanceof Error ? err.message : "Something went wrong" }));
+        } finally {
+          controller.close();
+        }
+      },
+      async cancel() {
+        await events.return(undefined);
+      },
+    });
+    return new Response(stream, { headers: STREAM_HEADERS });
+  }
+
+  // A phone suspends the page when its owner switches apps, which drops this
+  // connection. The answer keeps going regardless and is mirrored to the cache,
+  // so the page can collect it on return; only an explicit Stop ends it early.
+  const stop = new AbortController();
+  const relay = new AnswerRelay(id, () => stop.abort());
+  relay.begin();
+  // Set while the visitor is still connected.
+  const live: { send?: (event: AskEvent) => void } = {};
+  const generation = (async () => {
+    try {
+      for await (const event of ask({ provider, companion, signal: stop.signal }, turns)) {
+        relay.push(event);
+        live.send?.(event);
+      }
+    } catch (err) {
+      const event: AskEvent = { type: "error", message: err instanceof Error ? err.message : "Something went wrong" };
+      relay.push(event);
+      live.send?.(event);
+    } finally {
+      await relay.finish();
+    }
+  })();
+  after(() => generation);
+
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      const send = (event: AskEvent) => controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+      live.send = (event) => {
+        try {
+          controller.enqueue(encode(event));
+        } catch {
+          live.send = undefined;
+        }
+      };
+      await generation;
+      live.send = undefined;
       try {
-        for await (const event of events) send(event);
-      } catch (err) {
-        send({ type: "error", message: err instanceof Error ? err.message : "Something went wrong" });
-      } finally {
         controller.close();
-      }
+      } catch {}
     },
-    async cancel() {
-      await events.return(undefined);
+    cancel() {
+      live.send = undefined;
     },
   });
 
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "application/x-ndjson; charset=utf-8",
-      "Cache-Control": "no-store",
-      "X-Accel-Buffering": "no",
-    },
-  });
+  return new Response(stream, { headers: STREAM_HEADERS });
 }
+
+const STREAM_HEADERS = {
+  "Content-Type": "application/x-ndjson; charset=utf-8",
+  "Cache-Control": "no-store",
+  "X-Accel-Buffering": "no",
+};

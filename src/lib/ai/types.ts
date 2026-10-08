@@ -36,7 +36,11 @@ export interface WebSourceRef {
   url: string;
 }
 
+/** What the model is doing right now, taken from the stream itself. */
+export type AnswerPhase = "thinking" | "searching" | "writing";
+
 export type ChatStreamEvent =
+  | { type: "phase"; phase: AnswerPhase }
   | { type: "text"; text: string }
   | { type: "web_search"; query: string }
   | { type: "web_results"; sources: WebSourceRef[] }
