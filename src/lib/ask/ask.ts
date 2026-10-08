@@ -1,8 +1,9 @@
-import type { ChatProvider, WebSourceRef } from "@/lib/ai/types";
+import type { AnswerPhase, ChatProvider, WebSourceRef } from "@/lib/ai/types";
 import type { Companion } from "@/lib/companions/types";
 import { assemblePrompt, type AskTurn } from "./prompt";
 
 export type AskEvent =
+  | { type: "phase"; phase: AnswerPhase }
   | { type: "text"; text: string }
   | { type: "searching"; query: string }
   | { type: "sources"; sources: WebSourceRef[] }
@@ -24,7 +25,7 @@ export async function* ask(
   }
   try {
     for await (const event of deps.provider.streamChat({ ...request, signal: deps.signal })) {
-      if (event.type === "text") yield event;
+      if (event.type === "text" || event.type === "phase") yield event;
       else if (event.type === "web_search") yield { type: "searching", query: event.query };
       else if (event.type === "web_results") yield { type: "sources", sources: event.sources };
     }
