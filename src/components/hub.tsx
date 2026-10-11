@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 const ADVISOR_URLS: Record<string, string> = {
   tony: "https://tony-ten-bay.vercel.app",
   martini: "https://the-host-8xye.vercel.app",
@@ -102,6 +104,12 @@ export function Hub() {
               </div>
             </a>
           ))}
+        </div>
+
+        <div className="text-center" style={{ marginTop: '1.5rem' }}>
+          <Link href="/about" className="font-serif text-sm underline-offset-4 hover:underline" style={{ color: textMuted }}>
+            About Cinq
+          </Link>
         </div>
       </div>
 
