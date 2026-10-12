@@ -6,6 +6,10 @@ export interface CompanionCopy {
   tagline: string;
   /** The small line under it on the start screen. */
   subtitle: string;
+  /** Start screen, under the name: "Your travel advisor". Display only. */
+  role: string;
+  /** Start screen, under the role: a short introduction. Display only. */
+  intro: string;
   placeholder: string;
   placeholderWithPhotos: string;
   status: { thinking: string; looking: string; searching: string };

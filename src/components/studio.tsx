@@ -437,11 +437,12 @@ export function Studio({
           </div>
         </div>
         <main className="flex flex-1 flex-col items-center justify-start px-4 pb-[max(2rem,env(safe-area-inset-bottom))]">
-          <div className="w-full max-w-[640px]" style={{ marginTop: 'max(calc(3rem + 100px + 28px), calc(2.5vh + env(safe-area-inset-top) + 100px + 28px))' }}>
-            <p className="text-center text-[22px] font-bold leading-none tracking-[-0.04em] text-ink">{companion.name}</p>
-            <h1 className="mt-4 text-center font-serif text-[clamp(40px,10vw,64px)] font-normal leading-[1.1] tracking-[-0.025em] text-ink [text-wrap:balance]">
-              {companion.tagline}
-            </h1>
+          <div className="w-full max-w-[640px]" style={{ marginTop: 'max(calc(3rem + 48px), calc(2.5vh + env(safe-area-inset-top) + 48px))' }}>
+            <h1 className="text-center text-[22px] font-bold leading-none tracking-[-0.04em] text-ink">{companion.name}</h1>
+            <p className="mt-2 text-center text-[15px] text-ink-muted">{companion.role}</p>
+            <p className="mx-auto mt-6 max-w-[32rem] text-center font-serif text-[clamp(22px,5.6vw,28px)] leading-[1.3] tracking-[-0.01em] text-ink [text-wrap:balance]">
+              {companion.intro}
+            </p>
             <div className="mt-10">{composer}</div>
             {hint}
           </div>
