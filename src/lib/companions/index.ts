@@ -18,8 +18,8 @@ export function currentCompanion(value = process.env.COMPANION): Companion {
 }
 
 export function copyOf(companion: Companion): CompanionCopy {
-  const { id, name, tagline, subtitle, placeholder, placeholderWithPhotos, status } = companion;
-  return { id, name, tagline, subtitle, placeholder, placeholderWithPhotos, status };
+  const { id, name, tagline, subtitle, role, intro, placeholder, placeholderWithPhotos, status } = companion;
+  return { id, name, tagline, subtitle, role, intro, placeholder, placeholderWithPhotos, status };
 }
 
 export type { Companion, CompanionCopy, CompanionId };

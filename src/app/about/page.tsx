@@ -21,14 +21,15 @@ export default function About() {
           <h1 className="text-4xl font-normal leading-none tracking-tight sm:text-5xl">About Cinq</h1>
 
           <div className="mt-8 space-y-5 text-[17px] leading-relaxed sm:text-lg">
-            <p>Cinq brings you five advisors with taste, judgment and a point of view.</p>
-            <p>A free night in Mexico City? Tony knows the neighborhood place most visitors never find.</p>
-            <p>Trying on a vintage jacket on Brick Lane? Martine tells you if it suits you.</p>
-            <p>Gio helps you decide whether that chair at Round Top belongs in your living room.</p>
-            <p>Jack tells you if the pitch you’re excited about is as good as you think.</p>
-            <p>And when a board meeting conflicts with your daughter’s dance performance, Goldie helps you figure out what to do.</p>
-            <p>Cinq is built on my thirty years in hospitality, design and business, and what I’ve learned from people I trust.</p>
-            <p>Cinq. Live better.</p>
+            <p>Cinq gives you five advisors with taste, judgment and a point of view.</p>
+            <p>Have a free night in Mexico City? Tony tells you the spots most visitors never find.</p>
+            <p>Trying on a vintage jacket on Brick Lane? Martine will tell you if it suits you.</p>
+            <p>Found a chair at Round Top? Show Gio a picture. He’ll tell you if it belongs in your living room.</p>
+            <p>Telling yourself you like your job when you know you don’t? Jack gives you the hard truth and helps you figure out what’s next.</p>
+            <p>Board meeting on the night of your daughter’s dance recital? Goldie helps you sort out what matters and make the call.</p>
+            <p>I shaped Cinq’s advisors from what I’ve learned over thirty years in hospitality, design, travel and business, and from people I’ve met and admired.</p>
+            <p>A lot of what they know, I learned the hard way. I’d like you to have it sooner.</p>
+            <p>Cinq. Keep good company.</p>
           </div>
 
           <p className="mt-8 text-[17px] leading-snug sm:text-lg">
@@ -38,8 +39,8 @@ export default function About() {
           </p>
 
           <p className="mt-12 text-[13px] leading-relaxed text-ink-muted">
-            Tony, Martine, Gio, Jack and Goldie are AI advisors. Each draws on a distinct body of knowledge and has been
-            meticulously trained to bring a well-informed point of view. The decision is always yours.
+            Tony, Martine, Gio, Jack and Goldie are AI advisors. They’ll give you an honest opinion. The decision is always
+            yours.
           </p>
         </main>
       </div>
