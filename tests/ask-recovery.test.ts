@@ -131,6 +131,7 @@ describe("answer recovery", () => {
 
   it("ends an answer that runs too long with a message, before Vercel cuts the function off", async () => {
     vi.useFakeTimers();
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
     try {
       state.provider = new SilentProvider("Start with the south bed. ");
       const id = crypto.randomUUID();
@@ -149,7 +150,15 @@ describe("answer recovery", () => {
         done: true,
         error: "Gio ran out of time before finishing this answer. Try again.",
       });
+      // The log shows where the time went, though the answer never finished.
+      const finished = info.mock.calls.find((c) => c[0] === "Answer finished")!;
+      const record = JSON.parse(String(finished[1]));
+      expect(record).toMatchObject({ outcome: "time-limit", answerChars: 26, searchesRun: 0 });
+      expect(record.phases.map(([phase]: [string, number]) => phase)).toEqual(["thinking", "writing", "thinking"]);
+      expect(record.phases.at(-1)[1]).toBeLessThan(1_000);
+      expect(record.ms).toBeGreaterThanOrEqual(280_000);
     } finally {
+      info.mockRestore();
       vi.useRealTimers();
     }
   });

@@ -30,11 +30,18 @@ export const MAX_PHOTOS_PER_TURN = 10;
 /** Keep at most this many prior turns (oldest dropped first). */
 export const MAX_HISTORY_TURNS = 40;
 
+/**
+ * What every companion's reply can and can't be, whatever it advises on: this
+ * app shows text and links, and has no way to make, attach or send a file.
+ */
+export const APP_OUTPUT_LIMITS =
+  "This app shows your reply as text. You cannot create, attach, export, upload or send files of any kind (PNG, PDF, images, drawings, renderings, spreadsheets, documents) or links to files you made, so never say or imply that you have. Put the substance in the reply itself, in full: plans, measurements, quantities, schedules, lists and tables, and when a layout helps, a text layout or table someone can work from, labeled as a text layout rather than a drawing or map. If someone asks for a file, say plainly that this app can't produce one, then give them the content you can.";
+
 export function capabilitiesBlock(companion: Companion, webSearch: boolean): ContextBlock {
   return {
     label: "app_capabilities",
     title: "APP CAPABILITIES",
-    body: companion.capabilities(webSearch).join("\n"),
+    body: [...companion.capabilities(webSearch), APP_OUTPUT_LIMITS].join("\n"),
     cacheable: true,
   };
 }

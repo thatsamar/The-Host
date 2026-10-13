@@ -1,5 +1,6 @@
 import { ChatError, type AnswerPhase, type ChatProvider, type FailureInfo, type WebSourceRef } from "@/lib/ai/types";
 import type { Companion } from "@/lib/companions/types";
+import { safeToken } from "@/lib/diagnostics";
 import { assemblePrompt, type AskTurn } from "./prompt";
 
 export type AskEvent =
@@ -18,6 +19,10 @@ export interface AnswerInfo {
   stopReason: string | null;
   outputTokens?: number;
   searches: number;
+  /** The model that wrote the answer, which a fallback can change. */
+  model?: string;
+  /** Paused turns resumed to finish it. */
+  resumes?: number;
 }
 
 export const NO_ANSWER = "No answer came back. Try again.";
@@ -65,6 +70,8 @@ export async function* ask(
             stopReason: event.stopReason,
             outputTokens: typeof outputTokens === "number" ? outputTokens : undefined,
             searches: event.webSearches.length,
+            model: safeToken(event.model),
+            resumes: event.resumes,
           });
           // An answer that never started, or was cut off, must say so rather than look finished.
           if (!wrote) {

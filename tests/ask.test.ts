@@ -76,7 +76,7 @@ describe("ask", () => {
     );
     expect(events.filter((e) => e.type === "text").length).toBeGreaterThan(0);
     expect(events.at(-1)).toEqual({ type: "error", message: LENGTH_LIMIT });
-    expect(finished).toEqual([{ stopReason: "max_tokens", outputTokens: 5, searches: 0 }]);
+    expect(finished).toEqual([{ stopReason: "max_tokens", outputTokens: 5, searches: 0, model: "test-model" }]);
   });
 
   it("refuses a conversation that doesn't end with a question", async () => {

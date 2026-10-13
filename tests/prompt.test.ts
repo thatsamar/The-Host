@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ChatContentPart } from "@/lib/ai/types";
-import { BLOCK_ORDER, assemblePrompt, capabilitiesBlock, toChatTurns } from "@/lib/ask/prompt";
+import { APP_OUTPUT_LIMITS, BLOCK_ORDER, assemblePrompt, capabilitiesBlock, toChatTurns } from "@/lib/ask/prompt";
 import { COMPANIONS } from "@/lib/companions";
 import { gio } from "@/lib/companions/gio";
 import { jack } from "@/lib/companions/jack";
@@ -17,9 +17,37 @@ describe("assemblePrompt", () => {
     const req = assemblePrompt({ companion, turns: [{ role: "user", text: "Hi" }] });
     expect(req.system.map((b) => b.label)).toEqual([...BLOCK_ORDER]);
     expect(req.system[0].body).toBe(companion.systemPrompt);
-    expect(req.system[1].body).toBe(companion.capabilities(true).join("\n"));
+    expect(req.system[1].body).toBe([...companion.capabilities(true), APP_OUTPUT_LIMITS].join("\n"));
     expect(req.system.every((b) => b.cacheable)).toBe(true);
     expect(req.webSearch).toBe(true);
+  });
+});
+
+describe("what a reply can be", () => {
+  it.each(Object.values(COMPANIONS))("tells $name it can't make or send files, with or without web search", (companion) => {
+    for (const webSearch of [true, false]) {
+      const body = capabilitiesBlock(companion, webSearch).body;
+      expect(body.split("\n").at(-1)).toBe(APP_OUTPUT_LIMITS);
+    }
+  });
+
+  it("forbids claiming a file was made, and says what to do when one is asked for", () => {
+    expect(APP_OUTPUT_LIMITS).toMatch(/cannot create, attach, export, upload or send files/);
+    expect(APP_OUTPUT_LIMITS).toMatch(/PNG, PDF/);
+    expect(APP_OUTPUT_LIMITS).toMatch(/never say or imply that you have/);
+    expect(APP_OUTPUT_LIMITS).toMatch(/If someone asks for a file, say plainly that this app can't produce one, then give them the content you can/);
+  });
+
+  it("keeps the substance: the full plan in the reply, with layouts labeled as text", () => {
+    expect(APP_OUTPUT_LIMITS).toMatch(/Put the substance in the reply itself, in full/);
+    expect(APP_OUTPUT_LIMITS).toMatch(/plans, measurements, quantities, schedules, lists and tables/);
+    expect(APP_OUTPUT_LIMITS).toMatch(/labeled as a text layout rather than a drawing or map/);
+    // Nothing that would cut an answer short.
+    expect(APP_OUTPUT_LIMITS).not.toMatch(/\b(brief|short|concise|shorter|limit your)\b/i);
+  });
+
+  it("is the same for every companion and names none of them", () => {
+    for (const c of Object.values(COMPANIONS)) expect(APP_OUTPUT_LIMITS).not.toContain(c.name);
   });
 });
 

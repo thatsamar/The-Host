@@ -10,7 +10,7 @@ import { AnswerRelay, isAnswerId } from "@/lib/ask/relay";
 import { currentCompanion } from "@/lib/companions";
 import { MAX_PHOTOS_PER_TURN } from "@/lib/ask/prompt";
 import { createClient, getUserId } from "@/lib/supabase/server";
-import { errorClass } from "@/lib/diagnostics";
+import { errorClass, safeToken } from "@/lib/diagnostics";
 import type { FailureInfo } from "@/lib/ai/types";
 
 // Long answers with web search can take a while.
@@ -22,6 +22,8 @@ export const maxDuration = 300;
 const ANSWER_TIME_LIMIT_MS = (maxDuration - 20) * 1000;
 // A transient model failure is tried once more only this early, so a long answer still has time to finish.
 const RETRY_BEFORE_MS = 120_000;
+// Enough phase changes to see where a long answer spent its time.
+const MAX_LOGGED_PHASES = 60;
 // Something goes down the line at least this often, so a dead connection shows.
 const HEARTBEAT_MS = 10_000;
 
@@ -79,8 +81,9 @@ async function answer(request: Request): Promise<Response> {
 
   const companion = currentCompanion();
   let provider;
+  let env;
   try {
-    serverEnv();
+    env = serverEnv();
     provider = getChatProvider(companion);
   } catch (err) {
     // Names the missing or invalid settings, never their values, in the server log.
@@ -129,7 +132,15 @@ async function answer(request: Request): Promise<Response> {
     photos: latest.images?.length ?? 0,
     photoChars: (latest.images ?? []).reduce((n, i) => n + i.data.length, 0),
     textChars: latest.text.length,
+    // This environment's model settings (never the key), to compare deployments.
+    model: safeToken(env.CHAT_MODEL),
+    effort: env.CHAT_EFFORT,
+    webSearchMaxUses: env.WEB_SEARCH_MAX_USES ?? companion.webSearchMaxUses,
   };
+  // Where the time went, even when the answer never finishes: each phase and when it began.
+  const phases: [string, number][] = [];
+  let answerChars = 0;
+  let searchesRun = 0;
   let timedOut = false;
   const timeLimit = setTimeout(() => {
     timedOut = true;
@@ -154,8 +165,14 @@ async function answer(request: Request): Promise<Response> {
         if (event.type === "error") {
           outcome = timedOut ? "time-limit" : event.message === "Stopped." ? "stopped" : "error";
           if (timedOut) event = { type: "error", message: timeLimitMessage(companion.name) };
-        } else if (event.type === "phase" && !log.firstPhaseMs) log.firstPhaseMs = Date.now() - receivedAt;
-        else if (event.type === "text" && !log.firstTextMs) log.firstTextMs = Date.now() - receivedAt;
+        } else if (event.type === "phase") {
+          const atMs = Date.now() - receivedAt;
+          log.firstPhaseMs ??= atMs;
+          if (phases.at(-1)?.[0] !== event.phase && phases.length < MAX_LOGGED_PHASES) phases.push([event.phase, atMs]);
+        } else if (event.type === "text") {
+          log.firstTextMs ??= Date.now() - receivedAt;
+          answerChars += event.text.length;
+        } else if (event.type === "searching") searchesRun++;
         relay.push(event);
         live.send?.(event);
       }
@@ -168,7 +185,10 @@ async function answer(request: Request): Promise<Response> {
       clearTimeout(timeLimit);
       clearInterval(heartbeat);
       await relay.finish();
-      console.info("Answer finished", JSON.stringify({ outcome, ms: Date.now() - receivedAt, connected: !!live.send, ...log }));
+      console.info(
+        "Answer finished",
+        JSON.stringify({ outcome, ms: Date.now() - receivedAt, connected: !!live.send, ...log, answerChars, searchesRun, phases }),
+      );
     }
   })();
   after(() => generation);

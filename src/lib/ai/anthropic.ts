@@ -272,6 +272,6 @@ export class AnthropicChatProvider implements ChatProvider {
       progress.resumes++;
     }
 
-    yield { type: "done", text, model, stopReason, usage, webSearches, webSources };
+    yield { type: "done", text, model, stopReason, usage, webSearches, webSources, resumes: progress.resumes };
   }
 }

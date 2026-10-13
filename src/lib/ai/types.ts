@@ -52,6 +52,8 @@ export type ChatStreamEvent =
       usage: Record<string, unknown>;
       webSearches: string[];
       webSources: WebSourceRef[];
+      /** Paused turns resumed to finish this answer. */
+      resumes?: number;
     };
 
 /** A failed model call as the server log records it: fixed codes and numbers, no message text. */
