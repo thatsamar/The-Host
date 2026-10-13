@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { LENGTH_LIMIT, NO_ANSWER, ask, errorMessage } from "@/lib/ask/ask";
 import { gio } from "@/lib/companions/gio";
 import { tony } from "@/lib/companions/tony";
-import { ChatError, type ChatProvider, type ChatRequest, type ChatStreamEvent } from "@/lib/ai/types";
+import { ChatError, type ChatProvider, type ChatStreamEvent } from "@/lib/ai/types";
 import { ScriptedProvider, collect, replyWith } from "./helpers/fakes";
 
 /** Fails each call in turn with the given errors (after the given events), then answers. */
@@ -12,7 +12,7 @@ class FlakyProvider implements ChatProvider {
     private readonly failures: { before?: ChatStreamEvent[]; error: Error }[],
     private readonly answer = "The south bed first.",
   ) {}
-  async *streamChat(_request: ChatRequest): AsyncIterable<ChatStreamEvent> {
+  async *streamChat(): AsyncIterable<ChatStreamEvent> {
     const failure = this.failures[this.calls++];
     if (failure) {
       for (const event of failure.before ?? []) yield event;

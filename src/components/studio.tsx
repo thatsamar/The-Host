@@ -13,6 +13,7 @@ import { fitToBudget } from "@/lib/ask/budget";
 import { readNdjson } from "@/lib/ask/ndjson";
 import { PHOTO_ACCEPT, preparePhoto, type PreparedPhoto } from "@/lib/ask/photos";
 import { MAX_PHOTOS_PER_TURN, type AskTurn } from "@/lib/ask/prompt";
+import { connectionAbandoned, recoverAnswer, type SavedRead } from "@/lib/ask/recovery";
 import { cn } from "@/lib/utils";
 
 interface StagedPhoto {
@@ -32,6 +33,8 @@ interface Turn {
   progress?: Progress;
   sources?: WebSourceRef[];
   error?: string;
+  /** Retrying as is can't help (the photos are too large to send), so don't offer it. */
+  noRetry?: boolean;
   /** When the question was sent, to say so if the answer is slow to start. */
   sentAt?: number;
 }
@@ -53,33 +56,24 @@ interface InFlight {
   stopped: boolean;
   /** Collecting the answer from the server rather than streaming it live. */
   recovering: boolean;
-  /** The server has answered the request (headers arrived). */
-  connected: boolean;
-  sentAt: number;
+  /** When the server answered the request (headers arrived); its time limit runs from about then. */
+  connectedAt?: number;
+  /** Size of the request, to allow for uploading it on a slow connection. */
+  bodyBytes: number;
   lastEvent: number;
+  /** The server ended this answer itself, so there's nothing left to stop. */
+  settled: boolean;
 }
 
-type Outcome = "answered" | "failed" | "stopped" | "lost";
+type Outcome = "answered" | "failed" | "stopped" | "lost" | "too-large";
 
-// After returning to the page, a stream that has said nothing for this long is
-// treated as dropped and the answer is collected from the server instead.
+// After returning to the page, an established stream that has said nothing for
+// this long is treated as dropped and the answer is collected from the server.
 const STALL_MS = 2500;
-// The server sends something at least every 10 seconds; this much silence on a
-// visible page means the connection died, so collect the answer instead.
-const SILENCE_MS = 30_000;
-// Sending photos on a slow connection takes a while, but not this long.
-const CONNECT_MS = 120_000;
 const WATCHDOG_MS = 5000;
-const RECOVERY_POLL_MS = 1200;
 const CHECK_TIMEOUT_MS = 10_000;
-// The server saves a live answer at least every 10 seconds; a saved answer that
-// hasn't moved for this long was cut off and won't finish.
-const STALE_MS = 45_000;
-// A little longer than the server's own limit on one answer, counted from sending.
-const ANSWER_LIMIT_MS = 6 * 60_000;
-// Consecutive "not found" replies before deciding the question never arrived.
-const RECOVERY_MISSES = 5;
 const LOST_MESSAGE = "The connection dropped before the answer finished. Try again.";
+const TOO_LARGE_MESSAGE = "Those photos are too large to send together. Remove one or more and send again.";
 
 let counter = 0;
 const nextKey = () => `k${++counter}`;
@@ -120,7 +114,9 @@ export function Studio({
       if (document.visibilityState !== "visible" || !live || live.recovering) return;
       const returnedAt = Date.now();
       setTimeout(() => {
-        if (inFlight.current === live && !live.stopped && !live.recovering && live.lastEvent < returnedAt) {
+        // A request still uploading has its own, size-aware timeout; don't cut it off here.
+        const quiet = live.connectedAt !== undefined && live.lastEvent < returnedAt;
+        if (inFlight.current === live && !live.stopped && !live.recovering && quiet) {
           live.controller.abort();
         }
       }, STALL_MS);
@@ -173,51 +169,52 @@ export function Studio({
   };
 
   /** Streams the answer live; "lost" means the connection went before the answer finished. */
-  const stream = async (live: InFlight, key: string, turns: AskTurn[]): Promise<Outcome> => {
-    // Nothing at all for too long on a visible page: stop waiting on this
-    // connection and collect the answer from the server instead.
+  const stream = async (live: InFlight, key: string, body: string): Promise<Outcome> => {
+    // Nothing at all for too long on a visible page (allowing for uploading the
+    // photos): stop waiting on this connection and collect the answer instead.
     const watchdog = setInterval(() => {
       if (live.stopped || live.recovering || document.visibilityState !== "visible") return;
-      if (Date.now() - live.lastEvent > (live.connected ? SILENCE_MS : CONNECT_MS)) live.controller.abort();
+      const state = { connected: live.connectedAt !== undefined, lastEventAt: live.lastEvent, bodyBytes: live.bodyBytes };
+      if (connectionAbandoned({ ...state, now: Date.now() })) live.controller.abort();
     }, WATCHDOG_MS);
     try {
-      return await streamOnce(live, key, turns);
+      return await streamOnce(live, key, body);
     } finally {
       clearInterval(watchdog);
     }
   };
 
-  const streamOnce = async (live: InFlight, key: string, turns: AskTurn[]): Promise<Outcome> => {
+  const streamOnce = async (live: InFlight, key: string, body: string): Promise<Outcome> => {
     let response: Response;
     try {
       response = await fetch("/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: live.id, turns }),
+        body,
         signal: live.controller.signal,
       });
     } catch {
       return live.stopped ? "stopped" : "lost";
     }
     if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      const message =
-        body.error ??
-        (response.status === 413
-          ? "Those photos are too large to send together. Try fewer."
-          : "Something went wrong on our side. Try again.");
-      update(key, (t) => ({ ...t, error: message }));
+      // The server never started an answer, so there's nothing to stop.
+      live.settled = true;
+      if (response.status === 413) return "too-large";
+      const reply = await response.json().catch(() => ({}));
+      update(key, (t) => ({ ...t, error: reply.error ?? "Something went wrong on our side. Try again." }));
       return "failed";
     }
-    live.connected = true;
-    live.lastEvent = Date.now();
+    live.connectedAt = live.lastEvent = Date.now();
     try {
       for await (const event of readNdjson<StreamEvent>(response.body!)) {
         if (live.stopped) return "stopped";
         live.lastEvent = Date.now();
         apply(key, event);
         if (event.type === "done") return "answered";
-        if (event.type === "error") return event.message === "Stopped." ? "stopped" : "failed";
+        if (event.type === "error") {
+          live.settled = true;
+          return event.message === "Stopped." ? "stopped" : "failed";
+        }
       }
     } catch {
       if (live.stopped) return "stopped";
@@ -225,67 +222,85 @@ export function Studio({
     return "lost";
   };
 
+  /** Reads the saved answer once, with its own timeout so a dead connection can't hold up the next read. */
+  const readSaved = async (live: InFlight): Promise<SavedRead> => {
+    const check = new AbortController();
+    const timer = setTimeout(() => check.abort(), CHECK_TIMEOUT_MS);
+    const onStop = () => check.abort();
+    live.controller.signal.addEventListener("abort", onStop, { once: true });
+    try {
+      const res = await fetch(`/api/ask/${live.id}`, { cache: "no-store", signal: check.signal });
+      if (res.status === 404) return { status: "missing" };
+      if (!res.ok) return { status: "unreachable" };
+      return { status: "found", saved: (await res.json()) as AnswerSnapshot };
+    } catch {
+      return { status: "unreachable" };
+    } finally {
+      clearTimeout(timer);
+      live.controller.signal.removeEventListener("abort", onStop);
+    }
+  };
+
   /** Collects an answer the server kept writing while the page was away. */
   const recover = async (live: InFlight, key: string): Promise<Outcome> => {
     update(key, (t) => ({ ...t, progress: "reconnecting" }));
     live.recovering = true;
     live.controller = new AbortController();
-    const giveUpAt = live.sentAt + ANSWER_LIMIT_MS;
-    let misses = 0;
-    // When the saved answer last moved, to tell a long think from one that was cut off.
-    let seen = "";
-    let movedAt = Date.now();
-    while (!live.stopped && Date.now() < giveUpAt && misses < RECOVERY_MISSES) {
-      if (document.visibilityState === "visible") {
-        // A check that hangs (a dead connection) mustn't hold up the next one.
-        const check = new AbortController();
-        const timer = setTimeout(() => check.abort(), CHECK_TIMEOUT_MS);
-        const onStop = () => check.abort();
-        live.controller.signal.addEventListener("abort", onStop, { once: true });
-        try {
-          const res = await fetch(`/api/ask/${live.id}`, { cache: "no-store", signal: check.signal });
-          if (res.status === 404) misses++;
-          else if (res.ok) {
-            misses = 0;
-            const saved: AnswerSnapshot = await res.json();
-            if (live.stopped) break;
-            // The saved copy can trail what already arrived live; keep whichever is further along.
-            update(key, (t) => ({
-              ...t,
-              text: saved.text.length > t.text.length ? saved.text : t.text,
-              sources: saved.sources.length > (t.sources?.length ?? 0) ? saved.sources : t.sources,
-              progress: saved.phase ?? t.progress,
-            }));
-            if (saved.done) {
-              if (!saved.error) return "answered";
-              update(key, (t) => ({ ...t, error: saved.error }));
-              return saved.error === "Stopped." ? "stopped" : "failed";
-            }
-            const mark = String(saved.updatedAt ?? `${saved.phase}|${saved.text.length}|${saved.sources.length}`);
-            if (mark !== seen) {
-              seen = mark;
-              movedAt = Date.now();
-            } else if (Date.now() - movedAt > STALE_MS) {
-              update(key, (t) => ({ ...t, error: `${companion.name} stopped responding before the answer finished. Try again.` }));
-              return "failed";
-            }
-          }
-        } catch {
-          // Still offline or just resumed; try again shortly.
-        } finally {
-          clearTimeout(timer);
-          live.controller.signal.removeEventListener("abort", onStop);
-        }
-      }
-      await wait(RECOVERY_POLL_MS, live.controller.signal);
+    const result = await recoverAnswer({
+      connectedAt: live.connectedAt,
+      read: () => readSaved(live),
+      visible: () => document.visibilityState === "visible",
+      wait: (ms) => wait(ms, live.controller.signal),
+      now: Date.now,
+      stopped: () => live.stopped,
+      // The saved copy can trail what already arrived live; keep whichever is further along.
+      onProgress: (saved) =>
+        update(key, (t) => ({
+          ...t,
+          text: saved.text.length > t.text.length ? saved.text : t.text,
+          sources: saved.sources.length > (t.sources?.length ?? 0) ? saved.sources : t.sources,
+          progress: saved.phase ?? t.progress,
+        })),
+    });
+    if (result.outcome !== "failed") return result.outcome;
+    // What was written so far stays; the reason goes below it.
+    if (result.reason === "server") {
+      live.settled = true;
+      update(key, (t) => ({ ...t, error: result.error }));
+    } else {
+      const message =
+        result.reason === "stale" ? `${companion.name} stopped responding before the answer finished. Try again.` : LOST_MESSAGE;
+      update(key, (t) => ({ ...t, error: message }));
     }
-    if (live.stopped) return "stopped";
-    update(key, (t) => ({ ...t, error: LOST_MESSAGE }));
     return "failed";
   };
 
   /** Asks the server to stop an answer, in case it is still being written for no one. */
   const stopOnServer = (id: string) => void fetch(`/api/ask/${id}`, { method: "DELETE", keepalive: true }).catch(() => {});
+
+  // What's in the text box now, for putting a question back without overwriting new work.
+  const draft = useRef({ text, staged });
+  draft.current = { text, staged };
+
+  /**
+   * Takes a question that can't be sent as is (its photos are too large) out of
+   * the conversation and back into the text box, photos included, so it can be
+   * edited. If something new is already there, it stays, and the failed question
+   * keeps its error without a Retry.
+   */
+  const putBack = (answerKey: string, question: string, photos: PreparedPhoto[], message?: string) => {
+    if (draft.current.text.trim() || draft.current.staged.length) {
+      update(answerKey, (t) => ({ ...t, error: message ?? TOO_LARGE_MESSAGE, noRetry: true }));
+      return;
+    }
+    setThread((all) => {
+      const i = all.findIndex((t) => t.key === answerKey);
+      return i < 1 ? all : [...all.slice(0, i - 1), ...all.slice(i + 1)];
+    });
+    setText(question);
+    setStaged(photos.map((photo) => ({ key: nextKey(), previewUrl: photo.previewUrl, photo })));
+    if (message) setNotice(message);
+  };
 
   const ask = () => {
     if (!canSend) return;
@@ -300,7 +315,10 @@ export function Studio({
     const i = thread.findIndex((t) => t.key === answerKey);
     const question = thread[i - 1];
     if (busy || i < 1 || question?.role !== "user") return;
-    send(question.text, question.photos ?? [], [...thread.slice(0, i - 1), ...thread.slice(i + 1)]);
+    // Too large to send as is: hand it back for editing (send has said why).
+    if (!send(question.text, question.photos ?? [], [...thread.slice(0, i - 1), ...thread.slice(i + 1)])) {
+      putBack(answerKey, question.text, question.photos ?? []);
+    }
   };
 
   /** Starts a question after the given conversation; false if it can't be sent as is. */
@@ -327,37 +345,43 @@ export function Studio({
     setThread([...before, userTurn, answer]);
     setNotice(null);
     setBusy(true);
+    const id = crypto.randomUUID();
+    const body = JSON.stringify({ id, turns });
     const live: InFlight = {
-      id: crypto.randomUUID(),
+      id,
       controller: new AbortController(),
       stopped: false,
       recovering: false,
-      connected: false,
-      sentAt,
+      bodyBytes: body.length,
       lastEvent: sentAt,
+      settled: false,
     };
     inFlight.current = live;
-    void run(live, answer.key, turns);
+    void run(live, answer.key, body, question, photos);
     return true;
   };
 
-  const run = async (live: InFlight, key: string, turns: AskTurn[]) => {
+  const run = async (live: InFlight, key: string, body: string, question: string, photos: PreparedPhoto[]) => {
     let outcome: Outcome;
     try {
-      outcome = await stream(live, key, turns);
+      outcome = await stream(live, key, body);
       if (outcome === "lost") outcome = await recover(live, key);
     } catch (err) {
       update(key, (t) => ({ ...t, error: err instanceof Error ? err.message : "Something went wrong." }));
       outcome = "failed";
     }
 
+    // After New, a fresh question may already be in flight; leave its state alone.
+    const current = inFlight.current === live;
     if (outcome === "stopped") update(key, (t) => ({ ...t, error: t.error ?? "Stopped." }));
     // The page gave up waiting; make sure the server isn't still writing it, so a
-    // Retry doesn't leave two answers running.
-    if (outcome === "failed" && !live.stopped) stopOnServer(live.id);
+    // Retry doesn't leave two answers running. An answer the server ended itself
+    // has nothing left to stop.
+    if (outcome === "failed" && !live.stopped && !live.settled) stopOnServer(live.id);
     update(key, (t) => ({ ...t, pending: false, progress: undefined }));
-    // After New, a fresh question may already be in flight; leave its state alone.
-    if (inFlight.current === live) {
+    // Sending the same photos again would fail the same way: hand them back to edit.
+    if (outcome === "too-large" && current) putBack(key, question, photos, TOO_LARGE_MESSAGE);
+    if (current) {
       inFlight.current = null;
       setBusy(false);
     }
@@ -561,7 +585,7 @@ export function Studio({
               <Answer
                 key={t.key}
                 turn={t}
-                onRetry={!busy && t.error && i === thread.length - 1 ? () => retry(t.key) : undefined}
+                onRetry={!busy && t.error && !t.noRetry && i === thread.length - 1 ? () => retry(t.key) : undefined}
               />
             ),
           )}
