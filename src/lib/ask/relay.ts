@@ -2,6 +2,7 @@ import "server-only";
 import { getCache } from "@vercel/functions";
 import type { AnswerPhase, WebSourceRef } from "@/lib/ai/types";
 import type { AskEvent } from "./ask";
+import { errorClass } from "@/lib/diagnostics";
 
 /**
  * An answer in progress, kept briefly in Vercel's Runtime Cache so a visitor
@@ -131,7 +132,7 @@ export class AnswerRelay {
         await put(this.id, snapshot);
         if (!snapshot.done && (await store().get(`${this.id}:stop`))) this.onStopRequested();
       } catch (err) {
-        console.error("Couldn't save an answer for recovery:", err instanceof Error ? err.message : err);
+        console.error("Couldn't save an answer for recovery", JSON.stringify({ error: errorClass(err) }));
       }
     })().finally(() => {
       this.saving = null;

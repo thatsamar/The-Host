@@ -1,4 +1,4 @@
-import { ChatError, type AnswerPhase, type ChatProvider, type WebSourceRef } from "@/lib/ai/types";
+import { ChatError, type AnswerPhase, type ChatProvider, type FailureInfo, type WebSourceRef } from "@/lib/ai/types";
 import type { Companion } from "@/lib/companions/types";
 import { assemblePrompt, type AskTurn } from "./prompt";
 
@@ -40,8 +40,8 @@ export async function* ask(
      * Without it, a failure is reported as is.
      */
     canRetry?: () => boolean;
-    /** Each failed attempt's log-safe reason, and whether it is being retried. */
-    onFailure?: (reason: string, retrying: boolean) => void;
+    /** Each failed attempt, as the log records it, and whether it is being retried. */
+    onFailure?: (failure: FailureInfo, attempt: number, retrying: boolean) => void;
   },
   turns: AskTurn[],
 ): AsyncGenerator<AskEvent> {
@@ -89,7 +89,7 @@ export async function* ask(
         !wrote &&
         !deps.signal?.aborted &&
         (deps.canRetry?.() ?? false);
-      if (err instanceof ChatError) deps.onFailure?.(err.reason, retrying);
+      if (err instanceof ChatError) deps.onFailure?.(err.failure, attempt, retrying);
       if (retrying) continue;
       yield { type: "error", message: errorMessage(err) };
       return;

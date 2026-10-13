@@ -8,12 +8,15 @@ import type {
   BetaToolUnion,
 } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import { renderContextBlock } from "./render";
+import { errorClass, safeToken } from "@/lib/diagnostics";
 import {
   ChatError,
+  type AnswerPhase,
   type ChatContentPart,
   type ChatProvider,
   type ChatRequest,
   type ChatStreamEvent,
+  type FailureInfo,
   type WebSourceRef,
 } from "./types";
 
@@ -85,21 +88,34 @@ export const busy = (name: string) => `${name} is busy right now. Try again in a
 
 export const interrupted = (name: string) => `${name} was interrupted partway through. Try again.`;
 
-/** What went wrong, for the server log: kind, status, error type and request id. Never content. */
-export function failureReason(err: unknown): string {
-  if (err instanceof Anthropic.APIError) {
-    const kind = err.status ? "api" : "stream"; // errors sent partway through a stream carry no status
-    const type = err.type ?? (err.error as { error?: { type?: string } } | undefined)?.error?.type;
-    return [kind, err.status, type, err.requestID].filter(Boolean).join(" ");
-  }
-  if (err instanceof Error) return `${err.name}: ${err.message.slice(0, 120)}`;
-  return "unknown";
-}
-
 // Errors that say the service, not the request, failed: worth one more try.
 const TRANSIENT_STREAM_TYPES = new Set(["overloaded_error", "api_error", "timeout_error"]);
 // A stream cut off underneath the SDK surfaces as a plain error from fetch.
 const BROKEN_STREAM = /terminated|socket|ECONNRESET|other side closed|premature close/i;
+// The SDK's error when it can't read a tool call's input; its message quotes that input.
+const TOOL_INPUT_PARSE = /^Unable to parse tool parameter JSON/;
+// The SDK's errors for a stream that ended before the model's message was complete.
+const STREAM_INCOMPLETE = /^(stream ended without producing|request ended without sending)/;
+
+/** What the server log records about a failure: codes, status, error type and request id. Never message text. */
+export function failureInfo(err: unknown): FailureInfo {
+  if (err instanceof Anthropic.APIConnectionTimeoutError) return { code: "connection_timeout" };
+  if (err instanceof Anthropic.APIConnectionError) return { code: "connection" };
+  if (err instanceof Anthropic.APIError) {
+    const type = err.type ?? (err.error as { error?: { type?: string } } | undefined)?.error?.type;
+    return {
+      // Errors sent partway through a stream carry no status.
+      code: err.status ? "api_status" : "stream_error",
+      ...(err.status ? { status: err.status } : {}),
+      ...(safeToken(type) ? { type: safeToken(type) } : {}),
+      ...(safeToken(err.requestID) ? { requestId: safeToken(err.requestID) } : {}),
+    };
+  }
+  if (err instanceof Error && TOOL_INPUT_PARSE.test(err.message)) return { code: "tool_input_parse" };
+  if (err instanceof Error && STREAM_INCOMPLETE.test(err.message)) return { code: "stream_incomplete" };
+  if (err instanceof Error && BROKEN_STREAM.test(err.message)) return { code: "stream_terminated", error: errorClass(err) };
+  return { code: "unexpected", error: errorClass(err) };
+}
 
 /** Turns SDK errors into short messages that are safe to show to anyone. */
 export function describeAnthropicError(err: unknown, name = "Gio"): Error {
@@ -108,7 +124,7 @@ export function describeAnthropicError(err: unknown, name = "Gio"): Error {
     e.name = "AbortError";
     return e;
   }
-  const reason = failureReason(err);
+  const reason = failureInfo(err);
   if (err instanceof Anthropic.APIConnectionError) {
     return new ChatError(`Couldn't reach ${name}. Check your connection and try again.`, true, reason);
   }
@@ -133,6 +149,13 @@ export function describeAnthropicError(err: unknown, name = "Gio"): Error {
   return new ChatError(unavailable(name), false, reason);
 }
 
+/** How far a turn got, for the log if it fails. */
+interface Progress {
+  resumes: number;
+  fallback: boolean;
+  phase?: AnswerPhase;
+}
+
 export class AnthropicChatProvider implements ChatProvider {
   constructor(
     private readonly client: Anthropic,
@@ -141,23 +164,26 @@ export class AnthropicChatProvider implements ChatProvider {
   ) {}
 
   async *streamChat(request: ChatRequest): AsyncIterable<ChatStreamEvent> {
-    const progress = { resumes: 0, fallback: false };
+    const progress: Progress = { resumes: 0, fallback: false };
     try {
       yield* this.run(request, progress);
     } catch (err) {
       const described = describeAnthropicError(err, this.options.name);
       if (described.name === "AbortError") throw described;
       // Where in the turn it failed: a resumed request or a fallback point to their own causes.
-      const where = `${progress.resumes ? ` after ${progress.resumes} resume(s)` : ""}${progress.fallback ? " after a fallback" : ""}`;
-      // The person asking sees a plain message; this is where the reason goes.
-      const detail = err instanceof Error ? err.message.slice(0, 200) : String(err);
-      console.error("Anthropic chat error", `${failureReason(err)}${where}`, detail);
-      if (described instanceof ChatError) throw new ChatError(described.message, described.transient, `${described.reason}${where}`);
-      throw described;
+      const failure: FailureInfo = {
+        ...(described instanceof ChatError ? described.failure : failureInfo(err)),
+        ...(progress.phase ? { phase: progress.phase } : {}),
+        resumes: progress.resumes,
+        fallback: progress.fallback,
+      };
+      // The person asking sees a plain message; the log gets codes, never the error's text.
+      console.error("Anthropic chat error", JSON.stringify(failure));
+      throw described instanceof ChatError ? new ChatError(described.message, described.transient, failure) : described;
     }
   }
 
-  private async *run(request: ChatRequest, progress: { resumes: number; fallback: boolean }): AsyncIterable<ChatStreamEvent> {
+  private async *run(request: ChatRequest, progress: Progress): AsyncIterable<ChatStreamEvent> {
     const system = toAnthropicSystem(request);
     const messages: BetaMessageParam[] = request.messages.map((m) => ({
       role: m.role,
@@ -194,9 +220,18 @@ export class AnthropicChatProvider implements ChatProvider {
       for await (const event of stream) {
         if (event.type === "content_block_start") {
           const kind = event.content_block.type;
-          if (kind === "thinking" || kind === "redacted_thinking") yield { type: "phase", phase: "thinking" };
-          else if (kind === "server_tool_use") yield { type: "phase", phase: "searching" };
-          else if (kind === "text") yield { type: "phase", phase: "writing" };
+          const phase: AnswerPhase | undefined =
+            kind === "thinking" || kind === "redacted_thinking"
+              ? "thinking"
+              : kind === "server_tool_use"
+                ? "searching"
+                : kind === "text"
+                  ? "writing"
+                  : undefined;
+          if (phase) {
+            progress.phase = phase;
+            yield { type: "phase", phase };
+          }
         } else if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
           text += event.delta.text;
           yield { type: "text", text: event.delta.text };

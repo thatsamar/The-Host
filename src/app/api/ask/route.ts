@@ -10,6 +10,8 @@ import { AnswerRelay, isAnswerId } from "@/lib/ask/relay";
 import { currentCompanion } from "@/lib/companions";
 import { MAX_PHOTOS_PER_TURN } from "@/lib/ask/prompt";
 import { createClient, getUserId } from "@/lib/supabase/server";
+import { errorClass } from "@/lib/diagnostics";
+import type { FailureInfo } from "@/lib/ai/types";
 
 // Long answers with web search can take a while.
 export const maxDuration = 300;
@@ -49,8 +51,8 @@ export async function POST(request: Request) {
   try {
     return await answer(request);
   } catch (err) {
-    // Anything unexpected still gets a plain message, and its reason goes to the log.
-    console.error("Ask route failed", err instanceof Error ? `${err.name}: ${err.message.slice(0, 200)}` : String(err));
+    // Anything unexpected still gets a plain message; the log gets the error's class, never its text.
+    console.error("Ask route failed", JSON.stringify({ error: errorClass(err) }));
     return Response.json({ error: "Something went wrong on our side. Try again." }, { status: 500 });
   }
 }
@@ -81,8 +83,9 @@ async function answer(request: Request): Promise<Response> {
     serverEnv();
     provider = getChatProvider(companion);
   } catch (err) {
-    // Names the missing settings (never their values) in the server log.
-    console.error(`${companion.name} is misconfigured:`, err instanceof Error ? err.message : err);
+    // Names the missing or invalid settings, never their values, in the server log.
+    const settings = (err as { settings?: unknown }).settings;
+    console.error(`${companion.name} is misconfigured`, JSON.stringify({ error: errorClass(err), settings }));
     return Response.json({ error: unavailable(companion.name) }, { status: 503 });
   }
 
@@ -138,9 +141,9 @@ async function answer(request: Request): Promise<Response> {
   }, HEARTBEAT_MS);
   const onFinish = (info: AnswerInfo) => Object.assign(log, info);
   const canRetry = () => Date.now() - receivedAt < RETRY_BEFORE_MS;
-  const failures: string[] = [];
-  const onFailure = (reason: string, retrying: boolean) => {
-    failures.push(`${reason}${retrying ? " (retried)" : ""} at ${Date.now() - receivedAt}ms`);
+  const failures: (FailureInfo & { attempt: number; retried: boolean; atMs: number })[] = [];
+  const onFailure = (failure: FailureInfo, attempt: number, retrying: boolean) => {
+    failures.push({ ...failure, attempt, retried: retrying, atMs: Date.now() - receivedAt });
     log.failures = failures;
   };
 

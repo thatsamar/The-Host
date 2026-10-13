@@ -21,7 +21,8 @@ class FlakyProvider implements ChatProvider {
     yield* replyWith(this.answer)();
   }
 }
-const overloaded = () => new ChatError("Gio is busy right now. Try again in a minute.", true, "stream overloaded_error req_1");
+const overloadedFailure = { code: "stream_error", type: "overloaded_error", requestId: "req_1" };
+const overloaded = () => new ChatError("Gio is busy right now. Try again in a minute.", true, overloadedFailure);
 const thinking: ChatStreamEvent = { type: "phase", phase: "thinking" };
 
 describe("ask", () => {
@@ -92,14 +93,17 @@ describe("a model call that fails partway through", () => {
 
   it("is made once more when nothing has been shown yet and there's time, and then answers", async () => {
     const provider = new FlakyProvider([{ before: [thinking], error: overloaded() }]);
-    const failures: [string, boolean][] = [];
+    const failures: unknown[] = [];
     const events = await collect(
-      ask({ provider, companion: tony, canRetry: () => true, onFailure: (r, retrying) => failures.push([r, retrying]) }, turns),
+      ask(
+        { provider, companion: tony, canRetry: () => true, onFailure: (f, attempt, retrying) => failures.push([f, attempt, retrying]) },
+        turns,
+      ),
     );
     expect(provider.calls).toBe(2);
     expect(text(events)).toBe("The south bed first.");
     expect(events.at(-1)).toEqual({ type: "done" });
-    expect(failures).toEqual([["stream overloaded_error req_1", true]]);
+    expect(failures).toEqual([[overloadedFailure, 1, true]]);
   });
 
   it("is made at most once more", async () => {
@@ -120,7 +124,7 @@ describe("a model call that fails partway through", () => {
     const late = new FlakyProvider([{ error: overloaded() }]);
     await collect(ask({ provider: late, companion: tony, canRetry: () => false }, turns));
     expect(late.calls).toBe(1);
-    const refused = new FlakyProvider([{ error: new ChatError("Gio isn't available right now.", false, "api 400") }]);
+    const refused = new FlakyProvider([{ error: new ChatError("Gio isn't available right now.", false, { code: "api_status", status: 400 }) }]);
     await collect(ask({ provider: refused, companion: tony, canRetry: () => true }, turns));
     expect(refused.calls).toBe(1);
   });

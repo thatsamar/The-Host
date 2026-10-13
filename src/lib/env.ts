@@ -39,7 +39,12 @@ export function serverEnv(): ServerEnv {
   if (!parsed.success) {
     // Names each setting and what's wrong with it, never its value.
     const problems = parsed.error.issues.map((i) => `${i.path.join(".")} (${i.message})`).join(", ");
-    throw new Error(`Missing or invalid settings in Vercel: ${problems}. Fix them under Settings → Environment Variables, then redeploy.`);
+    // The settings' names alone, for the server log; the message is for whoever reads the error.
+    const settings = [...new Set(parsed.error.issues.map((i) => i.path.join(".")))];
+    throw Object.assign(
+      new Error(`Missing or invalid settings in Vercel: ${problems}. Fix them under Settings → Environment Variables, then redeploy.`),
+      { settings },
+    );
   }
   cached = parsed.data;
   return cached;

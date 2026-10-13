@@ -231,7 +231,14 @@ describe("errors partway through the answer", () => {
     expect(err).toBeInstanceOf(ChatError);
     expect((err as ChatError).message).toBe(busy("Gio"));
     expect((err as ChatError).transient).toBe(true);
-    expect((err as ChatError).reason).toBe("stream overloaded_error req_test123");
+    expect((err as ChatError).failure).toEqual({
+      code: "stream_error",
+      type: "overloaded_error",
+      requestId: "req_test123",
+      phase: "thinking",
+      resumes: 0,
+      fallback: false,
+    });
   });
 
   it("reports an internal error mid-stream as an interruption worth one more try", async () => {

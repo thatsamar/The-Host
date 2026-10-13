@@ -54,16 +54,36 @@ export type ChatStreamEvent =
       webSources: WebSourceRef[];
     };
 
+/** A failed model call as the server log records it: fixed codes and numbers, no message text. */
+export interface FailureInfo {
+  /** What kind of failure, e.g. "stream_error", "api_status", "connection", "stream_terminated". */
+  code: string;
+  /** HTTP status of a failed request. */
+  status?: number;
+  /** The provider's own error type, e.g. "overloaded_error". */
+  type?: string;
+  /** The provider's id for the failed request, to look it up with them. */
+  requestId?: string;
+  /** The error's class name, for failures with no better code. */
+  error?: string;
+  /** What the model was doing when it failed. */
+  phase?: AnswerPhase;
+  /** Paused turns resumed before the failure. */
+  resumes?: number;
+  /** Whether another model had taken over the turn. */
+  fallback?: boolean;
+}
+
 /**
  * A failed model call: a message safe to show anyone, whether the same call may
  * work if made again (the service was overloaded or the stream broke, not a bad
- * request or setup), and a reason for the server log with no conversation content.
+ * request or setup), and what the server log records about it.
  */
 export class ChatError extends Error {
   constructor(
     message: string,
     readonly transient = false,
-    readonly reason = "",
+    readonly failure: FailureInfo = { code: "unexpected" },
   ) {
     super(message);
   }
