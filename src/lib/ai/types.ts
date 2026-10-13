@@ -54,6 +54,21 @@ export type ChatStreamEvent =
       webSources: WebSourceRef[];
     };
 
+/**
+ * A failed model call: a message safe to show anyone, whether the same call may
+ * work if made again (the service was overloaded or the stream broke, not a bad
+ * request or setup), and a reason for the server log with no conversation content.
+ */
+export class ChatError extends Error {
+  constructor(
+    message: string,
+    readonly transient = false,
+    readonly reason = "",
+  ) {
+    super(message);
+  }
+}
+
 export interface ChatProvider {
   streamChat(request: ChatRequest): AsyncIterable<ChatStreamEvent>;
 }

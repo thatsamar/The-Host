@@ -8,12 +8,13 @@ import type {
   BetaToolUnion,
 } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import { renderContextBlock } from "./render";
-import type {
-  ChatContentPart,
-  ChatProvider,
-  ChatRequest,
-  ChatStreamEvent,
-  WebSourceRef,
+import {
+  ChatError,
+  type ChatContentPart,
+  type ChatProvider,
+  type ChatRequest,
+  type ChatStreamEvent,
+  type WebSourceRef,
 } from "./types";
 
 type Effort = "low" | "medium" | "high" | "xhigh" | "max";
@@ -62,6 +63,24 @@ function sourcesFrom(block: BetaContentBlock): WebSourceRef[] {
 export const unavailable = (name: string) => `${name} isn't available right now. Please try again a little later.`;
 export const busy = (name: string) => `${name} is busy right now. Try again in a minute.`;
 
+export const interrupted = (name: string) => `${name} was interrupted partway through. Try again.`;
+
+/** What went wrong, for the server log: kind, status, error type and request id. Never content. */
+export function failureReason(err: unknown): string {
+  if (err instanceof Anthropic.APIError) {
+    const kind = err.status ? "api" : "stream"; // errors sent partway through a stream carry no status
+    const type = err.type ?? (err.error as { error?: { type?: string } } | undefined)?.error?.type;
+    return [kind, err.status, type, err.requestID].filter(Boolean).join(" ");
+  }
+  if (err instanceof Error) return `${err.name}: ${err.message.slice(0, 120)}`;
+  return "unknown";
+}
+
+// Errors that say the service, not the request, failed: worth one more try.
+const TRANSIENT_STREAM_TYPES = new Set(["overloaded_error", "api_error", "timeout_error"]);
+// A stream cut off underneath the SDK surfaces as a plain error from fetch.
+const BROKEN_STREAM = /terminated|socket|ECONNRESET|other side closed|premature close/i;
+
 /** Turns SDK errors into short messages that are safe to show to anyone. */
 export function describeAnthropicError(err: unknown, name = "Gio"): Error {
   if (err instanceof Anthropic.APIUserAbortError) {
@@ -69,20 +88,29 @@ export function describeAnthropicError(err: unknown, name = "Gio"): Error {
     e.name = "AbortError";
     return e;
   }
+  const reason = failureReason(err);
   if (err instanceof Anthropic.APIConnectionError) {
-    return new Error(`Couldn't reach ${name}. Check your connection and try again.`);
+    return new ChatError(`Couldn't reach ${name}. Check your connection and try again.`, true, reason);
   }
-  if (err instanceof Anthropic.RateLimitError) return new Error(busy(name));
+  if (err instanceof Anthropic.RateLimitError) return new ChatError(busy(name), false, reason);
   if (err instanceof Anthropic.APIError) {
-    if (err.status === 529 || err.status === 503) return new Error(busy(name));
-    if (err.status === 413) return new Error("That's too much to send at once. Try fewer photos.");
-    return new Error(unavailable(name));
+    if (!err.status) {
+      // Sent partway through the answer, e.g. the model was overloaded mid-stream.
+      const type = err.type ?? "";
+      if (type === "overloaded_error") return new ChatError(busy(name), true, reason);
+      if (TRANSIENT_STREAM_TYPES.has(type)) return new ChatError(interrupted(name), true, reason);
+      return new ChatError(unavailable(name), false, reason);
+    }
+    // The SDK has already retried overloaded and server errors before this point.
+    if (err.status === 529 || err.status === 503) return new ChatError(busy(name), false, reason);
+    if (err.status === 413) return new ChatError("That's too much to send at once. Try fewer photos.", false, reason);
+    return new ChatError(unavailable(name), false, reason);
   }
   if (err instanceof Error && err.name === "AbortError") return err;
+  if (err instanceof Error && BROKEN_STREAM.test(err.message)) return new ChatError(interrupted(name), true, reason);
   // Anything else (a mangled key failing inside fetch, a bug) reads the same
   // to the person asking; the specifics go to the server log.
-  console.error("Chat request failed:", err instanceof Error ? err.message : err);
-  return new Error(unavailable(name));
+  return new ChatError(unavailable(name), false, reason);
 }
 
 export class AnthropicChatProvider implements ChatProvider {
@@ -96,9 +124,13 @@ export class AnthropicChatProvider implements ChatProvider {
     try {
       yield* this.run(request);
     } catch (err) {
+      const described = describeAnthropicError(err, this.options.name);
       // The person asking sees a plain message; this is where the reason goes.
-      if (err instanceof Anthropic.APIError) console.error("Anthropic chat error", err.status, err.message);
-      throw describeAnthropicError(err, this.options.name);
+      if (described.name !== "AbortError") {
+        const detail = err instanceof Error ? err.message.slice(0, 200) : String(err);
+        console.error("Anthropic chat error", failureReason(err), detail);
+      }
+      throw described;
     }
   }
 
