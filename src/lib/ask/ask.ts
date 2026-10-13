@@ -1,5 +1,6 @@
-import type { AnswerPhase, ChatProvider, WebSourceRef } from "@/lib/ai/types";
+import { ChatError, type AnswerPhase, type ChatProvider, type FailureInfo, type WebSourceRef } from "@/lib/ai/types";
 import type { Companion } from "@/lib/companions/types";
+import { safeToken } from "@/lib/diagnostics";
 import { assemblePrompt, type AskTurn } from "./prompt";
 
 export type AskEvent =
@@ -10,12 +11,38 @@ export type AskEvent =
   | { type: "done" }
   | { type: "error"; message: string };
 
+/** What the page reads: the answer's events, plus a heartbeat while nothing else is happening. */
+export type StreamEvent = AskEvent | { type: "alive" };
+
+/** How an answer ended, for the server log. Never any of the conversation's content. */
+export interface AnswerInfo {
+  stopReason: string | null;
+  outputTokens?: number;
+  searches: number;
+  /** The model that wrote the answer, which a fallback can change. */
+  model?: string;
+  /** Paused turns resumed to finish it. */
+  resumes?: number;
+}
+
+export const NO_ANSWER = "No answer came back. Try again.";
+export const timeLimitMessage = (name: string) => `${name} ran out of time before finishing this answer. Try again.`;
+export const LENGTH_LIMIT = "This answer reached its length limit before it finished.";
+
 /**
  * Answers the latest question in a visit's conversation. Nothing is read from
  * or written to storage: the conversation arrives whole with each request.
  */
 export async function* ask(
-  deps: { provider: ChatProvider; companion: Companion; webSearch?: boolean; signal?: AbortSignal },
+  deps: {
+    provider: ChatProvider;
+    companion: Companion;
+    webSearch?: boolean;
+    signal?: AbortSignal;
+    onFinish?: (info: AnswerInfo) => void;
+    /** A failed model call, as the log records it. */
+    onFailure?: (failure: FailureInfo) => void;
+  },
   turns: AskTurn[],
 ): AsyncGenerator<AskEvent> {
   const request = assemblePrompt({ companion: deps.companion, turns, webSearch: deps.webSearch });
@@ -23,14 +50,39 @@ export async function* ask(
     yield { type: "error", message: "Add a photo or a question." };
     return;
   }
+  // One model call per question: nothing here resends it. A long answer needs
+  // most of the time limit, and a second call would be paid for again.
+  let wrote = false;
   try {
     for await (const event of deps.provider.streamChat({ ...request, signal: deps.signal })) {
-      if (event.type === "text" || event.type === "phase") yield event;
-      else if (event.type === "web_search") yield { type: "searching", query: event.query };
+      if (event.type === "text" || event.type === "phase") {
+        if (event.type === "text" && event.text) wrote = true;
+        yield event;
+      } else if (event.type === "web_search") yield { type: "searching", query: event.query };
       else if (event.type === "web_results") yield { type: "sources", sources: event.sources };
+      else if (event.type === "done") {
+        const outputTokens = event.usage.output_tokens;
+        deps.onFinish?.({
+          stopReason: event.stopReason,
+          outputTokens: typeof outputTokens === "number" ? outputTokens : undefined,
+          searches: event.webSearches.length,
+          model: safeToken(event.model),
+          resumes: event.resumes,
+        });
+        // An answer that never started, or was cut off, must say so rather than look finished.
+        if (!wrote) {
+          yield { type: "error", message: NO_ANSWER };
+          return;
+        }
+        if (event.stopReason === "max_tokens") {
+          yield { type: "error", message: LENGTH_LIMIT };
+          return;
+        }
+      }
     }
     yield { type: "done" };
   } catch (err) {
+    if (err instanceof ChatError) deps.onFailure?.(err.failure);
     yield { type: "error", message: errorMessage(err) };
   }
 }

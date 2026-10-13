@@ -7,12 +7,13 @@ import { ArrowUpIcon, CameraIcon, SquareIcon, XIcon } from "lucide-react";
 import { signOut } from "@/app/login/actions";
 import type { CompanionCopy } from "@/lib/companions/types";
 import type { AnswerPhase, WebSourceRef } from "@/lib/ai/types";
-import type { AskEvent } from "@/lib/ask/ask";
+import type { StreamEvent } from "@/lib/ask/ask";
 import type { AnswerSnapshot } from "@/lib/ask/relay";
 import { fitToBudget } from "@/lib/ask/budget";
 import { readNdjson } from "@/lib/ask/ndjson";
 import { PHOTO_ACCEPT, preparePhoto, type PreparedPhoto } from "@/lib/ask/photos";
 import { MAX_PHOTOS_PER_TURN, type AskTurn } from "@/lib/ask/prompt";
+import { connectionAbandoned, recoverAnswer, type SavedRead } from "@/lib/ask/recovery";
 import { cn } from "@/lib/utils";
 
 interface StagedPhoto {
@@ -20,6 +21,15 @@ interface StagedPhoto {
   previewUrl: string;
   photo?: PreparedPhoto;
   error?: string;
+}
+
+/** A question set aside, whole, so the text box can hold another: its words and photos as they were. */
+interface SavedDraft {
+  key: string;
+  text: string;
+  staged: StagedPhoto[];
+  /** Why it was set aside: a question too large to send, or a draft switched out. */
+  tooLarge: boolean;
 }
 
 interface Turn {
@@ -32,6 +42,8 @@ interface Turn {
   progress?: Progress;
   sources?: WebSourceRef[];
   error?: string;
+  /** When the question was sent, to say so if the answer is slow to start. */
+  sentAt?: number;
 }
 
 type Progress = "sending" | AnswerPhase | "reconnecting";
@@ -51,20 +63,26 @@ interface InFlight {
   stopped: boolean;
   /** Collecting the answer from the server rather than streaming it live. */
   recovering: boolean;
+  /** When the server answered the request (headers arrived); its time limit runs from about then. */
+  connectedAt?: number;
+  /** Size of the request, to allow for uploading it on a slow connection. */
+  bodyBytes: number;
   lastEvent: number;
+  /** The server ended this answer itself, so there's nothing left to stop. */
+  settled: boolean;
 }
 
-type Outcome = "answered" | "failed" | "stopped" | "lost";
+type Outcome = "answered" | "failed" | "stopped" | "lost" | "too-large";
 
-// After returning to the page, a stream that has said nothing for this long is
-// treated as dropped and the answer is collected from the server instead.
+// After returning to the page, an established stream that has said nothing for
+// this long is treated as dropped and the answer is collected from the server.
 const STALL_MS = 2500;
-const RECOVERY_POLL_MS = 1200;
-// A little longer than the server's own limit on one answer.
-const RECOVERY_WINDOW_MS = 6 * 60_000;
-// Consecutive "not found" replies before deciding the question never arrived.
-const RECOVERY_MISSES = 5;
-const LOST_MESSAGE = "The connection dropped before the answer arrived. Try again.";
+const WATCHDOG_MS = 5000;
+const CHECK_TIMEOUT_MS = 10_000;
+const LOST_MESSAGE = "The connection dropped before the answer finished. Try again.";
+const TOO_LARGE_MESSAGE = "Those photos are too large to send together. Remove one or more and send again.";
+const TOO_LARGE_SAVED_MESSAGE =
+  "That question's photos are too large to send together. It's saved below the box: switch to it to remove a photo.";
 
 let counter = 0;
 const nextKey = () => `k${++counter}`;
@@ -90,9 +108,10 @@ export function Studio({
   const [text, setText] = useState("");
   const [staged, setStaged] = useState<StagedPhoto[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
+  // Questions set aside so the text box can hold another; each can be switched back in.
+  const [saved, setSaved] = useState<SavedDraft[]>([]);
   const [busy, setBusy] = useState(false);
   const inFlight = useRef<InFlight | null>(null);
-  const lastRequest = useRef<InFlight | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -106,7 +125,9 @@ export function Studio({
       if (document.visibilityState !== "visible" || !live || live.recovering) return;
       const returnedAt = Date.now();
       setTimeout(() => {
-        if (inFlight.current === live && !live.stopped && !live.recovering && live.lastEvent < returnedAt) {
+        // A request still uploading has its own, size-aware timeout; don't cut it off here.
+        const quiet = live.connectedAt !== undefined && live.lastEvent < returnedAt;
+        if (inFlight.current === live && !live.stopped && !live.recovering && quiet) {
           live.controller.abort();
         }
       }, STALL_MS);
@@ -129,15 +150,20 @@ export function Studio({
         const key = nextKey();
         const previewUrl = URL.createObjectURL(file);
         setStaged((s) => [...s, { key, previewUrl }]);
+        // The photo may have been set aside with its draft by the time it's ready.
+        const updatePhoto = (fn: (s: StagedPhoto[]) => StagedPhoto[]) => {
+          setStaged(fn);
+          setSaved((all) => all.map((d) => ({ ...d, staged: fn(d.staged) })));
+        };
         preparePhoto(file).then(
           (photo) => {
             URL.revokeObjectURL(previewUrl);
-            setStaged((s) => s.map((p) => (p.key === key ? { ...p, photo, previewUrl: photo.previewUrl } : p)));
+            updatePhoto((s) => s.map((p) => (p.key === key ? { ...p, photo, previewUrl: photo.previewUrl } : p)));
           },
           (err: unknown) => {
             // Drop the photo and say why, rather than leaving a dead thumbnail.
             URL.revokeObjectURL(previewUrl);
-            setStaged((s) => s.filter((p) => p.key !== key));
+            updatePhoto((s) => s.filter((p) => p.key !== key));
             setNotice(err instanceof Error ? err.message : "Couldn't read that photo.");
           },
         );
@@ -150,7 +176,7 @@ export function Studio({
 
   const update = (key: string, fn: (t: Turn) => Turn) => setThread((all) => all.map((t) => (t.key === key ? fn(t) : t)));
 
-  const apply = (key: string, event: AskEvent) => {
+  const apply = (key: string, event: StreamEvent) => {
     if (event.type === "phase") update(key, (t) => ({ ...t, progress: event.phase }));
     else if (event.type === "searching") update(key, (t) => ({ ...t, progress: "searching" }));
     else if (event.type === "text") update(key, (t) => ({ ...t, text: t.text + event.text }));
@@ -159,33 +185,52 @@ export function Studio({
   };
 
   /** Streams the answer live; "lost" means the connection went before the answer finished. */
-  const stream = async (live: InFlight, key: string, turns: AskTurn[]): Promise<Outcome> => {
+  const stream = async (live: InFlight, key: string, body: string): Promise<Outcome> => {
+    // Nothing at all for too long on a visible page (allowing for uploading the
+    // photos): stop waiting on this connection and collect the answer instead.
+    const watchdog = setInterval(() => {
+      if (live.stopped || live.recovering || document.visibilityState !== "visible") return;
+      const state = { connected: live.connectedAt !== undefined, lastEventAt: live.lastEvent, bodyBytes: live.bodyBytes };
+      if (connectionAbandoned({ ...state, now: Date.now() })) live.controller.abort();
+    }, WATCHDOG_MS);
+    try {
+      return await streamOnce(live, key, body);
+    } finally {
+      clearInterval(watchdog);
+    }
+  };
+
+  const streamOnce = async (live: InFlight, key: string, body: string): Promise<Outcome> => {
     let response: Response;
     try {
       response = await fetch("/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: live.id, turns }),
+        body,
         signal: live.controller.signal,
       });
     } catch {
       return live.stopped ? "stopped" : "lost";
     }
     if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      const message =
-        body.error ??
-        (response.status === 413 ? "Those photos are too large to send together. Try fewer." : `Request failed (${response.status})`);
-      update(key, (t) => ({ ...t, error: message }));
+      // The server never started an answer, so there's nothing to stop.
+      live.settled = true;
+      if (response.status === 413) return "too-large";
+      const reply = await response.json().catch(() => ({}));
+      update(key, (t) => ({ ...t, error: reply.error ?? "Something went wrong on our side. Try again." }));
       return "failed";
     }
+    live.connectedAt = live.lastEvent = Date.now();
     try {
-      for await (const event of readNdjson<AskEvent>(response.body!)) {
+      for await (const event of readNdjson<StreamEvent>(response.body!)) {
         if (live.stopped) return "stopped";
         live.lastEvent = Date.now();
         apply(key, event);
         if (event.type === "done") return "answered";
-        if (event.type === "error") return event.message === "Stopped." ? "stopped" : "failed";
+        if (event.type === "error") {
+          live.settled = true;
+          return event.message === "Stopped." ? "stopped" : "failed";
+        }
       }
     } catch {
       if (live.stopped) return "stopped";
@@ -193,99 +238,186 @@ export function Studio({
     return "lost";
   };
 
+  /** Reads the saved answer once, with its own timeout so a dead connection can't hold up the next read. */
+  const readSaved = async (live: InFlight): Promise<SavedRead> => {
+    const check = new AbortController();
+    const timer = setTimeout(() => check.abort(), CHECK_TIMEOUT_MS);
+    const onStop = () => check.abort();
+    live.controller.signal.addEventListener("abort", onStop, { once: true });
+    try {
+      const res = await fetch(`/api/ask/${live.id}`, { cache: "no-store", signal: check.signal });
+      if (res.status === 404) return { status: "missing" };
+      if (!res.ok) return { status: "unreachable" };
+      return { status: "found", saved: (await res.json()) as AnswerSnapshot };
+    } catch {
+      return { status: "unreachable" };
+    } finally {
+      clearTimeout(timer);
+      live.controller.signal.removeEventListener("abort", onStop);
+    }
+  };
+
   /** Collects an answer the server kept writing while the page was away. */
   const recover = async (live: InFlight, key: string): Promise<Outcome> => {
     update(key, (t) => ({ ...t, progress: "reconnecting" }));
     live.recovering = true;
     live.controller = new AbortController();
-    const giveUpAt = Date.now() + RECOVERY_WINDOW_MS;
-    let misses = 0;
-    while (!live.stopped && Date.now() < giveUpAt && misses < RECOVERY_MISSES) {
-      if (document.visibilityState === "visible") {
-        try {
-          const res = await fetch(`/api/ask/${live.id}`, { cache: "no-store", signal: live.controller.signal });
-          if (res.status === 404) misses++;
-          else if (res.ok) {
-            misses = 0;
-            const saved: AnswerSnapshot = await res.json();
-            if (live.stopped) break;
-            // The saved copy can trail what already arrived live; keep whichever is further along.
-            update(key, (t) => ({
-              ...t,
-              text: saved.text.length > t.text.length ? saved.text : t.text,
-              sources: saved.sources.length > (t.sources?.length ?? 0) ? saved.sources : t.sources,
-              progress: saved.phase ?? t.progress,
-            }));
-            if (saved.done) {
-              if (!saved.error) return "answered";
-              update(key, (t) => ({ ...t, error: saved.error }));
-              return saved.error === "Stopped." ? "stopped" : "failed";
-            }
-          }
-        } catch {
-          // Still offline or just resumed; try again shortly.
-        }
-      }
-      await wait(RECOVERY_POLL_MS, live.controller.signal);
+    const result = await recoverAnswer({
+      connectedAt: live.connectedAt,
+      read: () => readSaved(live),
+      visible: () => document.visibilityState === "visible",
+      wait: (ms) => wait(ms, live.controller.signal),
+      now: () => Date.now(),
+      stopped: () => live.stopped,
+      // The saved copy can trail what already arrived live; keep whichever is further along.
+      onProgress: (saved) =>
+        update(key, (t) => ({
+          ...t,
+          text: saved.text.length > t.text.length ? saved.text : t.text,
+          sources: saved.sources.length > (t.sources?.length ?? 0) ? saved.sources : t.sources,
+          progress: saved.phase ?? t.progress,
+        })),
+    });
+    if (result.outcome !== "failed") return result.outcome;
+    // What was written so far stays; the reason goes below it.
+    if (result.reason === "server") {
+      live.settled = true;
+      update(key, (t) => ({ ...t, error: result.error }));
+    } else {
+      const message =
+        result.reason === "stale" ? `${companion.name} stopped responding before the answer finished. Try again.` : LOST_MESSAGE;
+      update(key, (t) => ({ ...t, error: message }));
     }
-    if (live.stopped) return "stopped";
-    update(key, (t) => ({ ...t, error: LOST_MESSAGE }));
     return "failed";
   };
 
-  const ask = async () => {
+  /** Asks the server to stop an answer, in case it is still being written for no one. */
+  const stopOnServer = (id: string) => void fetch(`/api/ask/${id}`, { method: "DELETE", keepalive: true }).catch(() => {});
+
+  // What's in the text box now, for putting a question back without overwriting new work.
+  const draft = useRef({ text, staged });
+  draft.current = { text, staged };
+
+  /**
+   * Hands back a question that can't be sent as is (its photos are too large) to
+   * edit, rather than offering a Retry that would send the same photos again. It
+   * leaves the conversation, so it isn't sent again as history. It goes into the
+   * text box if that's empty; otherwise whatever the person has started stays
+   * there and this question is saved below it, whole, to switch back in.
+   */
+  const putBack = (answerKey: string, question: string, photos: PreparedPhoto[]) => {
+    setThread((all) => {
+      const i = all.findIndex((t) => t.key === answerKey);
+      return i < 1 ? all : [...all.slice(0, i - 1), ...all.slice(i + 1)];
+    });
+    const staging = photos.map((photo) => ({ key: nextKey(), previewUrl: photo.previewUrl, photo }));
+    if (draft.current.text.trim() || draft.current.staged.length) {
+      setSaved((all) => [...all, { key: nextKey(), text: question, staged: staging, tooLarge: true }]);
+      setNotice(TOO_LARGE_SAVED_MESSAGE);
+    } else {
+      setText(question);
+      setStaged(staging);
+      setNotice(TOO_LARGE_MESSAGE);
+    }
+  };
+
+  /** Puts a saved question in the text box, saving whatever was there in its place. */
+  const switchTo = (key: string) => {
+    const target = saved.find((d) => d.key === key);
+    if (!target) return;
+    const current: SavedDraft = { key: nextKey(), text, staged, tooLarge: false };
+    const keep = text.trim() || staged.length;
+    setSaved((all) => [...all.filter((d) => d.key !== key), ...(keep ? [current] : [])]);
+    setText(target.text);
+    setStaged(target.staged);
+    setNotice(null);
+    inputRef.current?.focus();
+  };
+
+  const discard = (key: string) => setSaved((all) => all.filter((d) => d.key !== key));
+
+  const ask = () => {
     if (!canSend) return;
-    const question = text.trim();
-    const photos = ready.map((p) => p.photo!);
+    if (send(text.trim(), ready.map((p) => p.photo!), thread)) {
+      setText("");
+      setStaged((s) => s.filter((p) => !p.photo));
+    }
+  };
+
+  /** Sends the same question and photos again, in place of the answer that failed. */
+  const retry = (answerKey: string) => {
+    const i = thread.findIndex((t) => t.key === answerKey);
+    const question = thread[i - 1];
+    if (busy || i < 1 || question?.role !== "user") return;
+    // Too large to send as is: hand it back for editing.
+    if (!send(question.text, question.photos ?? [], [...thread.slice(0, i - 1), ...thread.slice(i + 1)])) {
+      putBack(answerKey, question.text, question.photos ?? []);
+    }
+  };
+
+  /** Starts a question after the given conversation; false if it can't be sent as is. */
+  const send = (question: string, photos: PreparedPhoto[], before: Turn[]): boolean => {
     const userTurn: Turn = { key: nextKey(), role: "user", text: question, photos };
-    const answer: Turn = { key: nextKey(), role: "assistant", text: "", pending: true, progress: "sending" };
+    const sentAt = Date.now();
+    const answer: Turn = { key: nextKey(), role: "assistant", text: "", pending: true, progress: "sending", sentAt };
 
     // Earlier photos go along small; this question's photos go at full size.
     let turns: AskTurn[];
     try {
       turns = fitToBudget([
-        ...thread
+        ...before
           .filter((t) => !t.error && (t.role === "user" || t.text.trim()))
           .map((t) => ({ role: t.role, text: t.text, images: t.photos?.map((p) => p.small) })),
         { role: "user", text: question, images: photos.map((p) => p.full) },
       ]);
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Those photos are too large to send together.");
-      return;
+      return false;
     }
 
     following.current = true;
-    setThread((all) => [...all, userTurn, answer]);
-    setText("");
-    setStaged((s) => s.filter((p) => !p.photo));
+    setThread([...before, userTurn, answer]);
     setNotice(null);
     setBusy(true);
-    const live: InFlight = { id: crypto.randomUUID(), controller: new AbortController(), stopped: false, recovering: false, lastEvent: Date.now() };
+    const id = crypto.randomUUID();
+    const body = JSON.stringify({ id, turns });
+    const live: InFlight = {
+      id,
+      controller: new AbortController(),
+      stopped: false,
+      recovering: false,
+      bodyBytes: body.length,
+      lastEvent: sentAt,
+      settled: false,
+    };
     inFlight.current = live;
-    lastRequest.current = live;
+    void run(live, answer.key, body, question, photos);
+    return true;
+  };
 
+  const run = async (live: InFlight, key: string, body: string, question: string, photos: PreparedPhoto[]) => {
     let outcome: Outcome;
     try {
-      outcome = await stream(live, answer.key, turns);
-      if (outcome === "lost") outcome = await recover(live, answer.key);
+      outcome = await stream(live, key, body);
+      if (outcome === "lost") outcome = await recover(live, key);
     } catch (err) {
-      update(answer.key, (t) => ({ ...t, error: err instanceof Error ? err.message : "Something went wrong." }));
+      update(key, (t) => ({ ...t, error: err instanceof Error ? err.message : "Something went wrong." }));
       outcome = "failed";
     }
 
-    if (outcome === "stopped") update(answer.key, (t) => ({ ...t, error: t.error ?? "Stopped." }));
-    update(answer.key, (t) => ({ ...t, pending: false, progress: undefined }));
     // After New, a fresh question may already be in flight; leave its state alone.
-    if (inFlight.current === live) {
+    const current = inFlight.current === live;
+    if (outcome === "stopped") update(key, (t) => ({ ...t, error: t.error ?? "Stopped." }));
+    // The page gave up waiting; make sure the server isn't still writing it, so a
+    // Retry doesn't leave two answers running. An answer the server ended itself
+    // has nothing left to stop.
+    if (outcome === "failed" && !live.stopped && !live.settled) stopOnServer(live.id);
+    update(key, (t) => ({ ...t, pending: false, progress: undefined }));
+    // Sending the same photos again would fail the same way: hand them back to edit.
+    if (outcome === "too-large" && current) putBack(key, question, photos);
+    if (current) {
       inFlight.current = null;
       setBusy(false);
-    }
-    // Put the question back so it can be sent again with one tap.
-    if (outcome === "failed" && live === lastRequest.current) {
-      setText((current) => current || question);
-      setStaged((current) =>
-        current.length ? current : photos.map((photo) => ({ key: nextKey(), previewUrl: photo.previewUrl, photo })),
-      );
     }
   };
 
@@ -295,15 +427,15 @@ export function Studio({
     if (!live) return;
     live.stopped = true;
     live.controller.abort();
-    void fetch(`/api/ask/${live.id}`, { method: "DELETE", keepalive: true }).catch(() => {});
+    stopOnServer(live.id);
   };
 
   const startOver = () => {
-    lastRequest.current = null;
     stop();
     setThread([]);
     setText("");
     setStaged([]);
+    setSaved([]);
     setNotice(null);
     inputRef.current?.focus();
   };
@@ -426,6 +558,32 @@ export function Studio({
 
   const hint = notice ? <p className="mt-3 px-4 text-center text-sm text-warn">{notice}</p> : null;
 
+  // Questions set aside, each whole, to switch back into the text box.
+  const savedList = saved.length ? (
+    <ul aria-label="Saved questions" className="mt-3 space-y-2">
+      {saved.map((d) => (
+        <li key={d.key} className="flex items-center gap-3 rounded-2xl bg-sunk px-4 py-2 text-sm text-ink">
+          <span className="min-w-0 flex-1 truncate">
+            <span className="text-ink-muted">{d.tooLarge ? "Too large to send: " : "Saved draft: "}</span>
+            {d.text.trim() || "Photos only"}
+            {d.staged.length ? ` · ${d.staged.length} photo${d.staged.length === 1 ? "" : "s"}` : ""}
+          </span>
+          <button type="button" onClick={() => switchTo(d.key)} className="shrink-0 font-medium underline underline-offset-4">
+            Switch
+          </button>
+          <button
+            type="button"
+            onClick={() => discard(d.key)}
+            aria-label="Discard saved question"
+            className="grid size-6 shrink-0 place-items-center rounded-full text-ink-muted hover:text-ink"
+          >
+            <XIcon className="size-3.5" />
+          </button>
+        </li>
+      ))}
+    </ul>
+  ) : null;
+
   if (!started) {
     return (
       <div className="flex min-h-dvh flex-col">
@@ -445,6 +603,7 @@ export function Studio({
             </p>
             <div className="mt-10">{composer}</div>
             {hint}
+            {savedList}
           </div>
         </main>
         <div className="fixed inset-x-0 bottom-0 flex justify-center gap-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-sm text-ink-muted">
@@ -481,7 +640,17 @@ export function Studio({
         className="min-h-0 flex-1 overflow-y-auto"
       >
         <div className="mx-auto flex w-full max-w-[640px] flex-col gap-6 px-4 py-8">
-          {thread.map((t) => (t.role === "user" ? <Question key={t.key} turn={t} /> : <Answer key={t.key} turn={t} />))}
+          {thread.map((t, i) =>
+            t.role === "user" ? (
+              <Question key={t.key} turn={t} />
+            ) : (
+              <Answer
+                key={t.key}
+                turn={t}
+                onRetry={!busy && t.error && i === thread.length - 1 ? () => retry(t.key) : undefined}
+              />
+            ),
+          )}
           <div ref={endRef} />
         </div>
       </main>
@@ -489,6 +658,7 @@ export function Studio({
       <div className="mx-auto w-full max-w-[640px] shrink-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4">
         {composer}
         {hint}
+        {savedList}
       </div>
     </div>
   );
@@ -514,7 +684,18 @@ function Question({ turn }: { turn: Turn }) {
   );
 }
 
-function Answer({ turn }: { turn: Turn }) {
+// After this long with nothing written yet, say that's expected for a big question.
+const SLOW_START_MS = 40_000;
+
+function Answer({ turn, onRetry }: { turn: Turn; onRetry?: () => void }) {
+  const waiting = !!turn.pending && !turn.text && turn.sentAt !== undefined;
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (!waiting) return;
+    const timer = setTimeout(() => setSlow(true), Math.max(0, turn.sentAt! + SLOW_START_MS - Date.now()));
+    return () => clearTimeout(timer);
+  }, [waiting, turn.sentAt]);
+
   return (
     <div className="min-w-0">
       {turn.text ? (
@@ -536,9 +717,21 @@ function Answer({ turn }: { turn: Turn }) {
       {turn.pending ? (
         <p role="status" className={cn("leading-relaxed text-ink-muted", turn.text ? "mt-4 text-sm" : "text-[15px]")}>
           <span className="gio-dots">{PROGRESS_LABEL[turn.progress ?? "sending"]}</span>
+          {slow && waiting ? (
+            <span className="mt-1 block text-sm">Detailed questions can take a few minutes.</span>
+          ) : null}
         </p>
       ) : null}
-      {turn.error ? <p className="mt-3 text-[15px] text-warn">{turn.error}</p> : null}
+      {turn.error ? (
+        <div className={cn("flex flex-wrap items-baseline gap-x-4 gap-y-2", turn.text ? "mt-4 border-t border-ink/10 pt-3" : "mt-3")}>
+          <p className="text-[15px] text-warn">{turn.error}</p>
+          {onRetry ? (
+            <button type="button" onClick={onRetry} className="text-[15px] font-medium text-ink underline underline-offset-4">
+              Retry
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       {!turn.pending && turn.text.trim() ? (
         <div className="mt-5 flex flex-wrap items-start gap-x-5 gap-y-2 text-sm text-ink-muted">
           <CopyButton text={turn.text} />

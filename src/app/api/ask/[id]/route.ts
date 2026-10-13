@@ -1,6 +1,7 @@
 import { signInRequired } from "@/lib/auth/access";
 import { answerStore, isAnswerId, loadAnswer, requestStop } from "@/lib/ask/relay";
 import { createClient, getUserId } from "@/lib/supabase/server";
+import { errorClass } from "@/lib/diagnostics";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
@@ -20,7 +21,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     if (!answer) return Response.json({ error: "Not found", store: answerStore() }, { status: 404, headers });
     return Response.json(answer, { headers });
   } catch (err) {
-    console.error("Couldn't read a saved answer:", err instanceof Error ? err.message : err);
+    console.error("Couldn't read a saved answer", JSON.stringify({ error: errorClass(err) }));
     return Response.json({ error: "Try again." }, { status: 503, headers: NO_STORE });
   }
 }
@@ -30,7 +31,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   const { id } = await params;
   if (!isAnswerId(id) || !(await allowed())) return new Response(null, { status: 404, headers: NO_STORE });
   await requestStop(id).catch((err) =>
-    console.error("Couldn't pass on a stop:", err instanceof Error ? err.message : err),
+    console.error("Couldn't pass on a stop", JSON.stringify({ error: errorClass(err) })),
   );
   return new Response(null, { status: 204, headers: NO_STORE });
 }

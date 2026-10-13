@@ -52,7 +52,39 @@ export type ChatStreamEvent =
       usage: Record<string, unknown>;
       webSearches: string[];
       webSources: WebSourceRef[];
+      /** Paused turns resumed to finish this answer. */
+      resumes?: number;
     };
+
+/** A failed model call as the server log records it: fixed codes and numbers, no message text. */
+export interface FailureInfo {
+  /** What kind of failure, e.g. "stream_error", "api_status", "connection", "stream_terminated". */
+  code: string;
+  /** HTTP status of a failed request. */
+  status?: number;
+  /** The provider's own error type, e.g. "overloaded_error". */
+  type?: string;
+  /** The provider's id for the failed request, to look it up with them. */
+  requestId?: string;
+  /** The error's class name, for failures with no better code. */
+  error?: string;
+  /** What the model was doing when it failed. */
+  phase?: AnswerPhase;
+  /** Paused turns resumed before the failure. */
+  resumes?: number;
+  /** Whether another model had taken over the turn. */
+  fallback?: boolean;
+}
+
+/** A failed model call: a message safe to show anyone, and what the server log records about it. */
+export class ChatError extends Error {
+  constructor(
+    message: string,
+    readonly failure: FailureInfo = { code: "unexpected" },
+  ) {
+    super(message);
+  }
+}
 
 export interface ChatProvider {
   streamChat(request: ChatRequest): AsyncIterable<ChatStreamEvent>;

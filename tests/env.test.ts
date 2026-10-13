@@ -28,4 +28,14 @@ describe("serverEnv", () => {
       expect(String(err)).not.toContain("●");
     }
   });
+
+  it("lists the problem settings by name alone, for the server log", async () => {
+    const serverEnv = await load({ ANTHROPIC_API_KEY: "●●●●●●●●", CHAT_EFFORT: "turbo" });
+    try {
+      serverEnv();
+      expect.unreachable();
+    } catch (err) {
+      expect((err as { settings?: string[] }).settings?.sort()).toEqual(["ANTHROPIC_API_KEY", "CHAT_EFFORT"]);
+    }
+  });
 });

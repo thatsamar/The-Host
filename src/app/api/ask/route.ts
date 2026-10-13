@@ -5,14 +5,25 @@ import { unavailable } from "@/lib/ai/anthropic";
 import { signInRequired } from "@/lib/auth/access";
 import { createRateLimiter, questionsPerHour, visitorKey } from "@/lib/ask/rate-limit";
 import { serverEnv } from "@/lib/env";
-import { ask, type AskEvent } from "@/lib/ask/ask";
+import { ask, timeLimitMessage, type AnswerInfo, type AskEvent, type StreamEvent } from "@/lib/ask/ask";
 import { AnswerRelay, isAnswerId } from "@/lib/ask/relay";
 import { currentCompanion } from "@/lib/companions";
 import { MAX_PHOTOS_PER_TURN } from "@/lib/ask/prompt";
 import { createClient, getUserId } from "@/lib/supabase/server";
+import { errorClass, safeToken } from "@/lib/diagnostics";
+import type { FailureInfo } from "@/lib/ai/types";
 
 // Long answers with web search can take a while.
 export const maxDuration = 300;
+
+// Vercel ends the function at maxDuration without warning, which would leave
+// the answer unfinished with nothing to say so. Stop a little before that
+// instead, so the page always gets an ending and keeps what was written.
+const ANSWER_TIME_LIMIT_MS = (maxDuration - 20) * 1000;
+// Enough phase changes to see where a long answer spent its time.
+const MAX_LOGGED_PHASES = 60;
+// Something goes down the line at least this often, so a dead connection shows.
+const HEARTBEAT_MS = 10_000;
 
 const imageSchema = z.object({
   mediaType: z.enum(["image/jpeg", "image/png", "image/webp", "image/gif"]),
@@ -37,6 +48,17 @@ const bodySchema = z.object({
 const limiter = createRateLimiter({ limit: questionsPerHour() });
 
 export async function POST(request: Request) {
+  try {
+    return await answer(request);
+  } catch (err) {
+    // Anything unexpected still gets a plain message; the log gets the error's class, never its text.
+    console.error("Ask route failed", JSON.stringify({ error: errorClass(err) }));
+    return Response.json({ error: "Something went wrong on our side. Try again." }, { status: 500 });
+  }
+}
+
+async function answer(request: Request): Promise<Response> {
+  const receivedAt = Date.now();
   if (signInRequired()) {
     const supabase = await createClient();
     if (!(await getUserId(supabase))) {
@@ -57,18 +79,20 @@ export async function POST(request: Request) {
 
   const companion = currentCompanion();
   let provider;
+  let env;
   try {
-    serverEnv();
+    env = serverEnv();
     provider = getChatProvider(companion);
   } catch (err) {
-    // Names the missing settings (never their values) in the server log.
-    console.error(`${companion.name} is misconfigured:`, err instanceof Error ? err.message : err);
+    // Names the missing or invalid settings, never their values, in the server log.
+    const settings = (err as { settings?: unknown }).settings;
+    console.error(`${companion.name} is misconfigured`, JSON.stringify({ error: errorClass(err), settings }));
     return Response.json({ error: unavailable(companion.name) }, { status: 503 });
   }
 
   const { id, turns } = parsed.data;
   const encoder = new TextEncoder();
-  const encode = (event: AskEvent) => encoder.encode(`${JSON.stringify(event)}\n`);
+  const encode = (event: StreamEvent) => encoder.encode(`${JSON.stringify(event)}\n`);
 
   if (!id) {
     // Without an answer id there's nothing to resume, so stop when the visitor goes.
@@ -97,19 +121,69 @@ export async function POST(request: Request) {
   const relay = new AnswerRelay(id, () => stop.abort());
   relay.begin();
   // Set while the visitor is still connected.
-  const live: { send?: (event: AskEvent) => void } = {};
+  const live: { send?: (event: StreamEvent) => void } = {};
+  // Timings and counts only, for the server log; never the conversation itself.
+  const latest = turns.at(-1)!;
+  const log: Record<string, unknown> = {
+    companion: companion.id,
+    turns: turns.length,
+    photos: latest.images?.length ?? 0,
+    photoChars: (latest.images ?? []).reduce((n, i) => n + i.data.length, 0),
+    textChars: latest.text.length,
+    // This environment's model settings (never the key), to compare deployments.
+    model: safeToken(env.CHAT_MODEL),
+    effort: env.CHAT_EFFORT,
+    webSearchMaxUses: env.WEB_SEARCH_MAX_USES ?? companion.webSearchMaxUses,
+  };
+  // Where the time went, even when the answer never finishes: each phase and when it began.
+  const phases: [string, number][] = [];
+  let answerChars = 0;
+  let searchesRun = 0;
+  let timedOut = false;
+  const timeLimit = setTimeout(() => {
+    timedOut = true;
+    stop.abort();
+  }, Math.max(0, ANSWER_TIME_LIMIT_MS - (Date.now() - receivedAt)));
+  const heartbeat = setInterval(() => {
+    relay.keepAlive();
+    live.send?.({ type: "alive" });
+  }, HEARTBEAT_MS);
+  const onFinish = (info: AnswerInfo) => Object.assign(log, info);
+  const onFailure = (failure: FailureInfo) => {
+    log.failure = { ...failure, atMs: Date.now() - receivedAt };
+  };
+
   const generation = (async () => {
+    let outcome = "answered";
     try {
-      for await (const event of ask({ provider, companion, signal: stop.signal }, turns)) {
+      for await (let event of ask({ provider, companion, signal: stop.signal, onFinish, onFailure }, turns)) {
+        if (event.type === "error") {
+          outcome = timedOut ? "time-limit" : event.message === "Stopped." ? "stopped" : "error";
+          if (timedOut) event = { type: "error", message: timeLimitMessage(companion.name) };
+        } else if (event.type === "phase") {
+          const atMs = Date.now() - receivedAt;
+          log.firstPhaseMs ??= atMs;
+          if (phases.at(-1)?.[0] !== event.phase && phases.length < MAX_LOGGED_PHASES) phases.push([event.phase, atMs]);
+        } else if (event.type === "text") {
+          log.firstTextMs ??= Date.now() - receivedAt;
+          answerChars += event.text.length;
+        } else if (event.type === "searching") searchesRun++;
         relay.push(event);
         live.send?.(event);
       }
     } catch (err) {
+      outcome = "error";
       const event: AskEvent = { type: "error", message: err instanceof Error ? err.message : "Something went wrong" };
       relay.push(event);
       live.send?.(event);
     } finally {
+      clearTimeout(timeLimit);
+      clearInterval(heartbeat);
       await relay.finish();
+      console.info(
+        "Answer finished",
+        JSON.stringify({ outcome, ms: Date.now() - receivedAt, connected: !!live.send, ...log, answerChars, searchesRun, phases }),
+      );
     }
   })();
   after(() => generation);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import Anthropic from "@anthropic-ai/sdk";
-import { AnthropicChatProvider, busy, describeAnthropicError, toAnthropicSystem, unavailable } from "@/lib/ai/anthropic";
+import { AnthropicChatProvider, busy, describeAnthropicError, interrupted, resumableContent, toAnthropicSystem, unavailable } from "@/lib/ai/anthropic";
+import { ChatError } from "@/lib/ai/types";
 import { gio } from "@/lib/companions/gio";
 import type { ChatRequest, ChatStreamEvent } from "@/lib/ai/types";
 import { assemblePrompt } from "@/lib/ask/prompt";
@@ -140,6 +141,42 @@ describe("AnthropicChatProvider", () => {
     expect(done.usage.output_tokens).toBe(40);
   });
 
+  it("resumes after a mid-turn fallback without what only the declining model can read", async () => {
+    const paused: Block[] = [
+      { type: "thinking", thinking: "", signature: "sig-a" },
+      { type: "server_tool_use", id: "s1", name: "web_search", input: { query: "clay soil shrubs" } },
+      { type: "web_search_tool_result", tool_use_id: "s1", content: [] },
+      { type: "server_tool_use", id: "s2", name: "web_search", input: { query: "drip kits" } },
+      { type: "text", text: "Start with drainage. " },
+      { type: "fallback", from: { model: "claude-opus-5-5" }, to: { model: "claude-opus-5" } },
+      { type: "thinking", thinking: "", signature: "sig-b" },
+      { type: "server_tool_use", id: "s3", name: "web_search", input: { query: "mulch" } },
+    ];
+    const { client, calls } = fakeClient([
+      { stop_reason: "pause_turn", content: paused },
+      { stop_reason: "end_turn", content: [{ type: "text", text: "Then plant." }] },
+    ]);
+    const provider = new AnthropicChatProvider(client, "claude-opus-5-5", options);
+    await collect(provider.streamChat(request));
+    const resumed = (calls[1].messages as { role: string; content: Block[] }[]).at(-1)!;
+    expect(resumed.role).toBe("assistant");
+    expect(resumed.content.map((b) => (b.type === "server_tool_use" ? `${b.type}:${b.id}` : b.type))).toEqual([
+      "server_tool_use:s1",
+      "web_search_tool_result",
+      "text",
+      "thinking", // after the switch: echoed as is
+      "server_tool_use:s3",
+    ]);
+  });
+
+  it("resumes without a fallback by sending the paused turn back unchanged", () => {
+    const content = [
+      { type: "thinking", thinking: "", signature: "x" },
+      { type: "text", text: "a", citations: null },
+    ] as Parameters<typeof resumableContent>[0];
+    expect(resumableContent(content)).toBe(content);
+  });
+
   it("turns a refusal into a readable notice", async () => {
     const { client } = fakeClient([{ stop_reason: "refusal", content: [] }]);
     const provider = new AnthropicChatProvider(client, "claude-opus-5-5", options);
@@ -169,6 +206,55 @@ describe("error handling", () => {
     } as unknown as Anthropic;
     const provider = new AnthropicChatProvider(failing, "m", options);
     await expect(collect(provider.streamChat(request))).rejects.toThrow("Couldn't reach Gio");
+  });
+});
+
+/** The real SDK over a fake network: starts thinking, then the API sends an error event mid-stream. */
+function midStreamFailure(errorType: string) {
+  const sse = [
+    ["message_start", { type: "message_start", message: { id: "m", type: "message", role: "assistant", model: "claude-opus-5-5", content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 1, output_tokens: 0 } } }],
+    ["content_block_start", { type: "content_block_start", index: 0, content_block: { type: "thinking", thinking: "", signature: "" } }],
+    ["ping", { type: "ping" }],
+    ["error", { type: "error", error: { type: errorType, message: "Overloaded" } }],
+  ]
+    .map(([event, data]) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+    .join("");
+  const fetch = async () =>
+    new Response(sse, { status: 200, headers: { "content-type": "text/event-stream", "request-id": "req_test123" } });
+  return new Anthropic({ apiKey: "test", fetch, maxRetries: 0 });
+}
+
+describe("errors partway through the answer", () => {
+  it("reports an overload mid-stream as busy, not as unavailable", async () => {
+    const provider = new AnthropicChatProvider(midStreamFailure("overloaded_error"), "m", options);
+    const err = await collect(provider.streamChat(request)).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ChatError);
+    expect((err as ChatError).message).toBe(busy("Gio"));
+    expect((err as ChatError).failure).toEqual({
+      code: "stream_error",
+      type: "overloaded_error",
+      requestId: "req_test123",
+      phase: "thinking",
+      resumes: 0,
+      fallback: false,
+    });
+  });
+
+  it("reports an internal error mid-stream as an interruption", async () => {
+    const provider = new AnthropicChatProvider(midStreamFailure("api_error"), "m", options);
+    const err = (await collect(provider.streamChat(request)).catch((e: unknown) => e)) as ChatError;
+    expect(err.message).toBe(interrupted("Gio"));
+  });
+
+  it("reports a mid-stream error that says the request itself is wrong as unavailable", async () => {
+    const provider = new AnthropicChatProvider(midStreamFailure("invalid_request_error"), "m", options);
+    const err = (await collect(provider.streamChat(request)).catch((e: unknown) => e)) as ChatError;
+    expect(err.message).toBe(unavailable("Gio"));
+  });
+
+  it("treats a stream cut off underneath the SDK as an interruption", () => {
+    const err = describeAnthropicError(new TypeError("terminated"), "Gio") as ChatError;
+    expect(err.message).toBe(interrupted("Gio"));
   });
 });
 

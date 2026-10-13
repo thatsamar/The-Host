@@ -39,6 +39,24 @@ class SlowProvider implements ChatProvider {
   }
 }
 
+/** Writes a little, then thinks in silence until stopped, like a long answer with photos. */
+class SilentProvider implements ChatProvider {
+  constructor(private readonly before = "") {}
+
+  async *streamChat(request: ChatRequest): AsyncIterable<ChatStreamEvent> {
+    yield { type: "phase", phase: "thinking" };
+    if (this.before) {
+      yield { type: "phase", phase: "writing" };
+      yield { type: "text", text: this.before };
+      yield { type: "phase", phase: "thinking" };
+    }
+    await new Promise<void>((resolve) => request.signal?.addEventListener("abort", () => resolve(), { once: true }));
+    const err = new Error("Stopped.");
+    err.name = "AbortError";
+    throw err;
+  }
+}
+
 const QUESTION = "Which chair for the reading corner?";
 const post = (id: string) =>
   POST(
@@ -69,7 +87,13 @@ describe("answer recovery", () => {
     await Promise.all(state.background);
     const { status, body } = await collect(id);
     expect(status).toBe(200);
-    expect(body).toEqual({ phase: "writing", text: "The low walnut one, with the linen seat.", sources: [], done: true });
+    expect(body).toEqual({
+      phase: "writing",
+      text: "The low walnut one, with the linen seat.",
+      sources: [],
+      done: true,
+      updatedAt: expect.any(Number),
+    });
   });
 
   it("saves the answer only, never the question or photos", async () => {
@@ -103,6 +127,73 @@ describe("answer recovery", () => {
     const { body } = await collect(id);
     expect(body).toMatchObject({ done: true, error: "Stopped." });
     expect(body!.text.length).toBeLessThan(pieces.join("").length);
+  });
+
+  it("ends an answer that runs too long with a message, before Vercel cuts the function off", async () => {
+    vi.useFakeTimers();
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      state.provider = new SilentProvider("Start with the south bed. ");
+      const id = crypto.randomUUID();
+      const res = await post(id);
+      const read = res.text();
+      await vi.advanceTimersByTimeAsync(279_000);
+      expect((await collect(id)).body).toMatchObject({ done: false });
+      await vi.advanceTimersByTimeAsync(2_000);
+      await Promise.all(state.background);
+
+      const lines = (await read).trim().split("\n").map((l) => JSON.parse(l));
+      expect(lines.at(-1)).toEqual({ type: "error", message: "Gio ran out of time before finishing this answer. Try again." });
+      // What was written stays, with the reason it ended.
+      expect((await collect(id)).body).toMatchObject({
+        text: "Start with the south bed. ",
+        done: true,
+        error: "Gio ran out of time before finishing this answer. Try again.",
+      });
+      // The log shows where the time went, though the answer never finished.
+      const finished = info.mock.calls.find((c) => c[0] === "Answer finished")!;
+      const record = JSON.parse(String(finished[1]));
+      expect(record).toMatchObject({ outcome: "time-limit", answerChars: 26, searchesRun: 0 });
+      expect(record.phases.map(([phase]: [string, number]) => phase)).toEqual(["thinking", "writing", "thinking"]);
+      expect(record.phases.at(-1)[1]).toBeLessThan(1_000);
+      expect(record.ms).toBeGreaterThanOrEqual(280_000);
+    } finally {
+      info.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it("sends a heartbeat while the model thinks in silence, and keeps the saved answer fresh", async () => {
+    vi.useFakeTimers();
+    try {
+      state.provider = new SilentProvider();
+      const id = crypto.randomUUID();
+      const res = await post(id);
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let received = "";
+      const pump = (async () => {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          received += decoder.decode(value);
+        }
+      })();
+      await vi.advanceTimersByTimeAsync(1_000);
+      const first = (await collect(id)).body!.updatedAt!;
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(received.match(/"alive"/g)?.length).toBe(2);
+      expect((await collect(id)).body!.updatedAt).toBeGreaterThan(first);
+
+      // Stop reaches the server even before the first word is written.
+      await DELETE(new Request(`http://localhost/api/ask/${id}`), params(id));
+      await vi.advanceTimersByTimeAsync(10_000);
+      await Promise.all(state.background);
+      await pump;
+      expect((await collect(id)).body).toMatchObject({ done: true, error: "Stopped." });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("says which store answered, so a deployment can be checked", async () => {
