@@ -225,12 +225,11 @@ function midStreamFailure(errorType: string) {
 }
 
 describe("errors partway through the answer", () => {
-  it("reports an overload mid-stream as busy and worth one more try, not as unavailable", async () => {
+  it("reports an overload mid-stream as busy, not as unavailable", async () => {
     const provider = new AnthropicChatProvider(midStreamFailure("overloaded_error"), "m", options);
     const err = await collect(provider.streamChat(request)).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ChatError);
     expect((err as ChatError).message).toBe(busy("Gio"));
-    expect((err as ChatError).transient).toBe(true);
     expect((err as ChatError).failure).toEqual({
       code: "stream_error",
       type: "overloaded_error",
@@ -241,24 +240,21 @@ describe("errors partway through the answer", () => {
     });
   });
 
-  it("reports an internal error mid-stream as an interruption worth one more try", async () => {
+  it("reports an internal error mid-stream as an interruption", async () => {
     const provider = new AnthropicChatProvider(midStreamFailure("api_error"), "m", options);
     const err = (await collect(provider.streamChat(request)).catch((e: unknown) => e)) as ChatError;
     expect(err.message).toBe(interrupted("Gio"));
-    expect(err.transient).toBe(true);
   });
 
-  it("does not retry a mid-stream error that says the request itself is wrong", async () => {
+  it("reports a mid-stream error that says the request itself is wrong as unavailable", async () => {
     const provider = new AnthropicChatProvider(midStreamFailure("invalid_request_error"), "m", options);
     const err = (await collect(provider.streamChat(request)).catch((e: unknown) => e)) as ChatError;
     expect(err.message).toBe(unavailable("Gio"));
-    expect(err.transient).toBe(false);
   });
 
   it("treats a stream cut off underneath the SDK as an interruption", () => {
     const err = describeAnthropicError(new TypeError("terminated"), "Gio") as ChatError;
     expect(err.message).toBe(interrupted("Gio"));
-    expect(err.transient).toBe(true);
   });
 });
 

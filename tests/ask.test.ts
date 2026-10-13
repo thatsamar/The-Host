@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LENGTH_LIMIT, NO_ANSWER, ask, errorMessage, type AskEvent } from "@/lib/ask/ask";
+import { LENGTH_LIMIT, NO_ANSWER, ask, errorMessage } from "@/lib/ask/ask";
 import { gio } from "@/lib/companions/gio";
 import { tony } from "@/lib/companions/tony";
 import { ChatError, type ChatProvider, type ChatRequest, type ChatStreamEvent } from "@/lib/ai/types";
@@ -22,7 +22,7 @@ class FlakyProvider implements ChatProvider {
   }
 }
 const overloadedFailure = { code: "stream_error", type: "overloaded_error", requestId: "req_1" };
-const overloaded = () => new ChatError("Gio is busy right now. Try again in a minute.", true, overloadedFailure);
+const overloaded = () => new ChatError("Gio is busy right now. Try again in a minute.", overloadedFailure);
 const thinking: ChatStreamEvent = { type: "phase", phase: "thinking" };
 
 describe("ask", () => {
@@ -89,44 +89,21 @@ describe("ask", () => {
 
 describe("a model call that fails partway through", () => {
   const turns = [{ role: "user" as const, text: "Plan both sides of the house" }];
-  const text = (events: AskEvent[]) => events.map((e) => (e.type === "text" ? e.text : "")).join("");
 
-  it("is made once more when nothing has been shown yet and there's time, and then answers", async () => {
+  it("is reported once, logged by its codes, and never made again", async () => {
     const provider = new FlakyProvider([{ before: [thinking], error: overloaded() }]);
     const failures: unknown[] = [];
-    const events = await collect(
-      ask(
-        { provider, companion: tony, canRetry: () => true, onFailure: (f, attempt, retrying) => failures.push([f, attempt, retrying]) },
-        turns,
-      ),
-    );
-    expect(provider.calls).toBe(2);
-    expect(text(events)).toBe("The south bed first.");
-    expect(events.at(-1)).toEqual({ type: "done" });
-    expect(failures).toEqual([[overloadedFailure, 1, true]]);
-  });
-
-  it("is made at most once more", async () => {
-    const provider = new FlakyProvider([{ error: overloaded() }, { error: overloaded() }]);
-    const events = await collect(ask({ provider, companion: tony, canRetry: () => true }, turns));
-    expect(provider.calls).toBe(2);
-    expect(events.at(-1)).toEqual({ type: "error", message: "Gio is busy right now. Try again in a minute." });
-  });
-
-  it("is not made again once part of the answer has been shown", async () => {
-    const provider = new FlakyProvider([{ before: [{ type: "text", text: "Start with" }], error: overloaded() }]);
-    const events = await collect(ask({ provider, companion: tony, canRetry: () => true }, turns));
+    const events = await collect(ask({ provider, companion: tony, onFailure: (f) => failures.push(f) }, turns));
     expect(provider.calls).toBe(1);
-    expect(events.at(-1)).toMatchObject({ type: "error" });
+    expect(events).toEqual([thinking, { type: "error", message: "Gio is busy right now. Try again in a minute." }]);
+    expect(failures).toEqual([overloadedFailure]);
   });
 
-  it("is not made again when time is short, or when the request itself was refused", async () => {
-    const late = new FlakyProvider([{ error: overloaded() }]);
-    await collect(ask({ provider: late, companion: tony, canRetry: () => false }, turns));
-    expect(late.calls).toBe(1);
-    const refused = new FlakyProvider([{ error: new ChatError("Gio isn't available right now.", false, { code: "api_status", status: 400 }) }]);
-    await collect(ask({ provider: refused, companion: tony, canRetry: () => true }, turns));
-    expect(refused.calls).toBe(1);
+  it("keeps what was already written before it failed", async () => {
+    const provider = new FlakyProvider([{ before: [{ type: "text", text: "Start with" }], error: overloaded() }]);
+    const events = await collect(ask({ provider, companion: tony }, turns));
+    expect(provider.calls).toBe(1);
+    expect(events).toEqual([{ type: "text", text: "Start with" }, { type: "error", message: "Gio is busy right now. Try again in a minute." }]);
   });
 });
 

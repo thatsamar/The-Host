@@ -20,8 +20,6 @@ export const maxDuration = 300;
 // the answer unfinished with nothing to say so. Stop a little before that
 // instead, so the page always gets an ending and keeps what was written.
 const ANSWER_TIME_LIMIT_MS = (maxDuration - 20) * 1000;
-// A transient model failure is tried once more only this early, so a long answer still has time to finish.
-const RETRY_BEFORE_MS = 120_000;
 // Enough phase changes to see where a long answer spent its time.
 const MAX_LOGGED_PHASES = 60;
 // Something goes down the line at least this often, so a dead connection shows.
@@ -151,17 +149,14 @@ async function answer(request: Request): Promise<Response> {
     live.send?.({ type: "alive" });
   }, HEARTBEAT_MS);
   const onFinish = (info: AnswerInfo) => Object.assign(log, info);
-  const canRetry = () => Date.now() - receivedAt < RETRY_BEFORE_MS;
-  const failures: (FailureInfo & { attempt: number; retried: boolean; atMs: number })[] = [];
-  const onFailure = (failure: FailureInfo, attempt: number, retrying: boolean) => {
-    failures.push({ ...failure, attempt, retried: retrying, atMs: Date.now() - receivedAt });
-    log.failures = failures;
+  const onFailure = (failure: FailureInfo) => {
+    log.failure = { ...failure, atMs: Date.now() - receivedAt };
   };
 
   const generation = (async () => {
     let outcome = "answered";
     try {
-      for await (let event of ask({ provider, companion, signal: stop.signal, onFinish, canRetry, onFailure }, turns)) {
+      for await (let event of ask({ provider, companion, signal: stop.signal, onFinish, onFailure }, turns)) {
         if (event.type === "error") {
           outcome = timedOut ? "time-limit" : event.message === "Stopped." ? "stopped" : "error";
           if (timedOut) event = { type: "error", message: timeLimitMessage(companion.name) };

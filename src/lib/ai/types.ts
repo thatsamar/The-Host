@@ -76,15 +76,10 @@ export interface FailureInfo {
   fallback?: boolean;
 }
 
-/**
- * A failed model call: a message safe to show anyone, whether the same call may
- * work if made again (the service was overloaded or the stream broke, not a bad
- * request or setup), and what the server log records about it.
- */
+/** A failed model call: a message safe to show anyone, and what the server log records about it. */
 export class ChatError extends Error {
   constructor(
     message: string,
-    readonly transient = false,
     readonly failure: FailureInfo = { code: "unexpected" },
   ) {
     super(message);

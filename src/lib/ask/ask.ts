@@ -40,13 +40,8 @@ export async function* ask(
     webSearch?: boolean;
     signal?: AbortSignal;
     onFinish?: (info: AnswerInfo) => void;
-    /**
-     * Whether there's still time for one more attempt after a transient failure.
-     * Without it, a failure is reported as is.
-     */
-    canRetry?: () => boolean;
-    /** Each failed attempt, as the log records it, and whether it is being retried. */
-    onFailure?: (failure: FailureInfo, attempt: number, retrying: boolean) => void;
+    /** A failed model call, as the log records it. */
+    onFailure?: (failure: FailureInfo) => void;
   },
   turns: AskTurn[],
 ): AsyncGenerator<AskEvent> {
@@ -55,52 +50,40 @@ export async function* ask(
     yield { type: "error", message: "Add a photo or a question." };
     return;
   }
+  // One model call per question: nothing here resends it. A long answer needs
+  // most of the time limit, and a second call would be paid for again.
   let wrote = false;
-  for (let attempt = 1; ; attempt++) {
-    try {
-      for await (const event of deps.provider.streamChat({ ...request, signal: deps.signal })) {
-        if (event.type === "text" || event.type === "phase") {
-          if (event.type === "text" && event.text) wrote = true;
-          yield event;
-        } else if (event.type === "web_search") yield { type: "searching", query: event.query };
-        else if (event.type === "web_results") yield { type: "sources", sources: event.sources };
-        else if (event.type === "done") {
-          const outputTokens = event.usage.output_tokens;
-          deps.onFinish?.({
-            stopReason: event.stopReason,
-            outputTokens: typeof outputTokens === "number" ? outputTokens : undefined,
-            searches: event.webSearches.length,
-            model: safeToken(event.model),
-            resumes: event.resumes,
-          });
-          // An answer that never started, or was cut off, must say so rather than look finished.
-          if (!wrote) {
-            yield { type: "error", message: NO_ANSWER };
-            return;
-          }
-          if (event.stopReason === "max_tokens") {
-            yield { type: "error", message: LENGTH_LIMIT };
-            return;
-          }
+  try {
+    for await (const event of deps.provider.streamChat({ ...request, signal: deps.signal })) {
+      if (event.type === "text" || event.type === "phase") {
+        if (event.type === "text" && event.text) wrote = true;
+        yield event;
+      } else if (event.type === "web_search") yield { type: "searching", query: event.query };
+      else if (event.type === "web_results") yield { type: "sources", sources: event.sources };
+      else if (event.type === "done") {
+        const outputTokens = event.usage.output_tokens;
+        deps.onFinish?.({
+          stopReason: event.stopReason,
+          outputTokens: typeof outputTokens === "number" ? outputTokens : undefined,
+          searches: event.webSearches.length,
+          model: safeToken(event.model),
+          resumes: event.resumes,
+        });
+        // An answer that never started, or was cut off, must say so rather than look finished.
+        if (!wrote) {
+          yield { type: "error", message: NO_ANSWER };
+          return;
+        }
+        if (event.stopReason === "max_tokens") {
+          yield { type: "error", message: LENGTH_LIMIT };
+          return;
         }
       }
-      yield { type: "done" };
-      return;
-    } catch (err) {
-      // One more attempt is safe only when the failed call has ended, nothing of
-      // it has been shown, the service (not the request) failed, and there's time.
-      const retrying =
-        err instanceof ChatError &&
-        err.transient &&
-        attempt === 1 &&
-        !wrote &&
-        !deps.signal?.aborted &&
-        (deps.canRetry?.() ?? false);
-      if (err instanceof ChatError) deps.onFailure?.(err.failure, attempt, retrying);
-      if (retrying) continue;
-      yield { type: "error", message: errorMessage(err) };
-      return;
     }
+    yield { type: "done" };
+  } catch (err) {
+    if (err instanceof ChatError) deps.onFailure?.(err.failure);
+    yield { type: "error", message: errorMessage(err) };
   }
 }
 

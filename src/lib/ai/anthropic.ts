@@ -88,8 +88,8 @@ export const busy = (name: string) => `${name} is busy right now. Try again in a
 
 export const interrupted = (name: string) => `${name} was interrupted partway through. Try again.`;
 
-// Errors that say the service, not the request, failed: worth one more try.
-const TRANSIENT_STREAM_TYPES = new Set(["overloaded_error", "api_error", "timeout_error"]);
+// Errors sent partway through an answer that say the service, not the request, failed.
+const INTERRUPTION_TYPES = new Set(["api_error", "timeout_error"]);
 // A stream cut off underneath the SDK surfaces as a plain error from fetch.
 const BROKEN_STREAM = /terminated|socket|ECONNRESET|other side closed|premature close/i;
 // The SDK's error when it can't read a tool call's input; its message quotes that input.
@@ -126,27 +126,27 @@ export function describeAnthropicError(err: unknown, name = "Gio"): Error {
   }
   const reason = failureInfo(err);
   if (err instanceof Anthropic.APIConnectionError) {
-    return new ChatError(`Couldn't reach ${name}. Check your connection and try again.`, true, reason);
+    return new ChatError(`Couldn't reach ${name}. Check your connection and try again.`, reason);
   }
-  if (err instanceof Anthropic.RateLimitError) return new ChatError(busy(name), false, reason);
+  if (err instanceof Anthropic.RateLimitError) return new ChatError(busy(name), reason);
   if (err instanceof Anthropic.APIError) {
     if (!err.status) {
       // Sent partway through the answer, e.g. the model was overloaded mid-stream.
       const type = err.type ?? "";
-      if (type === "overloaded_error") return new ChatError(busy(name), true, reason);
-      if (TRANSIENT_STREAM_TYPES.has(type)) return new ChatError(interrupted(name), true, reason);
-      return new ChatError(unavailable(name), false, reason);
+      if (type === "overloaded_error") return new ChatError(busy(name), reason);
+      if (INTERRUPTION_TYPES.has(type)) return new ChatError(interrupted(name), reason);
+      return new ChatError(unavailable(name), reason);
     }
     // The SDK has already retried overloaded and server errors before this point.
-    if (err.status === 529 || err.status === 503) return new ChatError(busy(name), false, reason);
-    if (err.status === 413) return new ChatError("That's too much to send at once. Try fewer photos.", false, reason);
-    return new ChatError(unavailable(name), false, reason);
+    if (err.status === 529 || err.status === 503) return new ChatError(busy(name), reason);
+    if (err.status === 413) return new ChatError("That's too much to send at once. Try fewer photos.", reason);
+    return new ChatError(unavailable(name), reason);
   }
   if (err instanceof Error && err.name === "AbortError") return err;
-  if (err instanceof Error && BROKEN_STREAM.test(err.message)) return new ChatError(interrupted(name), true, reason);
+  if (err instanceof Error && BROKEN_STREAM.test(err.message)) return new ChatError(interrupted(name), reason);
   // Anything else (a mangled key failing inside fetch, a bug) reads the same
   // to the person asking; the specifics go to the server log.
-  return new ChatError(unavailable(name), false, reason);
+  return new ChatError(unavailable(name), reason);
 }
 
 /** How far a turn got, for the log if it fails. */
@@ -179,7 +179,7 @@ export class AnthropicChatProvider implements ChatProvider {
       };
       // The person asking sees a plain message; the log gets codes, never the error's text.
       console.error("Anthropic chat error", JSON.stringify(failure));
-      throw described instanceof ChatError ? new ChatError(described.message, described.transient, failure) : described;
+      throw described instanceof ChatError ? new ChatError(described.message, failure) : described;
     }
   }
 
