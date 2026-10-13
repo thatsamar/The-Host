@@ -14,11 +14,15 @@ export interface AnswerSnapshot {
   sources: WebSourceRef[];
   done: boolean;
   error?: string;
+  /** Server time of the last save. It keeps moving while the answer is alive, even when nothing new is written. */
+  updatedAt?: number;
 }
 
 /** How long a saved answer outlives its last update. */
 export const ANSWER_TTL_SECONDS = 15 * 60;
 const SAVE_INTERVAL_MS = 1000;
+/** While an answer is alive it is saved at least this often, so a stalled one shows. */
+export const KEEPALIVE_MS = 10_000;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export const isAnswerId = (id: unknown): id is string => typeof id === "string" && UUID.test(id);
@@ -98,6 +102,15 @@ export class AnswerRelay {
     else this.dirty = true;
   }
 
+  /**
+   * Called on a timer: saves if nothing has been saved for a while, so the
+   * page can tell a long silent think from an answer that died, and so a Stop
+   * is noticed even before the first word.
+   */
+  keepAlive() {
+    if (!this.snapshot.done && Date.now() - this.lastSave >= KEEPALIVE_MS) this.save();
+  }
+
   /** Saves the final state; never throws, since recovery is best effort. */
   async finish() {
     if (!this.snapshot.done) this.snapshot = { ...this.snapshot, done: true, error: this.snapshot.error ?? "Stopped." };
@@ -112,7 +125,7 @@ export class AnswerRelay {
     }
     this.dirty = false;
     this.lastSave = Date.now();
-    const snapshot = this.snapshot;
+    const snapshot = { ...this.snapshot, updatedAt: this.lastSave };
     this.saving = (async () => {
       try {
         await put(this.id, snapshot);

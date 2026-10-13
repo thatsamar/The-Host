@@ -5,7 +5,7 @@ import { unavailable } from "@/lib/ai/anthropic";
 import { signInRequired } from "@/lib/auth/access";
 import { createRateLimiter, questionsPerHour, visitorKey } from "@/lib/ask/rate-limit";
 import { serverEnv } from "@/lib/env";
-import { ask, type AskEvent } from "@/lib/ask/ask";
+import { ask, timeLimitMessage, type AnswerInfo, type AskEvent, type StreamEvent } from "@/lib/ask/ask";
 import { AnswerRelay, isAnswerId } from "@/lib/ask/relay";
 import { currentCompanion } from "@/lib/companions";
 import { MAX_PHOTOS_PER_TURN } from "@/lib/ask/prompt";
@@ -13,6 +13,13 @@ import { createClient, getUserId } from "@/lib/supabase/server";
 
 // Long answers with web search can take a while.
 export const maxDuration = 300;
+
+// Vercel ends the function at maxDuration without warning, which would leave
+// the answer unfinished with nothing to say so. Stop a little before that
+// instead, so the page always gets an ending and keeps what was written.
+const ANSWER_TIME_LIMIT_MS = (maxDuration - 20) * 1000;
+// Something goes down the line at least this often, so a dead connection shows.
+const HEARTBEAT_MS = 10_000;
 
 const imageSchema = z.object({
   mediaType: z.enum(["image/jpeg", "image/png", "image/webp", "image/gif"]),
@@ -37,6 +44,7 @@ const bodySchema = z.object({
 const limiter = createRateLimiter({ limit: questionsPerHour() });
 
 export async function POST(request: Request) {
+  const receivedAt = Date.now();
   if (signInRequired()) {
     const supabase = await createClient();
     if (!(await getUserId(supabase))) {
@@ -68,7 +76,7 @@ export async function POST(request: Request) {
 
   const { id, turns } = parsed.data;
   const encoder = new TextEncoder();
-  const encode = (event: AskEvent) => encoder.encode(`${JSON.stringify(event)}\n`);
+  const encode = (event: StreamEvent) => encoder.encode(`${JSON.stringify(event)}\n`);
 
   if (!id) {
     // Without an answer id there's nothing to resume, so stop when the visitor goes.
@@ -97,19 +105,49 @@ export async function POST(request: Request) {
   const relay = new AnswerRelay(id, () => stop.abort());
   relay.begin();
   // Set while the visitor is still connected.
-  const live: { send?: (event: AskEvent) => void } = {};
+  const live: { send?: (event: StreamEvent) => void } = {};
+  // Timings and counts only, for the server log; never the conversation itself.
+  const latest = turns.at(-1)!;
+  const log: Record<string, unknown> = {
+    companion: companion.id,
+    turns: turns.length,
+    photos: latest.images?.length ?? 0,
+    photoChars: (latest.images ?? []).reduce((n, i) => n + i.data.length, 0),
+    textChars: latest.text.length,
+  };
+  let timedOut = false;
+  const timeLimit = setTimeout(() => {
+    timedOut = true;
+    stop.abort();
+  }, Math.max(0, ANSWER_TIME_LIMIT_MS - (Date.now() - receivedAt)));
+  const heartbeat = setInterval(() => {
+    relay.keepAlive();
+    live.send?.({ type: "alive" });
+  }, HEARTBEAT_MS);
+  const onFinish = (info: AnswerInfo) => Object.assign(log, info);
+
   const generation = (async () => {
+    let outcome = "answered";
     try {
-      for await (const event of ask({ provider, companion, signal: stop.signal }, turns)) {
+      for await (let event of ask({ provider, companion, signal: stop.signal, onFinish }, turns)) {
+        if (event.type === "error") {
+          outcome = timedOut ? "time-limit" : event.message === "Stopped." ? "stopped" : "error";
+          if (timedOut) event = { type: "error", message: timeLimitMessage(companion.name) };
+        } else if (event.type === "phase" && !log.firstPhaseMs) log.firstPhaseMs = Date.now() - receivedAt;
+        else if (event.type === "text" && !log.firstTextMs) log.firstTextMs = Date.now() - receivedAt;
         relay.push(event);
         live.send?.(event);
       }
     } catch (err) {
+      outcome = "error";
       const event: AskEvent = { type: "error", message: err instanceof Error ? err.message : "Something went wrong" };
       relay.push(event);
       live.send?.(event);
     } finally {
+      clearTimeout(timeLimit);
+      clearInterval(heartbeat);
       await relay.finish();
+      console.info("Answer finished", JSON.stringify({ outcome, ms: Date.now() - receivedAt, connected: !!live.send, ...log }));
     }
   })();
   after(() => generation);

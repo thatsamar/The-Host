@@ -114,6 +114,6 @@ Every variable is documented in [`.env.example`](.env.example).
 
 **A second companion** is a second Vercel project from the same repo: **Add New → Project → import The-Host again**, name it (say, `tony`), and add the same variables plus `COMPANION=tony`. Connect the same Supabase project (Storage → Connect) so testers keep one login. Every merge to `main` redeploys both.
 
-Answers stream. The ask route allows up to 300 seconds; lower `maxDuration` in `src/app/api/ask/route.ts` if your plan's limit is lower.
+Answers stream. The ask route allows up to 300 seconds and ends an answer 20 seconds before that with a message, keeping what was written; lower `maxDuration` in `src/app/api/ask/route.ts` if your plan's limit is lower, or raise it (up to your plan's limit) to give long answers more time.
 
 Live prices come from web search, which must be enabled for your Anthropic organization. If a companion never searches, an admin can turn it on in the Claude Console under organization privacy settings.

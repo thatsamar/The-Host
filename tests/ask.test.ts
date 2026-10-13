@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ask, errorMessage } from "@/lib/ask/ask";
+import { LENGTH_LIMIT, NO_ANSWER, ask, errorMessage } from "@/lib/ask/ask";
 import { gio } from "@/lib/companions/gio";
 import { tony } from "@/lib/companions/tony";
 import { ScriptedProvider, collect, replyWith } from "./helpers/fakes";
@@ -39,6 +39,23 @@ describe("ask", () => {
     const provider = new ScriptedProvider(() => new Error("Gio is busy right now. Try again in a minute."));
     const events = await collect(ask({ provider, companion: tony }, [{ role: "user", text: "Hi" }]));
     expect(events).toEqual([{ type: "error", message: "Gio is busy right now. Try again in a minute." }]);
+  });
+
+  it("says so when the model finishes without writing anything", async () => {
+    const provider = new ScriptedProvider(replyWith(""));
+    const events = await collect(ask({ provider, companion: tony }, [{ role: "user", text: "Hi" }]));
+    expect(events).toEqual([{ type: "error", message: NO_ANSWER }]);
+  });
+
+  it("marks an answer cut off at its length limit as unfinished, keeping what was written", async () => {
+    const provider = new ScriptedProvider(replyWith("Plant the south bed with", { stopReason: "max_tokens" }));
+    const finished: unknown[] = [];
+    const events = await collect(
+      ask({ provider, companion: tony, onFinish: (info) => finished.push(info) }, [{ role: "user", text: "Plan" }]),
+    );
+    expect(events.filter((e) => e.type === "text").length).toBeGreaterThan(0);
+    expect(events.at(-1)).toEqual({ type: "error", message: LENGTH_LIMIT });
+    expect(finished).toEqual([{ stopReason: "max_tokens", outputTokens: 5, searches: 0 }]);
   });
 
   it("refuses a conversation that doesn't end with a question", async () => {

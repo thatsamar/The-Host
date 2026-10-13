@@ -35,7 +35,29 @@ describe("answer relay", () => {
       expect(write.key).toBe(id);
       expect(write.options).toEqual({ ttl: 900, name: "" });
     }
-    expect(store.writes.at(-1)!.value).toEqual({ phase: null, text: "Hello.", sources: [], done: true });
+    expect(store.writes.at(-1)!.value).toEqual({ phase: null, text: "Hello.", sources: [], done: true, updatedAt: expect.any(Number) });
+  });
+
+  it("keeps saving a silent answer, so a stalled one can be told apart", async () => {
+    vi.useFakeTimers();
+    try {
+      store.writes = [];
+      const relay = new AnswerRelay(crypto.randomUUID(), () => {});
+      relay.begin();
+      relay.push({ type: "phase", phase: "thinking" });
+      await vi.advanceTimersByTimeAsync(3000);
+      relay.keepAlive(); // saved recently: nothing to do
+      const before = store.writes.length;
+      await vi.advanceTimersByTimeAsync(10_000);
+      relay.keepAlive();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(store.writes.length).toBe(before + 1);
+      const [a, b] = store.writes.slice(-2).map((w) => (w.value as { updatedAt: number }).updatedAt);
+      expect(b).toBeGreaterThan(a);
+      await relay.finish();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("marks an answer that ended without finishing as stopped", async () => {
