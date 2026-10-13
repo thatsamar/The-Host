@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import Anthropic from "@anthropic-ai/sdk";
-import { AnthropicChatProvider, busy, describeAnthropicError, interrupted, toAnthropicSystem, unavailable } from "@/lib/ai/anthropic";
+import { AnthropicChatProvider, busy, describeAnthropicError, interrupted, resumableContent, toAnthropicSystem, unavailable } from "@/lib/ai/anthropic";
 import { ChatError } from "@/lib/ai/types";
 import { gio } from "@/lib/companions/gio";
 import type { ChatRequest, ChatStreamEvent } from "@/lib/ai/types";
@@ -139,6 +139,42 @@ describe("AnthropicChatProvider", () => {
     const done = events.at(-1) as Extract<ChatStreamEvent, { type: "done" }>;
     expect(done.text).toBe("Searching. Done.");
     expect(done.usage.output_tokens).toBe(40);
+  });
+
+  it("resumes after a mid-turn fallback without what only the declining model can read", async () => {
+    const paused: Block[] = [
+      { type: "thinking", thinking: "", signature: "sig-a" },
+      { type: "server_tool_use", id: "s1", name: "web_search", input: { query: "clay soil shrubs" } },
+      { type: "web_search_tool_result", tool_use_id: "s1", content: [] },
+      { type: "server_tool_use", id: "s2", name: "web_search", input: { query: "drip kits" } },
+      { type: "text", text: "Start with drainage. " },
+      { type: "fallback", from: { model: "claude-opus-5-5" }, to: { model: "claude-opus-5" } },
+      { type: "thinking", thinking: "", signature: "sig-b" },
+      { type: "server_tool_use", id: "s3", name: "web_search", input: { query: "mulch" } },
+    ];
+    const { client, calls } = fakeClient([
+      { stop_reason: "pause_turn", content: paused },
+      { stop_reason: "end_turn", content: [{ type: "text", text: "Then plant." }] },
+    ]);
+    const provider = new AnthropicChatProvider(client, "claude-opus-5-5", options);
+    await collect(provider.streamChat(request));
+    const resumed = (calls[1].messages as { role: string; content: Block[] }[]).at(-1)!;
+    expect(resumed.role).toBe("assistant");
+    expect(resumed.content.map((b) => (b.type === "server_tool_use" ? `${b.type}:${b.id}` : b.type))).toEqual([
+      "server_tool_use:s1",
+      "web_search_tool_result",
+      "text",
+      "thinking", // after the switch: echoed as is
+      "server_tool_use:s3",
+    ]);
+  });
+
+  it("resumes without a fallback by sending the paused turn back unchanged", () => {
+    const content = [
+      { type: "thinking", thinking: "", signature: "x" },
+      { type: "text", text: "a", citations: null },
+    ] as Parameters<typeof resumableContent>[0];
+    expect(resumableContent(content)).toBe(content);
   });
 
   it("turns a refusal into a readable notice", async () => {

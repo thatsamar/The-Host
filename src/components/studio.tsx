@@ -203,7 +203,9 @@ export function Studio({
       const body = await response.json().catch(() => ({}));
       const message =
         body.error ??
-        (response.status === 413 ? "Those photos are too large to send together. Try fewer." : `Request failed (${response.status})`);
+        (response.status === 413
+          ? "Those photos are too large to send together. Try fewer."
+          : "Something went wrong on our side. Try again.");
       update(key, (t) => ({ ...t, error: message }));
       return "failed";
     }

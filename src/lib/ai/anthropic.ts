@@ -53,6 +53,26 @@ export function toAnthropicSystem(request: ChatRequest): BetaTextBlockParam[] {
   }));
 }
 
+/**
+ * What a paused turn hands back to resume it. After a fallback partway through
+ * the turn, the API requires leaving out what only the declining model can read
+ * from before the switch: thinking, tool calls, and server tool calls without
+ * their results. Text and paired server tool blocks stay; the fallback marker
+ * itself is ignored by the API and is dropped.
+ */
+export function resumableContent(content: BetaContentBlock[]): BetaContentBlockParam[] {
+  const boundary = content.findLastIndex((b) => b.type === "fallback");
+  if (boundary < 0) return content as BetaContentBlockParam[];
+  const answered = new Set(content.flatMap((b) => ("tool_use_id" in b ? [b.tool_use_id] : [])));
+  return content.filter((b, i) => {
+    if (i > boundary) return true;
+    if (i === boundary || b.type === "thinking" || b.type === "redacted_thinking" || b.type === "tool_use") return false;
+    if (b.type === "text") return true;
+    if (b.type === "server_tool_use") return answered.has(b.id);
+    return "tool_use_id" in b;
+  }) as BetaContentBlockParam[];
+}
+
 function sourcesFrom(block: BetaContentBlock): WebSourceRef[] {
   if (block.type !== "web_search_tool_result" || !Array.isArray(block.content)) return [];
   return block.content.map((r) => ({ title: r.title, url: r.url }));
@@ -121,20 +141,23 @@ export class AnthropicChatProvider implements ChatProvider {
   ) {}
 
   async *streamChat(request: ChatRequest): AsyncIterable<ChatStreamEvent> {
+    const progress = { resumes: 0, fallback: false };
     try {
-      yield* this.run(request);
+      yield* this.run(request, progress);
     } catch (err) {
       const described = describeAnthropicError(err, this.options.name);
+      if (described.name === "AbortError") throw described;
+      // Where in the turn it failed: a resumed request or a fallback point to their own causes.
+      const where = `${progress.resumes ? ` after ${progress.resumes} resume(s)` : ""}${progress.fallback ? " after a fallback" : ""}`;
       // The person asking sees a plain message; this is where the reason goes.
-      if (described.name !== "AbortError") {
-        const detail = err instanceof Error ? err.message.slice(0, 200) : String(err);
-        console.error("Anthropic chat error", failureReason(err), detail);
-      }
+      const detail = err instanceof Error ? err.message.slice(0, 200) : String(err);
+      console.error("Anthropic chat error", `${failureReason(err)}${where}`, detail);
+      if (described instanceof ChatError) throw new ChatError(described.message, described.transient, `${described.reason}${where}`);
       throw described;
     }
   }
 
-  private async *run(request: ChatRequest): AsyncIterable<ChatStreamEvent> {
+  private async *run(request: ChatRequest, progress: { resumes: number; fallback: boolean }): AsyncIterable<ChatStreamEvent> {
     const system = toAnthropicSystem(request);
     const messages: BetaMessageParam[] = request.messages.map((m) => ({
       role: m.role,
@@ -207,9 +230,11 @@ export class AnthropicChatProvider implements ChatProvider {
         yield { type: "text", text: notice };
         break;
       }
+      if (message.usage?.iterations?.some((i) => i.type === "fallback_message")) progress.fallback = true;
       if (message.stop_reason !== "pause_turn") break;
       // Server tool turn paused mid-flight: hand the partial turn back to resume.
-      messages.push({ role: "assistant", content: message.content as BetaContentBlockParam[] });
+      messages.push({ role: "assistant", content: resumableContent(message.content) });
+      progress.resumes++;
     }
 
     yield { type: "done", text, model, stopReason, usage, webSearches, webSources };

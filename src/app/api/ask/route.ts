@@ -46,6 +46,16 @@ const bodySchema = z.object({
 const limiter = createRateLimiter({ limit: questionsPerHour() });
 
 export async function POST(request: Request) {
+  try {
+    return await answer(request);
+  } catch (err) {
+    // Anything unexpected still gets a plain message, and its reason goes to the log.
+    console.error("Ask route failed", err instanceof Error ? `${err.name}: ${err.message.slice(0, 200)}` : String(err));
+    return Response.json({ error: "Something went wrong on our side. Try again." }, { status: 500 });
+  }
+}
+
+async function answer(request: Request): Promise<Response> {
   const receivedAt = Date.now();
   if (signInRequired()) {
     const supabase = await createClient();
