@@ -23,6 +23,15 @@ interface StagedPhoto {
   error?: string;
 }
 
+/** A question set aside, whole, so the text box can hold another: its words and photos as they were. */
+interface SavedDraft {
+  key: string;
+  text: string;
+  staged: StagedPhoto[];
+  /** Why it was set aside: a question too large to send, or a draft switched out. */
+  tooLarge: boolean;
+}
+
 interface Turn {
   key: string;
   role: "user" | "assistant";
@@ -33,8 +42,6 @@ interface Turn {
   progress?: Progress;
   sources?: WebSourceRef[];
   error?: string;
-  /** Retrying as is can't help (the photos are too large to send), so don't offer it. */
-  noRetry?: boolean;
   /** When the question was sent, to say so if the answer is slow to start. */
   sentAt?: number;
 }
@@ -74,6 +81,8 @@ const WATCHDOG_MS = 5000;
 const CHECK_TIMEOUT_MS = 10_000;
 const LOST_MESSAGE = "The connection dropped before the answer finished. Try again.";
 const TOO_LARGE_MESSAGE = "Those photos are too large to send together. Remove one or more and send again.";
+const TOO_LARGE_SAVED_MESSAGE =
+  "That question's photos are too large to send together. It's saved below the box: switch to it to remove a photo.";
 
 let counter = 0;
 const nextKey = () => `k${++counter}`;
@@ -99,6 +108,8 @@ export function Studio({
   const [text, setText] = useState("");
   const [staged, setStaged] = useState<StagedPhoto[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
+  // Questions set aside so the text box can hold another; each can be switched back in.
+  const [saved, setSaved] = useState<SavedDraft[]>([]);
   const [busy, setBusy] = useState(false);
   const inFlight = useRef<InFlight | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -139,15 +150,20 @@ export function Studio({
         const key = nextKey();
         const previewUrl = URL.createObjectURL(file);
         setStaged((s) => [...s, { key, previewUrl }]);
+        // The photo may have been set aside with its draft by the time it's ready.
+        const updatePhoto = (fn: (s: StagedPhoto[]) => StagedPhoto[]) => {
+          setStaged(fn);
+          setSaved((all) => all.map((d) => ({ ...d, staged: fn(d.staged) })));
+        };
         preparePhoto(file).then(
           (photo) => {
             URL.revokeObjectURL(previewUrl);
-            setStaged((s) => s.map((p) => (p.key === key ? { ...p, photo, previewUrl: photo.previewUrl } : p)));
+            updatePhoto((s) => s.map((p) => (p.key === key ? { ...p, photo, previewUrl: photo.previewUrl } : p)));
           },
           (err: unknown) => {
             // Drop the photo and say why, rather than leaving a dead thumbnail.
             URL.revokeObjectURL(previewUrl);
-            setStaged((s) => s.filter((p) => p.key !== key));
+            updatePhoto((s) => s.filter((p) => p.key !== key));
             setNotice(err instanceof Error ? err.message : "Couldn't read that photo.");
           },
         );
@@ -251,7 +267,7 @@ export function Studio({
       read: () => readSaved(live),
       visible: () => document.visibilityState === "visible",
       wait: (ms) => wait(ms, live.controller.signal),
-      now: Date.now,
+      now: () => Date.now(),
       stopped: () => live.stopped,
       // The saved copy can trail what already arrived live; keep whichever is further along.
       onProgress: (saved) =>
@@ -283,24 +299,42 @@ export function Studio({
   draft.current = { text, staged };
 
   /**
-   * Takes a question that can't be sent as is (its photos are too large) out of
-   * the conversation and back into the text box, photos included, so it can be
-   * edited. If something new is already there, it stays, and the failed question
-   * keeps its error without a Retry.
+   * Hands back a question that can't be sent as is (its photos are too large) to
+   * edit, rather than offering a Retry that would send the same photos again. It
+   * leaves the conversation, so it isn't sent again as history. It goes into the
+   * text box if that's empty; otherwise whatever the person has started stays
+   * there and this question is saved below it, whole, to switch back in.
    */
-  const putBack = (answerKey: string, question: string, photos: PreparedPhoto[], message?: string) => {
-    if (draft.current.text.trim() || draft.current.staged.length) {
-      update(answerKey, (t) => ({ ...t, error: message ?? TOO_LARGE_MESSAGE, noRetry: true }));
-      return;
-    }
+  const putBack = (answerKey: string, question: string, photos: PreparedPhoto[]) => {
     setThread((all) => {
       const i = all.findIndex((t) => t.key === answerKey);
       return i < 1 ? all : [...all.slice(0, i - 1), ...all.slice(i + 1)];
     });
-    setText(question);
-    setStaged(photos.map((photo) => ({ key: nextKey(), previewUrl: photo.previewUrl, photo })));
-    if (message) setNotice(message);
+    const staging = photos.map((photo) => ({ key: nextKey(), previewUrl: photo.previewUrl, photo }));
+    if (draft.current.text.trim() || draft.current.staged.length) {
+      setSaved((all) => [...all, { key: nextKey(), text: question, staged: staging, tooLarge: true }]);
+      setNotice(TOO_LARGE_SAVED_MESSAGE);
+    } else {
+      setText(question);
+      setStaged(staging);
+      setNotice(TOO_LARGE_MESSAGE);
+    }
   };
+
+  /** Puts a saved question in the text box, saving whatever was there in its place. */
+  const switchTo = (key: string) => {
+    const target = saved.find((d) => d.key === key);
+    if (!target) return;
+    const current: SavedDraft = { key: nextKey(), text, staged, tooLarge: false };
+    const keep = text.trim() || staged.length;
+    setSaved((all) => [...all.filter((d) => d.key !== key), ...(keep ? [current] : [])]);
+    setText(target.text);
+    setStaged(target.staged);
+    setNotice(null);
+    inputRef.current?.focus();
+  };
+
+  const discard = (key: string) => setSaved((all) => all.filter((d) => d.key !== key));
 
   const ask = () => {
     if (!canSend) return;
@@ -315,7 +349,7 @@ export function Studio({
     const i = thread.findIndex((t) => t.key === answerKey);
     const question = thread[i - 1];
     if (busy || i < 1 || question?.role !== "user") return;
-    // Too large to send as is: hand it back for editing (send has said why).
+    // Too large to send as is: hand it back for editing.
     if (!send(question.text, question.photos ?? [], [...thread.slice(0, i - 1), ...thread.slice(i + 1)])) {
       putBack(answerKey, question.text, question.photos ?? []);
     }
@@ -380,7 +414,7 @@ export function Studio({
     if (outcome === "failed" && !live.stopped && !live.settled) stopOnServer(live.id);
     update(key, (t) => ({ ...t, pending: false, progress: undefined }));
     // Sending the same photos again would fail the same way: hand them back to edit.
-    if (outcome === "too-large" && current) putBack(key, question, photos, TOO_LARGE_MESSAGE);
+    if (outcome === "too-large" && current) putBack(key, question, photos);
     if (current) {
       inFlight.current = null;
       setBusy(false);
@@ -401,6 +435,7 @@ export function Studio({
     setThread([]);
     setText("");
     setStaged([]);
+    setSaved([]);
     setNotice(null);
     inputRef.current?.focus();
   };
@@ -523,6 +558,32 @@ export function Studio({
 
   const hint = notice ? <p className="mt-3 px-4 text-center text-sm text-warn">{notice}</p> : null;
 
+  // Questions set aside, each whole, to switch back into the text box.
+  const savedList = saved.length ? (
+    <ul aria-label="Saved questions" className="mt-3 space-y-2">
+      {saved.map((d) => (
+        <li key={d.key} className="flex items-center gap-3 rounded-2xl bg-sunk px-4 py-2 text-sm text-ink">
+          <span className="min-w-0 flex-1 truncate">
+            <span className="text-ink-muted">{d.tooLarge ? "Too large to send: " : "Saved draft: "}</span>
+            {d.text.trim() || "Photos only"}
+            {d.staged.length ? ` · ${d.staged.length} photo${d.staged.length === 1 ? "" : "s"}` : ""}
+          </span>
+          <button type="button" onClick={() => switchTo(d.key)} className="shrink-0 font-medium underline underline-offset-4">
+            Switch
+          </button>
+          <button
+            type="button"
+            onClick={() => discard(d.key)}
+            aria-label="Discard saved question"
+            className="grid size-6 shrink-0 place-items-center rounded-full text-ink-muted hover:text-ink"
+          >
+            <XIcon className="size-3.5" />
+          </button>
+        </li>
+      ))}
+    </ul>
+  ) : null;
+
   if (!started) {
     return (
       <div className="flex min-h-dvh flex-col">
@@ -542,6 +603,7 @@ export function Studio({
             </p>
             <div className="mt-10">{composer}</div>
             {hint}
+            {savedList}
           </div>
         </main>
         <div className="fixed inset-x-0 bottom-0 flex justify-center gap-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-sm text-ink-muted">
@@ -585,7 +647,7 @@ export function Studio({
               <Answer
                 key={t.key}
                 turn={t}
-                onRetry={!busy && t.error && !t.noRetry && i === thread.length - 1 ? () => retry(t.key) : undefined}
+                onRetry={!busy && t.error && i === thread.length - 1 ? () => retry(t.key) : undefined}
               />
             ),
           )}
@@ -596,6 +658,7 @@ export function Studio({
       <div className="mx-auto w-full max-w-[640px] shrink-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4">
         {composer}
         {hint}
+        {savedList}
       </div>
     </div>
   );
