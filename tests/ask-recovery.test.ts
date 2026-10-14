@@ -96,6 +96,19 @@ describe("answer recovery", () => {
     });
   });
 
+  it("still hands back an answer under way when Jack retires", async () => {
+    state.provider = new SlowProvider(["Say it plainly."], 1);
+    const id = crypto.randomUUID();
+    await (await post(id)).text();
+    await Promise.all(state.background);
+    process.env.COMPANION = "jack";
+    try {
+      expect(await collect(id)).toMatchObject({ status: 200, body: { text: "Say it plainly.", done: true } });
+    } finally {
+      delete process.env.COMPANION;
+    }
+  });
+
   it("saves the answer only, never the question or photos", async () => {
     state.provider = new SlowProvider(["Short answer."], 1);
     const id = crypto.randomUUID();

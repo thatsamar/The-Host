@@ -43,6 +43,37 @@ describe("POST /api/ask", () => {
     }
   });
 
+  it("answers as Alden on his deployment, with the photos passed through", async () => {
+    process.env.COMPANION = "alden";
+    try {
+      const provider = state.provider as ScriptedProvider;
+      const photo = { mediaType: "image/jpeg", data: "d2luZWxpc3Q=" };
+      const res = await post({ turns: [{ role: "user", text: "Roast chicken, about $80. Which bottle?", images: [photo, photo] }] });
+      expect(res.status).toBe(200);
+      await collect(readNdjson(res.body!));
+      const request = provider.requests[0];
+      expect(request.system[0].body).toMatch(/^You are Alden, Cinq’s advisor on wine, cocktails, and spirits/);
+      expect(request.system[1].body).toMatch(/up to five searches per answer/);
+      expect(request.webSearch).toBe(true);
+      expect(request.messages.at(-1)!.content.filter((p) => p.type === "image")).toHaveLength(2);
+    } finally {
+      delete process.env.COMPANION;
+    }
+  });
+
+  it("takes no new questions at Jack's retired address, and says so", async () => {
+    process.env.COMPANION = "jack";
+    try {
+      const provider = state.provider as ScriptedProvider;
+      const res = await post({ turns: [{ role: "user", text: "Should I quit?" }] });
+      expect(res.status).toBe(410);
+      expect(await res.json()).toEqual({ error: "Jack is no longer one of Cinq’s advisors. Visit Cinq to meet the current advisors." });
+      expect(provider.requests).toHaveLength(0);
+    } finally {
+      delete process.env.COMPANION;
+    }
+  });
+
   it("is open by default, and asks for sign-in only where it's switched on", async () => {
     state.userId = null;
     expect((await post({ turns: [{ role: "user", text: "Hi" }] })).status).toBe(200);

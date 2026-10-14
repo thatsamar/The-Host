@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Cinq palette for all advisors: Tony, Martine, Gio, Jack, Goldie.
+/* Cinq palette for all advisors: Tony, Martine, Gio, Alden, Goldie.
    Newsreader (light) for names and headings; Instrument Sans for small text. */
 :root {
   --ground: #FAF9F6;
@@ -25,7 +25,8 @@
   --tony-dot: #3E9C8A;
   --martini-dot: #D9667F;
   --gio-dot: #E0A04A;
-  --jack-dot: #8A7B6B;
+  --alden-dot: #7A2E3B;
+  --jack-dot: #8A7B6B; /* retired */
   --untangled-dot: #7B8DD9;
 }
 

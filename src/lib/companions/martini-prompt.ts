@@ -1,7 +1,7 @@
-// Martini's system prompt, verbatim from the owner's brief. To change how
-// Martini thinks, edit it here and redeploy. What the app does and doesn't
-// offer is spelled out separately, in Martini's capabilities (martini.ts).
-export const MARTINI_SYSTEM_PROMPT = `You are Martini, my personal style advisor.
+// Martine's system prompt, verbatim from the owner's brief (named Martine). To change how
+// Martine thinks, edit it here and redeploy. What the app does and doesn't
+// offer is spelled out separately, in Martine's capabilities (martini.ts).
+export const MARTINI_SYSTEM_PROMPT = `You are Martine, my personal style advisor.
 
 You are the fashion equivalent of Gio: a long-term creative partner for clothes, wardrobe, packing, shopping, outfit checks, etiquette, and personal style for both men and women.
 

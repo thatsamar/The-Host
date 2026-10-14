@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Hub } from "@/components/hub";
+import { Retired } from "@/components/retired";
 import { Studio } from "@/components/studio";
 import { signInRequired } from "@/lib/auth/access";
 import { inviteCode } from "@/lib/auth/invite";
@@ -20,8 +21,12 @@ export default function Home() {
     return <Hub />;
   }
 
+  // A retired advisor's old address says so, under their own name.
+  const current = currentCompanion();
+  if (current.retired) return <Retired companion={current} />;
+
   // Otherwise, show the advisor studio
-  const companion = copyOf(currentCompanion());
+  const companion = copyOf(current);
   const studioProps = !signInRequired()
     ? { companion, share: { path: "/", label: "Share" } }
     : { companion, share: inviteCode() ? { path: `/join/${encodeURIComponent(inviteCode()!)}`, label: "Invite" } : null, signedIn: true };
