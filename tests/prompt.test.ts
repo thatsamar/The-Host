@@ -155,8 +155,7 @@ describe("Alden", () => {
     for (const heading of ["START WITH THE PERSON AND THE OCCASION", "KNOW FAR MORE THAN YOU SAY", "EXERCISE JUDGMENT", "READ THE EVIDENCE", "VOICE AND RESPONSE"]) {
       expect(alden.systemPrompt).toContain(`\n${heading}\n`);
     }
-    expect(alden.systemPrompt).toMatch(/Give one strong recommendation\. Offer at most two meaningfully different alternatives/);
-    expect(alden.systemPrompt).toMatch(/The call: What to order or buy\.\nWhy: [\s\S]*\nThe move: [\s\S]*\nAlternative: /);
+    expect(alden.systemPrompt).toMatch(/The call: What you would order, open, buy, or make, in the first person\.\nWhy: Why it beats the nearest rival[\s\S]*\nThe move: [\s\S]*\nAlternative: Only if a real difference in preference or budget changes the answer\./);
     expect(alden.systemPrompt).toMatch(/Do not claim to know a bottle’s condition from a photo of a list\./);
     expect(alden.systemPrompt).toMatch(/Never encourage excessive drinking, drinking and driving, or drinking by someone under the legal drinking age\./);
     expect(alden.systemPrompt).toMatch(/Do not give personalized medical assurances about alcohol, medication, pregnancy, or recovery\.$/);
@@ -164,6 +163,24 @@ describe("Alden", () => {
     for (const block of assemblePrompt({ companion: alden, turns: [{ role: "user", text: "Hi" }] }).system) {
       expect(block.body).not.toMatch(/Aldo|Sohm/);
     }
+  });
+
+  it("leads with a personal call, defends it against the nearest rival, and keeps research behind it", () => {
+    expect(alden.systemPrompt).toMatch(/Lead with a definite, personal call: “I would order…”, “I would open…”, “I would make it this way\.”/);
+    expect(alden.systemPrompt).toMatch(/why that choice beats the nearest plausible alternative for this person, at this price, in this moment/);
+    expect(alden.systemPrompt).toMatch(/Usually give one choice and no alternatives\. Offer a second only when a real difference in preference or budget changes the answer/);
+    expect(alden.systemPrompt).toMatch(/do not reopen every possibility/);
+    expect(alden.systemPrompt).toMatch(/Show depth through discrimination, not length\./);
+    expect(alden.systemPrompt).toMatch(/name the spirit you would use, the modifier, the proportions, and the technique/);
+    expect(alden.systemPrompt).toMatch(/name the meal you would actually serve with it, not six pairings/);
+    expect(alden.systemPrompt).toMatch(/which bottle earns the money and why it beats the obvious rival/);
+    expect(alden.systemPrompt).toMatch(/Keep the research behind the recommendation\. Barcode matches, producer histories, technical production details, and global average prices belong in the answer only if they change the call or prevent a mistake\./);
+    expect(alden.systemPrompt).toMatch(/never imply that a label, a region, or an online listing proves how a particular bottle tastes or how it has been stored/);
+    // Breadth, safeguards and safety stay.
+    for (const area of ["Wine:", "Sake:", "Beer:", "Spirits:", "Cocktails:"]) expect(alden.systemPrompt).toContain(`\n${area} `);
+    expect(alden.systemPrompt).toMatch(/Never invent a producer, vintage, price, ingredient, availability, or bottle identity\./);
+    expect(alden.systemPrompt).toMatch(/Attribute sourced prices and mark unsourced prices as estimates\./);
+    expect(alden.systemPrompt).toMatch(/Alcohol is optional\./);
   });
 
   it("reads lists, bottles and bars, keeps nothing, and searches up to five times with sourced prices", () => {
