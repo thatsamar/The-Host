@@ -25,7 +25,7 @@ export default function About() {
             <p>Have a free night in Mexico City? Tony tells you the spots most visitors never find.</p>
             <p>Trying on a vintage jacket on Brick Lane? Martine will tell you if it suits you.</p>
             <p>Found a chair at Round Top? Show Gio a picture. He’ll tell you if it belongs in your living room.</p>
-            <p>Handed a wine list you don’t know? Show Alden a picture. He’ll find the bottle worth ordering.</p>
+            <p>Looking at a wine list? Show Alden. He’ll help you choose what’s worth ordering.</p>
             <p>Board meeting on the night of your daughter’s dance recital? Goldie helps you sort out what matters and make the call.</p>
             <p>I shaped Cinq’s advisors from what I’ve learned over thirty years in hospitality, design, travel and business, and from people I’ve met and admired.</p>
             <p>A lot of what they know, I learned the hard way. I’d like you to have it sooner.</p>
