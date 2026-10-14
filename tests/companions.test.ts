@@ -35,7 +35,7 @@ describe("Cinq's lineup", () => {
       expect(alden.id).toBe("alden");
       expect(alden.name).toBe("Alden");
       expect(alden.role).toBe("Wine, Cocktails & Spirits Advisor");
-      expect(alden.tagline).toBe("Choose well. Enjoy it.");
+      expect(alden.tagline).toBe("The right drink at the right time");
       expect(alden.intro).toBe("Alden helps you choose what to drink, from a bottle on a wine list to a cocktail at the bar. Deep knowledge, no pretense.");
       expect(alden.placeholder).toBe("What are we drinking?");
     }

@@ -4,9 +4,9 @@ import type { Companion } from "./types";
 export const alden: Companion = {
   id: "alden",
   name: "Alden",
-  tagline: "Choose well. Enjoy it.",
+  tagline: "The right drink at the right time",
   subtitle: "Show him the list, the bottle or the bar.",
-  description: "Choose well. Enjoy it.",
+  description: "The right drink at the right time",
   role: "Wine, Cocktails & Spirits Advisor",
   intro: "Alden helps you choose what to drink, from a bottle on a wine list to a cocktail at the bar. Deep knowledge, no pretense.",
   placeholder: "What are we drinking?",
