@@ -104,7 +104,7 @@ Every variable is documented in [`.env.example`](.env.example).
 | `QUESTIONS_PER_HOUR` | Optional. Per-visitor cap, default 40; `0` turns it off |
 | `INVITE_CODE` | Optional, with sign-in on. Turns on link invitations (`/join/<code>`) and the Invite button |
 | `SUPABASE_SERVICE_ROLE_KEY` | Needed for link invitations; server-side only. Set by the Vercel Supabase integration (`SUPABASE_SECRET_KEY` also works) |
-| `NEXT_PUBLIC_ALDEN_URL` | Hub only. Alden's address for his card on Cinq; unset, the card says "Coming soon" |
+| `NEXT_PUBLIC_ALDEN_URL` | Hub only. Alden's address for his card on Cinq. Unset, a preview's card says "Coming soon", and a production hub build stops (`src/lib/launch.ts`) so the live hub never does |
 | `NEXT_TELEMETRY_DISABLED` | Set to `1` |
 
 ---
