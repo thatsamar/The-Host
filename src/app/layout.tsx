@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Newsreader, Schibsted_Grotesk } from "next/font/google";
-import { currentCompanion } from "@/lib/companions";
+import { currentCompanion, isCompanionId } from "@/lib/companions";
 import "./globals.css";
 
 // next/font downloads these at build time and serves them from this app, so
@@ -17,9 +17,7 @@ const sans = Schibsted_Grotesk({
   subsets: ["latin"],
 });
 
-const companionValue = process.env.COMPANION?.toLowerCase().trim();
-const validCompanions = ["gio", "tony", "martini", "jack", "goldie"];
-const isHub = !companionValue || !validCompanions.includes(companionValue);
+const isHub = !isCompanionId(process.env.COMPANION);
 const companion = isHub ? null : currentCompanion();
 
 export const metadata: Metadata = isHub

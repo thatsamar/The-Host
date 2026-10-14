@@ -59,6 +59,11 @@ export async function POST(request: Request) {
 
 async function answer(request: Request): Promise<Response> {
   const receivedAt = Date.now();
+  // A retired advisor takes no new questions (answers already under way can still be collected).
+  const advisor = currentCompanion();
+  if (advisor.retired) {
+    return Response.json({ error: `${advisor.name} is no longer one of Cinq’s advisors. Visit Cinq to meet the current advisors.` }, { status: 410 });
+  }
   if (signInRequired()) {
     const supabase = await createClient();
     if (!(await getUserId(supabase))) {

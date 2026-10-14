@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 
-const ADVISOR_URLS: Record<string, string> = {
+// Alden's address comes from NEXT_PUBLIC_ALDEN_URL on the hub project, set
+// once his deployment exists; until then his card says he's coming soon.
+const ADVISOR_URLS: Record<string, string | undefined> = {
   tony: "https://tony-ten-bay.vercel.app",
   martini: "https://the-host-8xye.vercel.app",
   gio: "https://gio-chi.vercel.app",
-  jack: "https://jack-fawn-iota.vercel.app",
+  alden: process.env.NEXT_PUBLIC_ALDEN_URL || undefined,
   goldie: "https://untangled-hazel.vercel.app",
 };
 
@@ -14,7 +16,7 @@ interface Card {
   id: string;
   category: string;
   advisorName: string;
-  url: string;
+  url?: string;
 }
 
 const CATEGORIES: Card[] = [
@@ -37,10 +39,10 @@ const CATEGORIES: Card[] = [
     url: ADVISOR_URLS.gio,
   },
   {
-    id: "jack",
-    category: "Reality check",
-    advisorName: "Jack",
-    url: ADVISOR_URLS.jack,
+    id: "alden",
+    category: "Wine, cocktails & spirits",
+    advisorName: "Alden",
+    url: ADVISOR_URLS.alden,
   },
   {
     id: "goldie",
@@ -76,34 +78,46 @@ export function Hub() {
 
         {/* Cards - pure navigation */}
         <div className="grid grid-cols-1 gap-3 sm:gap-3">
-          {CATEGORIES.map((card) => (
-            <a
-              key={card.id}
-              href={card.url}
-              className="group block p-4 sm:p-4 rounded-2xl transition-all hover:shadow-sm active:shadow-xs"
-              style={{
-                backgroundColor: 'transparent',
-                border: `1px solid ${borderColor}`,
-                minHeight: '56px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '1rem',
-              }}
-            >
-              {/* Left: Category Name */}
-              <h2 className="text-lg sm:text-lg font-serif font-normal leading-tight" style={{ color: textDark }}>
-                {card.category}
-              </h2>
-              {/* Right: Advisor Name with Chevron */}
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <p className="text-sm sm:text-sm font-serif" style={{ color: textMuted }}>
-                  {card.advisorName}
-                </p>
-                <span style={{ color: textMuted }}>›</span>
+          {CATEGORIES.map((card) => {
+            const style = {
+              backgroundColor: "transparent",
+              border: `1px solid ${borderColor}`,
+              minHeight: "56px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "1rem",
+            } as const;
+            const content = (
+              <>
+                {/* Left: Category Name */}
+                <h2 className="text-lg sm:text-lg font-serif font-normal leading-tight" style={{ color: textDark }}>
+                  {card.category}
+                </h2>
+                {/* Right: Advisor Name with Chevron, or a note while there's no address yet */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <p className="text-sm sm:text-sm font-serif" style={{ color: textMuted }}>
+                    {card.url ? card.advisorName : `${card.advisorName} · Coming soon`}
+                  </p>
+                  {card.url && <span style={{ color: textMuted }}>›</span>}
+                </div>
+              </>
+            );
+            return card.url ? (
+              <a
+                key={card.id}
+                href={card.url}
+                className="group block p-4 sm:p-4 rounded-2xl transition-all hover:shadow-sm active:shadow-xs"
+                style={style}
+              >
+                {content}
+              </a>
+            ) : (
+              <div key={card.id} className="block p-4 sm:p-4 rounded-2xl" style={style}>
+                {content}
               </div>
-            </a>
-          ))}
+            );
+          })}
         </div>
 
         <div className="text-center" style={{ marginTop: '1.5rem' }}>

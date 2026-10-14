@@ -15,7 +15,9 @@ export interface CompanionCopy {
   status: { thinking: string; looking: string; searching: string };
 }
 
-export type CompanionId = "gio" | "tony" | "martini" | "jack" | "goldie";
+// "jack" stays known so his old deployment shows that he has retired, rather
+// than another advisor or Gio. The active lineup is ACTIVE_LINEUP in index.ts.
+export type CompanionId = "gio" | "tony" | "martini" | "alden" | "goldie" | "jack";
 
 /** One character on the shared engine: what it's told, and how it looks. */
 export interface Companion extends CompanionCopy {
@@ -30,4 +32,9 @@ export interface Companion extends CompanionCopy {
   iconTile: string;
   /** One-line description for the link preview and home screen. */
   description: string;
+  /**
+   * No longer in Cinq's lineup. Kept, under its own name, so an old link shows
+   * that this advisor has retired; it answers no new questions.
+   */
+  retired?: boolean;
 }

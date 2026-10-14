@@ -1,8 +1,11 @@
 import { JACK_SYSTEM_PROMPT } from "./jack-prompt";
 import type { Companion } from "./types";
 
+// Jack has retired from Cinq's lineup (Alden took the fifth place). He stays
+// here, as Jack, so his old address says so instead of showing someone else.
 export const jack: Companion = {
   id: "jack",
+  retired: true,
   name: "Jack",
   tagline: "The truth you need.",
   subtitle: "Ask a question, and add screenshots.",

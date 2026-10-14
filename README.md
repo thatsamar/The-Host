@@ -1,14 +1,16 @@
-# Gio, Tony, Martini, Jack and Untangled
+# Cinq: Tony, Martine, Gio, Alden and Goldie
 
 Five private-beta companions on one engine. Each is one page: add up to 10 photos, ask a question, or both, and get an answer with a point of view.
 
 - **Gio** (design): *See with a designer's eye.* The custom GPT's design point of view, addressed to whoever is asking.
 - **Tony** (travel): *Travel like it matters.* A travel companion for going beneath the surface of a place, in Amar Lalvani's voice and taste.
 - **Martini** (style): *Dress like you.* A personal style advisor for men's, women's and mixed wardrobes: outfit checks, shopping, packing, dress codes, invest / save / skip.
-- **Jack** (hard truths): *The truth you need.* Hard advice from the sharpest friend you have, in a dark bar at midnight: what's really going on, the hard truth, one next move. Drafts the message you can't bring yourself to write.
+- **Alden** (wine, cocktails & spirits): *The right drink at the right time* Helps you choose what to drink, from a bottle on a wine list to a cocktail at the bar, with sake and beer taken just as seriously. Deep knowledge, no pretense.
 - **Untangled** (clarity): *Clear decisions from complexity.* Map a tangle of people, incentives, facts and assumptions. Separate signal from noise, control from non-control, labor from fruits. Restore your ability to decide.
 
-The code is shared. Each companion is its own Vercel project with its own address, name, icon and link preview, chosen by one setting: `COMPANION=gio`, `tony`, `martini`, `jack` or `untangled`.
+The code is shared. Each companion is its own Vercel project with its own address, name, icon and link preview, chosen by one setting: `COMPANION=gio`, `tony`, `martini`, `alden` or `goldie` (`hub` for the Cinq landing page).
+
+**Jack has retired.** He stays in the code as Jack (`jack.ts`, `jack-prompt.ts`) so his old address, still `COMPANION=jack`, shows a page saying he's no longer one of Cinq's advisors, under his own name and icon. It takes no new questions (the ask route answers 410). Nothing a person asked Jack was ever saved, so there is nothing to move, and nothing presents Jack's link as Alden.
 
 - **No saved conversations.** A visit is one conversation. Follow-up questions work while the page is open; **New** or a reload starts fresh.
 - **Nothing stored.** Photos are shrunk in the browser and sent with the question. The app has no database tables of its own and keeps no files.
@@ -49,8 +51,8 @@ Browser ──► Next.js on Vercel ──► Anthropic (claude-opus-5-5, web se
 ```
 
 - `src/components/studio.tsx` is the whole interface: the start screen, the conversation and the composer (camera button, optional text, send). A failed answer puts the question and photos back to resend; answers can be copied.
-- `src/lib/companions/` holds each companion: its system prompt (`gio-prompt.ts`, `tony-prompt.ts`, `martini-prompt.ts`, `jack-prompt.ts`), its capabilities, and the words the page shows (name, tagline, placeholder, status lines). `currentCompanion()` picks one from `COMPANION`.
-- `src/app/icon.tsx`, `apple-icon.tsx`, `opengraph-image.tsx` and `manifest.ts` give each companion its home-screen icon (Gio black, Tony rust, Martini olive, Jack oxblood) and link preview, drawn at build time with the fonts in `assets/fonts` (SIL Open Font License).
+- `src/lib/companions/` holds each companion: its system prompt (`gio-prompt.ts`, `tony-prompt.ts`, `martini-prompt.ts`, `alden-prompt.ts`, `untangled-prompt.ts`; `jack-prompt.ts` for the retired Jack), its capabilities, and the words the page shows (name, tagline, placeholder, status lines). `currentCompanion()` picks one from `COMPANION`; `ACTIVE_LINEUP` is the five on Cinq.
+- `src/app/icon.tsx`, `apple-icon.tsx`, `opengraph-image.tsx` and `manifest.ts` give each companion its home-screen icon (a letter on each companion's `iconTile` colour; Alden's claret tile is a placeholder until an approved Alden icon exists) and link preview, drawn at build time with the fonts in `assets/fonts` (SIL Open Font License).
 - `src/lib/ask/photos.ts` shrinks photos in the browser. `src/lib/ask/budget.ts` keeps each request under Vercel's 4.5 MB body limit by dropping the oldest photos from long visits first.
 - `src/app/api/ask/route.ts` checks the sign-in, validates the request and streams the answer as NDJSON.
 - `src/lib/ask/prompt.ts` assembles what the model sees, in order: the companion's system prompt, then an **app capabilities** block (what the app does, that it keeps nothing, that it doesn't know who's asking), then the conversation.
@@ -92,16 +94,17 @@ Every variable is documented in [`.env.example`](.env.example).
 
 | Variable | Purpose |
 | --- | --- |
-| `COMPANION` | `gio` (default), `tony`, `martini` or `jack`. Read at build time: redeploy after changing it |
+| `COMPANION` | `gio` (default), `tony`, `martini`, `alden`, `goldie`, or `hub`; `jack` only on Jack's retired address. Read at build time: redeploy after changing it |
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Sign-in, when it's on. `NEXT_PUBLIC_SUPABASE_ANON_KEY` also works, as set by the Vercel Supabase integration |
 | `ANTHROPIC_API_KEY` | Claude |
 | `CHAT_MODEL` | Defaults to `claude-opus-5-5` (`GIO_CHAT_MODEL` also works) |
 | `CHAT_EFFORT` | How much the companion thinks before answering. Defaults to `high` |
-| `WEB_SEARCH_MAX_USES` | Web searches allowed per answer. Defaults to Gio 5, Tony 8, Martini 5, Jack 0; `0` turns search off |
+| `WEB_SEARCH_MAX_USES` | Web searches allowed per answer. Defaults to Gio 5, Tony 8, Martini 5, Alden 5, Goldie 0; `0` turns search off |
 | `REQUIRE_SIGN_IN` | Optional. `true` requires sign-in; unset, the app is open to anyone with the address |
 | `QUESTIONS_PER_HOUR` | Optional. Per-visitor cap, default 40; `0` turns it off |
 | `INVITE_CODE` | Optional, with sign-in on. Turns on link invitations (`/join/<code>`) and the Invite button |
 | `SUPABASE_SERVICE_ROLE_KEY` | Needed for link invitations; server-side only. Set by the Vercel Supabase integration (`SUPABASE_SECRET_KEY` also works) |
+| `NEXT_PUBLIC_ALDEN_URL` | Hub only. Alden's address for his card on Cinq. Unset, a preview's card says "Coming soon", and a production hub build stops (`src/lib/launch.ts`) so the live hub never does |
 | `NEXT_TELEMETRY_DISABLED` | Set to `1` |
 
 ---

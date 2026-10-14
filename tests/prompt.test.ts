@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ChatContentPart } from "@/lib/ai/types";
 import { APP_OUTPUT_LIMITS, BLOCK_ORDER, assemblePrompt, capabilitiesBlock, toChatTurns } from "@/lib/ask/prompt";
 import { COMPANIONS } from "@/lib/companions";
+import { alden } from "@/lib/companions/alden";
 import { gio } from "@/lib/companions/gio";
 import { jack } from "@/lib/companions/jack";
 import { martini } from "@/lib/companions/martini";
@@ -99,7 +100,8 @@ describe("Tony", () => {
 
 describe("Martini", () => {
   it("carries the style brief as written", () => {
-    expect(martini.systemPrompt).toMatch(/^You are Martini, my personal style advisor\./);
+    expect(martini.systemPrompt).toMatch(/^You are Martine, my personal style advisor\./);
+    expect(martini.systemPrompt).not.toMatch(/\bMartini\b/);
     expect(martini.systemPrompt).toMatch(/Do not treat men’s style as an afterthought or women’s style as the default\./);
     for (const label of ["THE CALL", "WHY", "THE MOVE", "WHAT NOT TO DO", "COST", "NEXT STEP"]) {
       expect(martini.systemPrompt).toContain(`${label} — `);
@@ -146,7 +148,81 @@ describe("Jack", () => {
   });
 });
 
+describe("Alden", () => {
+  it("carries the owner's brief as written, as an original advisor", () => {
+    expect(alden.systemPrompt).toMatch(/^You are Alden, Cinq’s advisor on wine, cocktails, and spirits\. Your knowledge also runs deep in sake and beer\./);
+    expect(alden.systemPrompt).toContain("Your governing question is: What is worth drinking, for this person, at this price, in this moment?");
+    for (const heading of ["START WITH THE PERSON AND THE OCCASION", "KNOW FAR MORE THAN YOU SAY", "EXERCISE JUDGMENT", "READ THE EVIDENCE", "VOICE AND RESPONSE"]) {
+      expect(alden.systemPrompt).toContain(`\n${heading}\n`);
+    }
+    expect(alden.systemPrompt).toMatch(/The call: What you would order, open, buy, or make, in the first person\.\nWhy: Why it beats the nearest rival[\s\S]*\nThe move: [\s\S]*\nAlternative: Only if a real difference in preference or budget changes the answer\./);
+    expect(alden.systemPrompt).toMatch(/Do not claim to know a bottle’s condition from a photo of a list\./);
+    expect(alden.systemPrompt).toMatch(/Never encourage excessive drinking, drinking and driving, or drinking by someone under the legal drinking age\./);
+    expect(alden.systemPrompt).toMatch(/Do not give personalized medical assurances about alcohol, medication, pregnancy, or recovery\.$/);
+    // No real person's name or endorsement.
+    for (const block of assemblePrompt({ companion: alden, turns: [{ role: "user", text: "Hi" }] }).system) {
+      expect(block.body).not.toMatch(/Aldo|Sohm/);
+    }
+  });
+
+  it("leads with a personal call, defends it against the nearest rival, and keeps research behind it", () => {
+    expect(alden.systemPrompt).toMatch(/Lead with a definite, personal call: “I would order…”, “I would open…”, “I would make it this way\.”/);
+    expect(alden.systemPrompt).toMatch(/why that choice beats the nearest plausible alternative for this person, at this price, in this moment/);
+    expect(alden.systemPrompt).toMatch(/Usually give one choice and no alternatives\. Offer a second only when a real difference in preference or budget changes the answer/);
+    expect(alden.systemPrompt).toMatch(/do not reopen every possibility/);
+    expect(alden.systemPrompt).toMatch(/Show depth through discrimination, not length\./);
+    expect(alden.systemPrompt).toMatch(/name the spirit you would use, the modifier, the proportions, and the technique/);
+    expect(alden.systemPrompt).toMatch(/name the meal you would actually serve with it, not six pairings/);
+    expect(alden.systemPrompt).toMatch(/which bottle earns the money and why it beats the obvious rival/);
+    expect(alden.systemPrompt).toMatch(/Keep the research behind the recommendation\. Barcode matches, producer histories, technical production details, and global average prices belong in the answer only if they change the call or prevent a mistake\./);
+    expect(alden.systemPrompt).toMatch(/never imply that a label, a region, or an online listing proves how a particular bottle tastes or how it has been stored/);
+    // Breadth, safeguards and safety stay.
+    for (const area of ["Wine:", "Sake:", "Beer:", "Spirits:", "Cocktails:"]) expect(alden.systemPrompt).toContain(`\n${area} `);
+    expect(alden.systemPrompt).toMatch(/Never invent a producer, vintage, price, ingredient, availability, or bottle identity\./);
+    expect(alden.systemPrompt).toMatch(/Attribute sourced prices and mark unsourced prices as estimates\./);
+    expect(alden.systemPrompt).toMatch(/Alcohol is optional\./);
+  });
+
+  it("reads lists, bottles and bars, keeps nothing, and searches up to five times with sourced prices", () => {
+    const body = capabilitiesBlock(alden, true).body;
+    expect(body).toMatch(/up to 10 photos/);
+    for (const thing of ["wine list", "sake list", "cocktail menu", "beer list", "bottle", "label", "back bar", "store shelf", "meal or table"]) {
+      expect(body).toContain(thing);
+    }
+    expect(body).toMatch(/keeps nothing/);
+    expect(body).toMatch(/Don't assume the person's name, budget, company or drinking habits/);
+    expect(body).toMatch(/web_search tool, up to five searches per answer/);
+    expect(body).toMatch(/Briefly say what you verified/);
+    expect(body).toMatch(/Give the source for any sourced price, and mark any price you did not find in a listing as an estimate/);
+    expect(body.split("\n").at(-1)).toBe(APP_OUTPUT_LIMITS);
+    expect(capabilitiesBlock(alden, false).body).toMatch(/Mark every price as an estimate/);
+    expect(alden.webSearchMaxUses).toBe(5);
+  });
+
+  it("makes the call from a photo alone", () => {
+    const [turn] = toChatTurns([{ role: "user", text: "", images: [img()] }], alden.photosOnly);
+    expect(textOf(turn.content)).toMatch(/^\(A photo, no question\. Read what's there, whether a list, a menu, a bottle or a shelf, and make the call/);
+  });
+});
+
+describe("Tony and Alden", () => {
+  it("each knows the other's territory: where to go is Tony's, what to drink is Alden's", () => {
+    const toAlden = capabilitiesBlock(alden, true).body;
+    const toTony = capabilitiesBlock(tony, true).body;
+    expect(toAlden).toMatch(/Your territory is what to drink/);
+    expect(toAlden).toMatch(/is Tony's territory in Cinq/);
+    expect(toTony).toMatch(/Your territory is where to go/);
+    expect(toTony).toMatch(/is Alden's territory in Cinq/);
+    expect(toTony).not.toContain("—");
+  });
+});
+
 describe("Goldie", () => {
+  it("is named Goldie at the start of her brief", () => {
+    expect(goldie.systemPrompt).toMatch(/^You are Goldie: /);
+    expect(goldie.systemPrompt).not.toMatch(/^You are Untangled/);
+  });
+
   it("separates facts from assumptions, control from non-control, labor from fruits", () => {
     expect(goldie.systemPrompt).toMatch(/^You are Untangled: a thinking tool for consequential human situations/);
     expect(goldie.systemPrompt).toMatch(/What's Actually Happening/);
