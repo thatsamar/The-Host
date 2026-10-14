@@ -83,7 +83,7 @@ describe("Alden's page", () => {
   it("shows Alden's words and sends a photographed list through the shared answer flow", async () => {
     render(createElement(Studio, { companion: copyOf(COMPANIONS.alden) }));
     expect(screen.getByText("Wine, Cocktails & Spirits Advisor")).toBeTruthy();
-    expect(screen.getByText(/Deep knowledge, no pretense\./)).toBeTruthy();
+    expect(screen.getByText("The right drink at the right time", { selector: "p" })).toBeTruthy();
     const box = screen.getByLabelText("Ask Alden") as HTMLTextAreaElement;
     expect(box.placeholder).toBe("What are we drinking?");
 

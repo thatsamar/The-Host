@@ -36,7 +36,7 @@ describe("Cinq's lineup", () => {
       expect(alden.name).toBe("Alden");
       expect(alden.role).toBe("Wine, Cocktails & Spirits Advisor");
       expect(alden.tagline).toBe("The right drink at the right time");
-      expect(alden.intro).toBe("Alden helps you choose what to drink, from a bottle on a wine list to a cocktail at the bar. Deep knowledge, no pretense.");
+      expect(alden.intro).toBe("The right drink at the right time");
       expect(alden.placeholder).toBe("What are we drinking?");
     }
   });
