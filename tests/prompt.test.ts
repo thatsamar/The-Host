@@ -87,17 +87,28 @@ describe("The call: Cinq's shared standard of judgment", () => {
     expect(APP_JUDGMENT).not.toContain("—");
   });
 
-  it("leaves no brief's response template labeling its opening as the call", () => {
-    // Where a template has a call, it is the closing section, after WHY.
-    for (const [prompt, opening] of [
-      [gio.systemPrompt, "THE VERDICT — "],
-      [martini.systemPrompt, "THE VERDICT — "],
-    ] as const) {
-      expect(prompt.indexOf(opening)).toBeGreaterThan(-1);
+  it("leaves no template with a required opening label, and makes its closing call optional", () => {
+    for (const prompt of [gio.systemPrompt, martini.systemPrompt]) {
+      expect(prompt).not.toMatch(/THE VERDICT|NEXT STEP — /);
+      expect(prompt).toMatch(/[Gg]ive your view first, in your own words|Start with your view, in your own words/);
+      expect(prompt).toMatch(/THE CALL — [Ww]hen it helps, close with the single best/);
       expect(prompt.indexOf("THE CALL — ")).toBeGreaterThan(prompt.indexOf("WHY — "));
-      expect(prompt).not.toContain("NEXT STEP — ");
     }
-    expect(alden.systemPrompt.indexOf("\nThe call: ")).toBeGreaterThan(alden.systemPrompt.indexOf("\nWhy: "));
+    expect(capabilitiesBlock(martini, true).body).toMatch(/give your view first in your own words[\s\S]*THE CALL only when a closing action helps/);
+    expect(alden.systemPrompt).toMatch(/\nThe call: Only when it helps, /);
+  });
+
+  it("never gives two endings where a brief already has a closing thought (Tony)", () => {
+    expect(tony.systemPrompt).toMatch(/End with the emotional key to the trip/);
+    expect(APP_JUDGMENT).toMatch(/If your instructions already give you a closing thought or next step, The call takes its place or carries it; never end twice\./);
+  });
+
+  it("lets Goldie close with a next step without directing someone's life", () => {
+    const body = capabilitiesBlock(goldie, true).body;
+    expect(body).toMatch(/You do not tell the user what to do\./);
+    expect(body).toMatch(/When you end with The call, make it one clear next step within the person's control, or the question they need to answer next/);
+    expect(body).toMatch(/Never make it a verdict on their life or relationships, or a decision that is theirs to make\./);
+    expect(body).toMatch(/In grief, crisis, or a delicate moment, leave the label off\./);
   });
 });
 
@@ -152,7 +163,7 @@ describe("Martini", () => {
     expect(martini.systemPrompt).toMatch(/^You are Martine, my personal style advisor\./);
     expect(martini.systemPrompt).not.toMatch(/\bMartini\b/);
     expect(martini.systemPrompt).toMatch(/Do not treat men’s style as an afterthought or women’s style as the default\./);
-    for (const label of ["THE VERDICT", "WHY", "THE MOVE", "WHAT NOT TO DO", "COST", "THE CALL"]) {
+    for (const label of ["WHY", "THE MOVE", "WHAT NOT TO DO", "COST", "THE CALL"]) {
       expect(martini.systemPrompt).toContain(`${label} — `);
     }
     expect(martini.systemPrompt).toMatch(/INVEST:\n[\s\S]*SAVE:\n[\s\S]*SKIP:\n/);

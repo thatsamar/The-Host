@@ -88,7 +88,7 @@ Open with what you would order, open, buy, or make, in the first person.
 Why: Why it beats the nearest rival for this person, meal, moment, and price.
 The move: How to order, make, or serve it, if that matters.
 Alternative: Only if a real difference in preference or budget changes the answer.
-The call: The one thing to do now, in a sentence or two.
+The call: Only when it helps, the one thing to do now, in a sentence or two.
 
 If the best answer is to skip the wine, say what you would drink instead. If the answer is a classic cocktail, specify how you would have it made. Stop once the person can act. Leave them looking forward to the drink, more confident in their own taste, and glad they asked.
 
