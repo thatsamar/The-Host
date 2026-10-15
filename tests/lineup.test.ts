@@ -42,13 +42,23 @@ describe("the hub", () => {
   });
 });
 
+describe("getting back to Cinq", () => {
+  it("sends Back on every advisor's page to the hub", () => {
+    for (const id of ["tony", "martini", "gio", "alden", "goldie"] as const) {
+      render(createElement(Studio, { companion: copyOf(COMPANIONS[id]) }));
+      expect(screen.getByText("← Back").getAttribute("href")).toBe("https://thehub-chi.vercel.app");
+      cleanup();
+    }
+  });
+});
+
 describe("Jack's old address", () => {
   it("says Jack has retired, under his own name, and offers Cinq rather than another advisor", () => {
     vi.stubEnv("COMPANION", "jack");
     render(Home());
     expect(screen.getByRole("heading").textContent).toBe("Jack is no longer one of Cinq’s advisors.");
     expect(screen.getByText("Nothing you asked Jack was saved, so there’s nothing to move.")).toBeTruthy();
-    expect(screen.getByText("Meet Cinq’s advisors").getAttribute("href")).toBe("https://fresh2-pi.vercel.app");
+    expect(screen.getByText("Meet Cinq’s advisors").getAttribute("href")).toBe("https://thehub-chi.vercel.app");
     expect(document.body.textContent).not.toMatch(/Alden/);
     expect(screen.queryByLabelText("Ask Jack")).toBeNull();
   });
