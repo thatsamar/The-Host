@@ -2,7 +2,7 @@ import type { Companion } from "@/lib/companions/types";
 
 // Where a retired advisor's old address leads. It names the advisor who lived
 // here and sends people to Cinq; it never shows another advisor in their place.
-export const CINQ_URL = "https://fresh2-pi.vercel.app";
+export const CINQ_URL = "https://thehub-chi.vercel.app";
 
 export function Retired({ companion }: { companion: Pick<Companion, "name"> }) {
   return (
