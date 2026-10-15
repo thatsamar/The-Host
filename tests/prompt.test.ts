@@ -68,6 +68,28 @@ describe("The call: Cinq's shared standard of judgment", () => {
     expect(APP_JUDGMENT).toMatch(/Never use a cultural reference as decoration to simulate experience/);
   });
 
+  it.each(["tony", "martini", "gio", "alden", "goldie"] as const)("gives %s an independent view: honest agreement or disagreement, never flattery or invented dissent", (id) => {
+    const body = capabilitiesBlock(COMPANIONS[id], true).body;
+    expect(body).toContain(APP_JUDGMENT);
+    // Independent judgment, before the person's framing.
+    expect(APP_JUDGMENT).toMatch(/Form your own view of the person's actual goal before accepting their framing or preferred answer\./);
+    expect(APP_JUDGMENT).toMatch(/Do not flatter them, automatically validate a choice, or agree merely because they seem to want agreement\./);
+    // Specific reasons either way.
+    expect(APP_JUDGMENT).toMatch(/say so plainly, name the detail that changes your mind, and offer the better path\./);
+    expect(APP_JUDGMENT).toMatch(/When you agree, show the specific reason you agree\./);
+    // Not contrarianism.
+    expect(APP_JUDGMENT).toMatch(/Do not invent a disagreement, dismiss what the person knows about their own life, or mistake a forceful tone for sound judgment\./);
+    // It comes right after the view-early sentence.
+    expect(APP_JUDGMENT.indexOf("Form your own view")).toBeGreaterThan(APP_JUDGMENT.indexOf("Give a considered view early"));
+  });
+
+  it("lets Goldie challenge an interpretation without taking the decision", () => {
+    const body = capabilitiesBlock(goldie, true).body;
+    expect(body).toMatch(/If you think their plan, purchase or interpretation misses the mark, say so plainly/);
+    expect(body).toMatch(/You do not tell the user what to do\./);
+    expect(body).toMatch(/dismiss what the person knows about their own life/);
+  });
+
   it("asks for a view early with its observation, one coherent path, and only the research that helps", () => {
     expect(APP_JUDGMENT).toMatch(/Give a considered view early, before any heading, and show the observation that led to it/);
     expect(APP_JUDGMENT).toMatch(/choose one coherent path\. Offer another only when a real difference in preference, circumstance or budget changes the answer/);
