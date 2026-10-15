@@ -89,6 +89,13 @@ describe("The call: Cinq's shared standard of judgment", () => {
     expect(APP_JUDGMENT).toMatch(/When an expensive or hard-to-reverse recommendation rests on an uncertain premise[\s\S]*say how to check it first\./);
   });
 
+  it("claims only what the photo and the person's words establish, without hedging a sound call", () => {
+    expect(APP_JUDGMENT).toMatch(/Be as exact about what the photo and the person's words establish as about the recommendation/);
+    expect(APP_JUDGMENT).toMatch(/a photo of an object does not show the weather or the temperature of the room, and the name of a place does not establish its conditions/);
+    expect(APP_JUDGMENT).toMatch(/give the one condition that decides it[\s\S]*rather than asserting it\./);
+    expect(APP_JUDGMENT).toMatch(/Do not pile generic caveats onto a well-supported call\./);
+  });
+
   it("is optional: never forced into brief replies, follow-ups or delicate moments", () => {
     expect(APP_JUDGMENT).toMatch(/when it would help the person act/);
     expect(APP_JUDGMENT).toMatch(/Do not force The call into a brief reply, a conversational follow-up, or an emotionally delicate moment/);
@@ -175,6 +182,7 @@ describe("Gio", () => {
     const body = capabilitiesBlock(gio, true).body;
     expect(body).toMatch(/A photograph does not establish distances, ceiling heights, compass orientation, how a room looks at night, or whether a piece of a given size will fit\./);
     expect(body).toMatch(/say that you are inferring it and how to check it[\s\S]*before you specify a purchase/);
+    expect(body).toMatch(/Keep what you can see, what you infer and what needs testing distinct: do not estimate distances from perspective or describe the room at night as if you had seen it/);
     expect(body).toMatch(/When the person is deciding what to buy, give for each piece:/);
     expect(gio.systemPrompt).toMatch(/Often that judgment is to keep what works and test something before buying anything\./);
     expect(gio.systemPrompt).toMatch(/Bring in cost \(invest, save, or skip\) only when the person is actually deciding what to buy/);
@@ -207,6 +215,7 @@ describe("Tony", () => {
     expect(body).toMatch(/For one night or one day, give one route someone could actually follow, in order, with its timing\./);
     expect(body).toMatch(/A materially different alternative gets a sentence or two, never a second itinerary\./);
     expect(body).toMatch(/timing, distance between stops, opening hours or reservations decide whether the plan works, check them/);
+    expect(body).toMatch(/Fit the stops to the hours with the travel between them included, say how to get from one to the next, and cut a stop rather than rush the night\./);
   });
 
   it("reads a place from photos alone", () => {
@@ -240,6 +249,7 @@ describe("Martini", () => {
     expect(martini.systemPrompt).toMatch(/Then name the one change that makes the outfit work where it is going/);
     expect(martini.systemPrompt).toMatch(/do not turn an outfit check into a shopping assignment: most outfits are fixed with what the person already has\./);
     expect(martini.systemPrompt).toMatch(/how often it is likely to be worn, only from what the person has told you/);
+    expect(body).toMatch(/Once you have made the decisive change, stop: add a styling detail only if it changes the result\./);
     expect(body).toMatch(/Suggest buying something only when what the person has cannot solve the problem\./);
     expect(body).toMatch(/Never state how often something will be worn unless the person told you\./);
   });

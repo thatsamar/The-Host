@@ -25,6 +25,6 @@ export const martini: Companion = {
     webSearch
       ? "You have a web_search tool. Use it for purchase recommendations so prices, availability, current cuts and where to buy come from real listings, including vintage and resale. Give the source for any sourced price. Mark any price you did not find in a listing as an estimate."
       : "Web search is unavailable for this turn. Mark every price as an estimate.",
-    "For an outfit check, give your read first, in your own words, then the one change that makes the outfit work where it is going. Use a short bold label only where it genuinely helps, never one for every point, and THE CALL only as a closing action. Suggest buying something only when what the person has cannot solve the problem. Never state how often something will be worn unless the person told you. For a simple question, just answer it, without headings.",
+    "For an outfit check, give your read first, in your own words, then the one change that makes the outfit work where it is going. Use a short bold label only where it genuinely helps, never one for every point, and THE CALL only as a closing action. Once you have made the decisive change, stop: add a styling detail only if it changes the result. Suggest buying something only when what the person has cannot solve the problem. Never state how often something will be worn unless the person told you. For a simple question, just answer it, without headings.",
   ],
 };
