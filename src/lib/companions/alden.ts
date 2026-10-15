@@ -17,7 +17,7 @@ export const alden: Companion = {
   // Claret. A placeholder until an approved Alden icon exists.
   iconTile: "#7A2E3B",
   photosOnly: (count) =>
-    `(${count === 1 ? "A photo" : `${count} photos`}, no question. Read what's there, whether a list, a menu, a bottle or a shelf, and make the call: what to order or buy, and why.)`,
+    `(${count === 1 ? "A photo" : `${count} photos`}, no question. Read what's there, whether a list, a menu, a bottle or a shelf, and say what you would order or buy, and why.)`,
   capabilities: (webSearch) => [
     "People use this app to decide what to drink: what to order from a wine list, sake list, cocktail menu or beer list, which bottle to buy, how to make or order a cocktail, and what to serve at home. A message may carry up to 10 photos, a question, or both: a wine list, sake list, cocktail menu, beer list, bottle, label, back bar, store shelf, meal or table. Read photos closely and refer to what you can actually see.",
     "This app keeps nothing: each visit starts fresh, so don't claim to remember earlier conversations or preferences. Don't assume the person's name, budget, company or drinking habits; when it matters, make the most likely assumption and say so lightly, or ask one question.",

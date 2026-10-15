@@ -61,17 +61,32 @@ describe("The call: Cinq's shared standard of judgment", () => {
     }
   });
 
-  it("asks for a judgment early and a closing call that turns advice into action, not a recap", () => {
-    expect(APP_JUDGMENT).toMatch(/^Offer a considered judgment early when the information supports one/);
-    expect(APP_JUDGMENT).toMatch(/end with a short section headed The call \(a Markdown heading, ### The call/);
+  it("asks for earned judgment, not borrowed experience", () => {
+    expect(APP_JUDGMENT).toMatch(/^Your judgment should feel earned: by close attention to this person's situation, real knowledge of the field, and an understanding of how a choice plays out in life\./);
+    expect(APP_JUDGMENT).toMatch(/Notice something consequential, explain why it matters, and make a call\./);
+    expect(APP_JUDGMENT).toMatch(/You have no personal history: never claim to have been somewhere, tasted, worn, met or seen something yourself\./);
+    expect(APP_JUDGMENT).toMatch(/Never use a cultural reference as decoration to simulate experience/);
+  });
+
+  it("asks for a view early with its observation, one coherent path, and only the research that helps", () => {
+    expect(APP_JUDGMENT).toMatch(/Give a considered view early, before any heading, and show the observation that led to it/);
+    expect(APP_JUDGMENT).toMatch(/choose one coherent path\. Offer another only when a real difference in preference, circumstance or budget changes the answer/);
+    expect(APP_JUDGMENT).toMatch(/Include prices, sources, caveats and technical details when they help the decision or prevent a mistake\. Leave the rest of the research out\./);
+  });
+
+  it("makes The call an optional closing action, never an opening label or a recap, with nothing after it", () => {
+    expect(APP_JUDGMENT).toMatch(/you may end with a short section headed The call \(a Markdown heading, ### The call/);
     expect(APP_JUDGMENT).toMatch(/what you recommend, reject, would do next, would wait for, or need to know before deciding/);
     expect(APP_JUDGMENT).toMatch(/does not repeat the opening or summarize the answer/);
-    expect(APP_JUDGMENT).toMatch(/never use it to label your opening judgment/);
+    expect(APP_JUDGMENT).toMatch(/The call is only ever the ending: never use it to label your opening view, and nothing follows it\./);
+    expect(APP_JUDGMENT).toMatch(/Wherever your instructions mention The call, they mean this optional ending\./);
   });
 
   it("calibrates confidence to the evidence and the stakes, and never fakes precision", () => {
     expect(APP_JUDGMENT).toMatch(/Match the strength of your recommendation to the quality of the evidence and the consequences of being wrong/);
     expect(APP_JUDGMENT).toMatch(/Do not invent precision, imply that you saw details you could not see, or present a guess as certainty/);
+    expect(APP_JUDGMENT).toMatch(/Separate what you can see or have verified from what you infer\./);
+    expect(APP_JUDGMENT).toMatch(/When an expensive or hard-to-reverse recommendation rests on an uncertain premise[\s\S]*say how to check it first\./);
   });
 
   it("is optional: never forced into brief replies, follow-ups or delicate moments", () => {
@@ -79,7 +94,7 @@ describe("The call: Cinq's shared standard of judgment", () => {
     expect(APP_JUDGMENT).toMatch(/Do not force The call into a brief reply, a conversational follow-up, or an emotionally delicate moment/);
     expect(APP_JUDGMENT).toMatch(/Never add it merely to satisfy a format/);
     expect(APP_JUDGMENT).toMatch(/the person makes the decision/);
-    expect(APP_JUDGMENT).toMatch(/not a shared voice or a required shape/);
+    expect(APP_JUDGMENT).toMatch(/not a shared voice or an answer template/);
   });
 
   it("is the same for every companion, names none of them, and uses no em dashes (Tony never does)", () => {
@@ -87,20 +102,38 @@ describe("The call: Cinq's shared standard of judgment", () => {
     expect(APP_JUDGMENT).not.toContain("—");
   });
 
-  it("leaves no template with a required opening label, and makes its closing call optional", () => {
-    for (const prompt of [gio.systemPrompt, martini.systemPrompt]) {
-      expect(prompt).not.toMatch(/THE VERDICT|NEXT STEP — /);
-      expect(prompt).toMatch(/[Gg]ive your view first, in your own words|Start with your view, in your own words/);
-      expect(prompt).toMatch(/THE CALL — [Ww]hen it helps, close with the single best/);
-      expect(prompt.indexOf("THE CALL — ")).toBeGreaterThan(prompt.indexOf("WHY — "));
+  it.each(Object.values(COMPANIONS))("gives $name nothing that would put The call at the start", (companion) => {
+    for (const webSearch of [true, false]) {
+      const text = [
+        ...assemblePrompt({ companion, turns: [{ role: "user", text: "Hi" }], webSearch }).system.map((b) => b.body),
+        companion.photosOnly(1),
+        companion.photosOnly(3),
+      ].join("\n");
+      // No opening label, and no instruction to open, start or lead with a call.
+      expect(text).not.toMatch(/THE VERDICT|NEXT STEP — /);
+      expect(text).not.toMatch(/\b(open|start|lead|begin)\w*( \w+){0,3} with (a |the )?([\w,-]+ ){0,2}call\b/i);
+      // A photo with no question asks for a read, not for "the call".
+      expect(companion.photosOnly(1)).not.toMatch(/\bcall\b/i);
     }
-    expect(capabilitiesBlock(martini, true).body).toMatch(/give your view first in your own words[\s\S]*THE CALL only when a closing action helps/);
-    expect(alden.systemPrompt).toMatch(/\nThe call: Only when it helps, /);
+  });
+
+  it("leaves no stacked section template, and mentions The call only as an optional ending", () => {
+    for (const prompt of [gio.systemPrompt, martini.systemPrompt, alden.systemPrompt]) {
+      expect(prompt).not.toMatch(/^(WHY|THE MOVE|WHAT NOT TO DO|COST|REFERENCE|THE CALL|NEXT STEP) — /m);
+      expect(prompt).not.toMatch(/^(Why|The move|Alternative|The call): /m);
+      expect(prompt).toMatch(/If a closing action helps, end with it as (The call|THE CALL)[.,][\s\S]{0,60}[Nn]othing comes after it\./);
+    }
+    expect(gio.systemPrompt).toMatch(/Lead with your strongest judgment, in your own words, and the observation in the room that led to it\./);
+    expect(gio.systemPrompt).toMatch(/Do not build a section for every heading\./);
+    expect(martini.systemPrompt).toMatch(/Start with your view, in your own words: what you see, what is working, and what it says about the person\./);
+    expect(martini.systemPrompt).toMatch(/Do not build a section for every point/);
+    expect(capabilitiesBlock(martini, true).body).toMatch(/give your read first, in your own words[\s\S]*THE CALL only as a closing action/);
   });
 
   it("never gives two endings where a brief already has a closing thought (Tony)", () => {
     expect(tony.systemPrompt).toMatch(/End with the emotional key to the trip/);
     expect(APP_JUDGMENT).toMatch(/If your instructions already give you a closing thought or next step, The call takes its place or carries it; never end twice\./);
+    expect(capabilitiesBlock(tony, true).body).toMatch(/End once\. The emotional key to the trip is your ending: if you label it The call, that section carries the thought in a sentence or two, and nothing comes after it\./);
   });
 
   it("lets Goldie close with a next step without directing someone's life", () => {
@@ -109,6 +142,13 @@ describe("The call: Cinq's shared standard of judgment", () => {
     expect(body).toMatch(/When you end with The call, make it one clear next step within the person's control, or the question they need to answer next/);
     expect(body).toMatch(/Never make it a verdict on their life or relationships, or a decision that is theirs to make\./);
     expect(body).toMatch(/In grief, crisis, or a delicate moment, leave the label off\./);
+    // Her brief asks for no headings, so a named call is a bold lead-in, not a heading.
+    expect(goldie.systemPrompt).toMatch(/No headings\./);
+    expect(body).toMatch(/begin your final short paragraph with \*\*The call:\*\* in bold rather than a heading/);
+  });
+
+  it("keeps Goldie sharp about other people without presenting a read as a fact", () => {
+    expect(capabilitiesBlock(goldie, true).body).toMatch(/When you read another person's motives or feelings from it, make the observation sharp, and make clear it is your read of what you have been told, not a fact you know\./);
   });
 });
 
@@ -129,6 +169,16 @@ describe("Gio", () => {
     expect(body).toMatch(/Invest \/ save \/ skip/);
     expect(body).toMatch(/"Don't buy anything"/);
     expect(capabilitiesBlock(gio, false).body).toMatch(/Mark every price as an estimate/);
+  });
+
+  it("checks what a photo can't show before specifying a purchase, and brings in cost only when buying", () => {
+    const body = capabilitiesBlock(gio, true).body;
+    expect(body).toMatch(/A photograph does not establish distances, ceiling heights, compass orientation, how a room looks at night, or whether a piece of a given size will fit\./);
+    expect(body).toMatch(/say that you are inferring it and how to check it[\s\S]*before you specify a purchase/);
+    expect(body).toMatch(/When the person is deciding what to buy, give for each piece:/);
+    expect(gio.systemPrompt).toMatch(/Often that judgment is to keep what works and test something before buying anything\./);
+    expect(gio.systemPrompt).toMatch(/Bring in cost \(invest, save, or skip\) only when the person is actually deciding what to buy/);
+    expect(gio.systemPrompt).toMatch(/If a strong preliminary view is possible, give it first\./);
   });
 });
 
@@ -152,6 +202,13 @@ describe("Tony", () => {
     expect(capabilitiesBlock(tony, false).body).toMatch(/from memory and worth checking/);
   });
 
+  it("gives one feasible route, checks what decides it, and keeps an alternative brief", () => {
+    const body = capabilitiesBlock(tony, true).body;
+    expect(body).toMatch(/For one night or one day, give one route someone could actually follow, in order, with its timing\./);
+    expect(body).toMatch(/A materially different alternative gets a sentence or two, never a second itinerary\./);
+    expect(body).toMatch(/timing, distance between stops, opening hours or reservations decide whether the plan works, check them/);
+  });
+
   it("reads a place from photos alone", () => {
     const [turn] = toChatTurns([{ role: "user", text: "", images: [img(), img()] }], tony.photosOnly);
     expect(textOf(turn.content)).toMatch(/^\(2 photos, no question\. Read the place/);
@@ -163,9 +220,6 @@ describe("Martini", () => {
     expect(martini.systemPrompt).toMatch(/^You are Martine, my personal style advisor\./);
     expect(martini.systemPrompt).not.toMatch(/\bMartini\b/);
     expect(martini.systemPrompt).toMatch(/Do not treat men’s style as an afterthought or women’s style as the default\./);
-    for (const label of ["WHY", "THE MOVE", "WHAT NOT TO DO", "COST", "THE CALL"]) {
-      expect(martini.systemPrompt).toContain(`${label} — `);
-    }
     expect(martini.systemPrompt).toMatch(/INVEST:\n[\s\S]*SAVE:\n[\s\S]*SKIP:\n/);
     expect(martini.systemPrompt).toMatch(/Could this be on anyone with money\?\n\nIf yes, look harder\./);
     expect(martini.systemPrompt).toMatch(/never generic\.$/);
@@ -181,9 +235,18 @@ describe("Martini", () => {
     expect(capabilitiesBlock(martini, false).body).toMatch(/Mark every price as an estimate/);
   });
 
+  it("finds the one change that makes an outfit work, without a shopping assignment or invented wear counts", () => {
+    const body = capabilitiesBlock(martini, true).body;
+    expect(martini.systemPrompt).toMatch(/Then name the one change that makes the outfit work where it is going/);
+    expect(martini.systemPrompt).toMatch(/do not turn an outfit check into a shopping assignment: most outfits are fixed with what the person already has\./);
+    expect(martini.systemPrompt).toMatch(/how often it is likely to be worn, only from what the person has told you/);
+    expect(body).toMatch(/Suggest buying something only when what the person has cannot solve the problem\./);
+    expect(body).toMatch(/Never state how often something will be worn unless the person told you\./);
+  });
+
   it("gives an outfit check from photos alone", () => {
     const [turn] = toChatTurns([{ role: "user", text: "", images: [img()] }], martini.photosOnly);
-    expect(textOf(turn.content)).toBe("(A photo, no question. Give the outfit check: the call, the highest-leverage move, and what not to do.)");
+    expect(textOf(turn.content)).toBe("(A photo, no question. Give the outfit check: your read of it, and the one change that makes it work.)");
   });
 });
 
@@ -215,7 +278,7 @@ describe("Alden", () => {
     for (const heading of ["START WITH THE PERSON AND THE OCCASION", "KNOW FAR MORE THAN YOU SAY", "EXERCISE JUDGMENT", "READ THE EVIDENCE", "VOICE AND RESPONSE"]) {
       expect(alden.systemPrompt).toContain(`\n${heading}\n`);
     }
-    expect(alden.systemPrompt).toMatch(/Open with what you would order, open, buy, or make, in the first person\.\nWhy: Why it beats the nearest rival[\s\S]*\nThe move: [\s\S]*\nAlternative: Only if a real difference in preference or budget changes the answer\.\nThe call: /);
+    expect(alden.systemPrompt).toMatch(/Open with what you would order, open, buy, or make, in the first person, and why it beats the nearest rival for this person, meal, moment, and price\./);
     expect(alden.systemPrompt).toMatch(/Do not claim to know a bottle’s condition from a photo of a list\./);
     expect(alden.systemPrompt).toMatch(/Never encourage excessive drinking, drinking and driving, or drinking by someone under the legal drinking age\./);
     expect(alden.systemPrompt).toMatch(/Do not give personalized medical assurances about alcohol, medication, pregnancy, or recovery\.$/);
@@ -225,8 +288,8 @@ describe("Alden", () => {
     }
   });
 
-  it("leads with a personal call, defends it against the nearest rival, and keeps research behind it", () => {
-    expect(alden.systemPrompt).toMatch(/Lead with a definite, personal call: “I would order…”, “I would open…”, “I would make it this way\.”/);
+  it("leads with a personal choice, defends it against the nearest rival, and keeps research behind it", () => {
+    expect(alden.systemPrompt).toMatch(/Lead with a definite, personal choice: “I would order…”, “I would open…”, “I would make it this way\.”/);
     expect(alden.systemPrompt).toMatch(/why that choice beats the nearest plausible alternative for this person, at this price, in this moment/);
     expect(alden.systemPrompt).toMatch(/Usually give one choice and no alternatives\. Offer a second only when a real difference in preference or budget changes the answer/);
     expect(alden.systemPrompt).toMatch(/do not reopen every possibility/);
@@ -234,7 +297,7 @@ describe("Alden", () => {
     expect(alden.systemPrompt).toMatch(/name the spirit you would use, the modifier, the proportions, and the technique/);
     expect(alden.systemPrompt).toMatch(/name the meal you would actually serve with it, not six pairings/);
     expect(alden.systemPrompt).toMatch(/which bottle earns the money and why it beats the obvious rival/);
-    expect(alden.systemPrompt).toMatch(/Keep the research behind the recommendation\. Barcode matches, producer histories, technical production details, and global average prices belong in the answer only if they change the call or prevent a mistake\./);
+    expect(alden.systemPrompt).toMatch(/Keep the research behind the recommendation\. Barcode matches, producer histories, technical production details, and global average prices belong in the answer only if they change the choice or prevent a mistake\./);
     expect(alden.systemPrompt).toMatch(/never imply that a label, a region, or an online listing proves how a particular bottle tastes or how it has been stored/);
     // Breadth, safeguards and safety stay.
     for (const area of ["Wine:", "Sake:", "Beer:", "Spirits:", "Cocktails:"]) expect(alden.systemPrompt).toContain(`\n${area} `);
@@ -259,9 +322,16 @@ describe("Alden", () => {
     expect(alden.webSearchMaxUses).toBe(5);
   });
 
-  it("makes the call from a photo alone", () => {
+  it("ends once, with any serving detail inside the answer, and lets a finished recommendation stand", () => {
+    expect(alden.systemPrompt).toMatch(/If one ordering or serving detail matters, give it where it belongs in the answer rather than as a separate conclusion\./);
+    expect(alden.systemPrompt).toMatch(/end with it as The call, without repeating what you have already said; nothing comes after it\./);
+    expect(alden.systemPrompt).toMatch(/Once the recommendation is complete, let it stand\. Do not weaken it with a price aside or an invitation to send the menu/);
+    expect(alden.systemPrompt).toMatch(/You have no personal history\./);
+  });
+
+  it("chooses from a photo alone", () => {
     const [turn] = toChatTurns([{ role: "user", text: "", images: [img()] }], alden.photosOnly);
-    expect(textOf(turn.content)).toMatch(/^\(A photo, no question\. Read what's there, whether a list, a menu, a bottle or a shelf, and make the call/);
+    expect(textOf(turn.content)).toMatch(/^\(A photo, no question\. Read what's there, whether a list, a menu, a bottle or a shelf, and say what you would order or buy, and why\.\)$/);
   });
 });
 
