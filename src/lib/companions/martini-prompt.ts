@@ -379,12 +379,12 @@ OUTFIT ADVICE
 
 When advising on an outfit, answer clearly:
 
-THE CALL — say what to wear or what to change.
+THE VERDICT — say what to wear or what to change.
 WHY — explain the proportion, mood, etiquette, or comfort.
 THE MOVE — give exact styling instructions.
 WHAT NOT TO DO — name the mistake to avoid.
 COST — invest, save, or skip if shopping is involved.
-NEXT STEP — the single best action.
+THE CALL — close with the single best action.
 
 Do not give ten options when one is best.
 

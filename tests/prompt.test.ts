@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ChatContentPart } from "@/lib/ai/types";
-import { APP_OUTPUT_LIMITS, BLOCK_ORDER, assemblePrompt, capabilitiesBlock, toChatTurns } from "@/lib/ask/prompt";
+import { APP_JUDGMENT, APP_OUTPUT_LIMITS, BLOCK_ORDER, assemblePrompt, capabilitiesBlock, toChatTurns } from "@/lib/ask/prompt";
 import { COMPANIONS } from "@/lib/companions";
 import { alden } from "@/lib/companions/alden";
 import { gio } from "@/lib/companions/gio";
@@ -18,7 +18,7 @@ describe("assemblePrompt", () => {
     const req = assemblePrompt({ companion, turns: [{ role: "user", text: "Hi" }] });
     expect(req.system.map((b) => b.label)).toEqual([...BLOCK_ORDER]);
     expect(req.system[0].body).toBe(companion.systemPrompt);
-    expect(req.system[1].body).toBe([...companion.capabilities(true), APP_OUTPUT_LIMITS].join("\n"));
+    expect(req.system[1].body).toBe([...companion.capabilities(true), APP_JUDGMENT, APP_OUTPUT_LIMITS].join("\n"));
     expect(req.system.every((b) => b.cacheable)).toBe(true);
     expect(req.webSearch).toBe(true);
   });
@@ -49,6 +49,55 @@ describe("what a reply can be", () => {
 
   it("is the same for every companion and names none of them", () => {
     for (const c of Object.values(COMPANIONS)) expect(APP_OUTPUT_LIMITS).not.toContain(c.name);
+  });
+});
+
+describe("The call: Cinq's shared standard of judgment", () => {
+  it.each(Object.values(COMPANIONS))("is given to $name, just before the output limits, with or without web search", (companion) => {
+    for (const webSearch of [true, false]) {
+      const lines = capabilitiesBlock(companion, webSearch).body.split("\n");
+      expect(lines.at(-2)).toBe(APP_JUDGMENT);
+      expect(lines.at(-1)).toBe(APP_OUTPUT_LIMITS);
+    }
+  });
+
+  it("asks for a judgment early and a closing call that turns advice into action, not a recap", () => {
+    expect(APP_JUDGMENT).toMatch(/^Offer a considered judgment early when the information supports one/);
+    expect(APP_JUDGMENT).toMatch(/end with a short section headed The call \(a Markdown heading, ### The call/);
+    expect(APP_JUDGMENT).toMatch(/what you recommend, reject, would do next, would wait for, or need to know before deciding/);
+    expect(APP_JUDGMENT).toMatch(/does not repeat the opening or summarize the answer/);
+    expect(APP_JUDGMENT).toMatch(/never use it to label your opening judgment/);
+  });
+
+  it("calibrates confidence to the evidence and the stakes, and never fakes precision", () => {
+    expect(APP_JUDGMENT).toMatch(/Match the strength of your recommendation to the quality of the evidence and the consequences of being wrong/);
+    expect(APP_JUDGMENT).toMatch(/Do not invent precision, imply that you saw details you could not see, or present a guess as certainty/);
+  });
+
+  it("is optional: never forced into brief replies, follow-ups or delicate moments", () => {
+    expect(APP_JUDGMENT).toMatch(/when it would help the person act/);
+    expect(APP_JUDGMENT).toMatch(/Do not force The call into a brief reply, a conversational follow-up, or an emotionally delicate moment/);
+    expect(APP_JUDGMENT).toMatch(/Never add it merely to satisfy a format/);
+    expect(APP_JUDGMENT).toMatch(/the person makes the decision/);
+    expect(APP_JUDGMENT).toMatch(/not a shared voice or a required shape/);
+  });
+
+  it("is the same for every companion, names none of them, and uses no em dashes (Tony never does)", () => {
+    for (const c of Object.values(COMPANIONS)) expect(APP_JUDGMENT).not.toContain(c.name);
+    expect(APP_JUDGMENT).not.toContain("—");
+  });
+
+  it("leaves no brief's response template labeling its opening as the call", () => {
+    // Where a template has a call, it is the closing section, after WHY.
+    for (const [prompt, opening] of [
+      [gio.systemPrompt, "THE VERDICT — "],
+      [martini.systemPrompt, "THE VERDICT — "],
+    ] as const) {
+      expect(prompt.indexOf(opening)).toBeGreaterThan(-1);
+      expect(prompt.indexOf("THE CALL — ")).toBeGreaterThan(prompt.indexOf("WHY — "));
+      expect(prompt).not.toContain("NEXT STEP — ");
+    }
+    expect(alden.systemPrompt.indexOf("\nThe call: ")).toBeGreaterThan(alden.systemPrompt.indexOf("\nWhy: "));
   });
 });
 
@@ -103,7 +152,7 @@ describe("Martini", () => {
     expect(martini.systemPrompt).toMatch(/^You are Martine, my personal style advisor\./);
     expect(martini.systemPrompt).not.toMatch(/\bMartini\b/);
     expect(martini.systemPrompt).toMatch(/Do not treat men’s style as an afterthought or women’s style as the default\./);
-    for (const label of ["THE CALL", "WHY", "THE MOVE", "WHAT NOT TO DO", "COST", "NEXT STEP"]) {
+    for (const label of ["THE VERDICT", "WHY", "THE MOVE", "WHAT NOT TO DO", "COST", "THE CALL"]) {
       expect(martini.systemPrompt).toContain(`${label} — `);
     }
     expect(martini.systemPrompt).toMatch(/INVEST:\n[\s\S]*SAVE:\n[\s\S]*SKIP:\n/);
@@ -155,7 +204,7 @@ describe("Alden", () => {
     for (const heading of ["START WITH THE PERSON AND THE OCCASION", "KNOW FAR MORE THAN YOU SAY", "EXERCISE JUDGMENT", "READ THE EVIDENCE", "VOICE AND RESPONSE"]) {
       expect(alden.systemPrompt).toContain(`\n${heading}\n`);
     }
-    expect(alden.systemPrompt).toMatch(/The call: What you would order, open, buy, or make, in the first person\.\nWhy: Why it beats the nearest rival[\s\S]*\nThe move: [\s\S]*\nAlternative: Only if a real difference in preference or budget changes the answer\./);
+    expect(alden.systemPrompt).toMatch(/Open with what you would order, open, buy, or make, in the first person\.\nWhy: Why it beats the nearest rival[\s\S]*\nThe move: [\s\S]*\nAlternative: Only if a real difference in preference or budget changes the answer\.\nThe call: /);
     expect(alden.systemPrompt).toMatch(/Do not claim to know a bottle’s condition from a photo of a list\./);
     expect(alden.systemPrompt).toMatch(/Never encourage excessive drinking, drinking and driving, or drinking by someone under the legal drinking age\./);
     expect(alden.systemPrompt).toMatch(/Do not give personalized medical assurances about alcohol, medication, pregnancy, or recovery\.$/);

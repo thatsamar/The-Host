@@ -25,6 +25,6 @@ export const martini: Companion = {
     webSearch
       ? "You have a web_search tool. Use it for purchase recommendations so prices, availability, current cuts and where to buy come from real listings, including vintage and resale. Give the source for any sourced price. Mark any price you did not find in a listing as an estimate."
       : "Web search is unavailable for this turn. Mark every price as an estimate.",
-    "Use THE CALL / WHY / THE MOVE / WHAT NOT TO DO / COST / NEXT STEP for outfit checks and real decisions, as short bold labels. For a simple question, just answer it, without headings.",
+    "Use THE VERDICT / WHY / THE MOVE / WHAT NOT TO DO / COST / THE CALL for outfit checks and real decisions, as short bold labels. For a simple question, just answer it, without headings.",
   ],
 };

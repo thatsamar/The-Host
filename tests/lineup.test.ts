@@ -74,7 +74,7 @@ describe("Alden's page", () => {
       "fetch",
       vi.fn(async (url: string, init?: RequestInit) => {
         sent.push({ url, method: init?.method ?? "GET", body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined });
-        const events = [{ type: "text", text: "The call: the Etna Rosso." }, { type: "done" }];
+        const events = [{ type: "text", text: "I would order the Etna Rosso.\n\n### The call\nOrder it, and ask for it a little cool." }, { type: "done" }];
         return new Response(events.map((e) => `${JSON.stringify(e)}\n`).join(""), { headers: { "Content-Type": "application/x-ndjson" } });
       }),
     );
@@ -94,7 +94,10 @@ describe("Alden's page", () => {
     fireEvent.change(box, { target: { value: "Roast chicken, $80 tops." } });
     fireEvent.submit(form);
 
-    await waitFor(() => expect(screen.getByText("The call: the Etna Rosso.")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("I would order the Etna Rosso.")).toBeTruthy());
+    // The closing call renders as a plain heading in the answer's own style, with no special treatment.
+    expect(screen.getByRole("heading", { name: "The call" }).tagName).toBe("H3");
+    expect(screen.getByText("Order it, and ask for it a little cool.").tagName).toBe("P");
     const asks = sent.filter((r) => r.method === "POST" && r.url === "/api/ask");
     expect(asks).toHaveLength(1);
     expect(asks[0].body!.turns).toEqual([

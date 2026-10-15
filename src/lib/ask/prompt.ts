@@ -2,7 +2,8 @@
 // deployment is. The context the model sees is always, in order:
 //
 //   1. SYSTEM PROMPT     – the companion's prompt (src/lib/companions)
-//   2. APP CAPABILITIES  – what this app gives the companion, and what it doesn't
+//   2. APP CAPABILITIES  – what this app gives the companion, and what it doesn't,
+//                          then the shared answer principle and output limits
 //   3. CONVERSATION      – this visit's turns, oldest first
 //
 // 1–2 are system blocks; 3 is the messages array. Nothing is stored: the
@@ -37,11 +38,19 @@ export const MAX_HISTORY_TURNS = 40;
 export const APP_OUTPUT_LIMITS =
   "This app shows your reply as text. You cannot create, attach, export, upload or send files of any kind (PNG, PDF, images, drawings, renderings, spreadsheets, documents) or links to files you made, so never say or imply that you have. Put the substance in the reply itself, in full: plans, measurements, quantities, schedules, lists and tables, and when a layout helps, a text layout or table someone can work from, labeled as a text layout rather than a drawing or map. If someone asks for a file, say plainly that this app can't produce one, then give them the content you can.";
 
+/**
+ * Cinq's shared standard of judgment, the same for every companion: a view
+ * early, and, when it helps, a closing "The call" the person can act on. It
+ * sets a standard, not a voice or a fixed shape; each companion keeps its own.
+ */
+export const APP_JUDGMENT =
+  "Offer a considered judgment early when the information supports one, so the person does not have to read several paragraphs to learn what you think. Explain the specific observation or reasoning that matters most, in your own voice. For a substantial answer, when it would help the person act, end with a short section headed The call (a Markdown heading, ### The call, unless your instructions give their own label style) and one or two short sentences stating what you recommend, reject, would do next, would wait for, or need to know before deciding. The call turns the advice into a decision or action; it does not repeat the opening or summarize the answer, and the best calls name something the person might have missed. The call is only ever this closing section: never use it to label your opening judgment. Match the strength of your recommendation to the quality of the evidence and the consequences of being wrong. Be decisive when the choice is clear and appropriately cautious when the stakes are high. Do not invent precision, imply that you saw details you could not see, or present a guess as certainty. Do not force The call into a brief reply, a conversational follow-up, or an emotionally delicate moment where a labeled verdict would feel mechanical; a natural human ending is better there. Never add it merely to satisfy a format. You make the recommendation; the person makes the decision. Keep your own expertise, boundaries and manner: this is a shared standard of judgment, not a shared voice or a required shape.";
+
 export function capabilitiesBlock(companion: Companion, webSearch: boolean): ContextBlock {
   return {
     label: "app_capabilities",
     title: "APP CAPABILITIES",
-    body: [...companion.capabilities(webSearch), APP_OUTPUT_LIMITS].join("\n"),
+    body: [...companion.capabilities(webSearch), APP_JUDGMENT, APP_OUTPUT_LIMITS].join("\n"),
     cacheable: true,
   };
 }
