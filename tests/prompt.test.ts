@@ -68,6 +68,30 @@ describe("The call: Cinq's shared standard of judgment", () => {
     expect(APP_JUDGMENT).toMatch(/Never use a cultural reference as decoration to simulate experience/);
   });
 
+  it.each(["tony", "martini", "gio", "alden", "goldie"] as const)("gives %s an independent view: honest agreement or disagreement, never flattery or invented dissent", (id) => {
+    const body = capabilitiesBlock(COMPANIONS[id], true).body;
+    expect(body).toContain(APP_JUDGMENT);
+    // Independent judgment, before the person's framing.
+    expect(APP_JUDGMENT).toMatch(/Form your own view of the person's actual goal before accepting their framing or preferred answer\./);
+    expect(APP_JUDGMENT).toMatch(/Do not flatter them, automatically validate a choice, or agree merely because they seem to want agreement\./);
+    // Specific reasons either way.
+    expect(APP_JUDGMENT).toMatch(/say so plainly, name the detail that changes your mind, and offer the better path\./);
+    expect(APP_JUDGMENT).toMatch(/When you agree, show the specific reason you agree\./);
+    // Not contrarianism.
+    expect(APP_JUDGMENT).toMatch(/Do not invent a disagreement, dismiss what the person knows about their own life, or mistake a forceful tone for sound judgment\./);
+    // It comes right after the view-early sentence.
+    expect(APP_JUDGMENT.indexOf("Form your own view")).toBeGreaterThan(APP_JUDGMENT.indexOf("Give a considered view early"));
+  });
+
+  it("lets Goldie challenge an interpretation and give advice without taking the big decisions", () => {
+    const body = capabilitiesBlock(goldie, true).body;
+    expect(body).toMatch(/If you think their plan, purchase or interpretation misses the mark, say so plainly/);
+    expect(body).toMatch(/You give advice: name the problem plainly, show who is absorbing the cost and what needs to give, and recommend one practical next step/);
+    expect(body).toMatch(/You do not make major life or relationship decisions on the person's behalf; those stay theirs/);
+    expect(body).not.toMatch(/You do not tell the user what to do\./);
+    expect(body).toMatch(/dismiss what the person knows about their own life/);
+  });
+
   it("asks for a view early with its observation, one coherent path, and only the research that helps", () => {
     expect(APP_JUDGMENT).toMatch(/Give a considered view early, before any heading, and show the observation that led to it/);
     expect(APP_JUDGMENT).toMatch(/choose one coherent path\. Offer another only when a real difference in preference, circumstance or budget changes the answer/);
@@ -145,8 +169,8 @@ describe("The call: Cinq's shared standard of judgment", () => {
 
   it("lets Goldie close with a next step without directing someone's life", () => {
     const body = capabilitiesBlock(goldie, true).body;
-    expect(body).toMatch(/You do not tell the user what to do\./);
-    expect(body).toMatch(/When you end with The call, make it one clear next step within the person's control, or the question they need to answer next/);
+    expect(body).toMatch(/you match your confidence to what you know and to the stakes/);
+    expect(body).toMatch(/When you end with The call, make it the one practical move you recommend, within the person's control, or the question they need to answer next/);
     expect(body).toMatch(/Never make it a verdict on their life or relationships, or a decision that is theirs to make\./);
     expect(body).toMatch(/In grief, crisis, or a delicate moment, leave the label off\./);
     // Her brief asks for no headings, so a named call is a bold lead-in, not a heading.
@@ -363,26 +387,71 @@ describe("Goldie", () => {
     expect(goldie.systemPrompt).not.toMatch(/^You are Untangled/);
   });
 
-  it("separates facts from assumptions, control from non-control, labor from fruits", () => {
-    expect(goldie.systemPrompt).toMatch(/^You are Untangled: a thinking tool for consequential human situations/);
-    expect(goldie.systemPrompt).toMatch(/What's Actually Happening/);
-    expect(goldie.systemPrompt).toMatch(/The People Involved/);
-    expect(goldie.systemPrompt).toMatch(/The Facts/);
-    expect(goldie.systemPrompt).toMatch(/The Assumptions/);
-    expect(goldie.systemPrompt).toMatch(/The Noise/);
-    expect(goldie.systemPrompt).toMatch(/What You Control/);
-    expect(goldie.systemPrompt).toMatch(/What You Don't Control/);
-    expect(goldie.systemPrompt).toMatch(/The Ghosts/);
-    expect(goldie.systemPrompt).toMatch(/The Real Decision/);
-    expect(goldie.systemPrompt).toMatch(/You own the labor\. You do not own the fruits of the labor\./);
+  it("is a perceptive close friend who untangles the situation and says what she would do", () => {
+    const brief = goldie.systemPrompt;
+    expect(brief).toMatch(/^You are Goldie: the perceptive close friend people call when a situation has them stuck\./);
+    expect(brief).toMatch(/untangle what is actually happening so they can move forward, and then to tell them what you would do next/);
+    expect(brief).toMatch(/Name the problem plainly\. Show who is absorbing the cost and what needs to give\. Then offer the one practical move you would recommend, in direct natural language/);
+    expect(brief).toMatch(/End with the one move you would make\./);
   });
 
-  it("does not make the decision for the user", () => {
+  it("keeps her thinking tools behind the scenes, used only when one reveals something specific", () => {
+    const brief = goldie.systemPrompt;
+    // The discipline stays: facts vs fears, desires, control, ghosts, the real decision, labor vs fruits.
+    expect(brief).toMatch(/What is actually happening\?/);
+    expect(brief).toMatch(/What is feared versus what is actual\?/);
+    expect(brief).toMatch(/What does the user want\?/);
+    expect(brief).toMatch(/What can they control, influence, or neither\?/);
+    expect(brief).toMatch(/Are they chasing a ghost\?/);
+    expect(brief).toMatch(/What is the real decision\?/);
+    expect(brief).toMatch(/You own the labor\. You do not own the fruits of the labor\./);
+    // But it is not a route every answer marches along.
+    expect(brief).toMatch(/They are tools, not a route your answer has to march along\./);
+    expect(brief).toMatch(/Bring one into the answer only when it reveals something specific about this situation; otherwise it stays behind the scenes\./);
+    expect(brief).toMatch(/Do not run every answer through facts versus fears, competing desires, control, ghosts and the real decision\./);
+    expect(brief).toMatch(/Do not narrate your method or walk through your tools in order\./);
+    expect(brief).toMatch(/There is no fixed closing format\./);
+    // No stacked output template: the old step-by-step output list is gone.
+    expect(brief).not.toMatch(/Name any ghosts you see\./);
+    expect(brief).not.toMatch(/Surface the real decision\. What is actually being decided here\?/);
+  });
+
+  it("believes the person's account of what a situation is costing them", () => {
+    const brief = goldie.systemPrompt;
+    expect(brief).toMatch(/When someone tells you a situation is costing them, believe them\./);
+    expect(brief).toMatch(/Their firsthand account of their own strain, exhaustion or unhappiness is a fact about the situation, not an assumption to test\./);
+    expect(brief).toMatch(/What you may question is an assumption they have made about someone else's motives or reactions, or a prediction about what will happen\./);
+    expect(brief).toMatch(/Never turn a person's account of their own life into a hypothetical flaw in their thinking\./);
+    expect(capabilitiesBlock(goldie, true).body).toMatch(/The person's own account of what a situation is costing them is a fact, not an assumption to test\./);
+  });
+
+  it("gives advice instead of retreating into journaling, questions or 'only you can decide'", () => {
+    const brief = goldie.systemPrompt;
+    expect(brief).toMatch(/When there is enough information to give useful advice, give it\./);
+    expect(brief).toMatch(/Do not retreat into a writing exercise, a list of questions to consider, or "only you can decide\."/);
+    expect(brief).toMatch(/No therapy language/);
+    expect(brief).not.toMatch(/Do not tell them what to do\./);
+  });
+
+  it("reconciles advice with the boundary: a next step, never a major life decision made for them", () => {
+    const brief = goldie.systemPrompt;
+    expect(brief).toMatch(/You give advice and a next step\. You do not make major life or relationship decisions on their behalf/);
+    expect(brief).toMatch(/Match your confidence to what you know and to the stakes/);
     const body = capabilitiesBlock(goldie, true).body;
-    expect(body).toMatch(/not to tell people what to do/);
-    expect(body).toMatch(/restore their ability to decide/);
-    expect(body).toMatch(/not therapy, coaching, or an advice column/);
+    expect(body).toMatch(/You do not make major life or relationship decisions on the person's behalf/);
+    expect(body).toMatch(/You are not therapy or coaching\. You are a perceptive close friend for consequential situations\./);
+    expect(body).not.toMatch(/advice column/);
     expect(goldie.webSearchMaxUses).toBe(0);
+  });
+
+  it("does not hard-code one prescription or make family the priority in every case", () => {
+    const brief = goldie.systemPrompt;
+    expect(brief).toMatch(/The move depends on the situation; do not reach for the same prescription every time, and do not assume which side of a tension deserves to win/);
+    expect(brief).toMatch(/An example of the register, not a template\./);
+    expect(brief).not.toMatch(/two evenings/i);
+    expect(brief).not.toMatch(/family (comes|should come) first/i);
+    expect(brief).not.toMatch(/put (your )?family first/i);
+    expect(brief).not.toMatch(/Take .* for your family/);
   });
 });
 
