@@ -8,6 +8,7 @@ import { jack } from "@/lib/companions/jack";
 import { martini } from "@/lib/companions/martini";
 import { tony } from "@/lib/companions/tony";
 import { goldie } from "@/lib/companions/goldie";
+import { cinqAdvisors } from "@/lib/companions/cinq";
 
 const textOf = (parts: ChatContentPart[]) =>
   parts.flatMap((p) => (p.type === "text" ? [p.text] : [])).join("\n");
@@ -186,7 +187,10 @@ describe("The call: Cinq's shared standard of judgment", () => {
 describe("Gio", () => {
   it("isn't addressed to any one household", () => {
     const req = assemblePrompt({ companion: gio, turns: [{ role: "user", text: "Hi" }] });
-    for (const block of req.system) expect(block.body).not.toMatch(/Courtney|Amar\b|speaker|memories are provided|uploaded library/i);
+    // The shared Cinq line names Amar only as the travel advisor; nothing else may name a person.
+    const advisors = cinqAdvisors("gio");
+    expect(advisors.match(/Amar\b[^,]*/g)).toEqual(["Amar (travel"]);
+    for (const block of req.system) expect(block.body.replace(advisors, "")).not.toMatch(/Courtney|Amar\b|speaker|memories are provided|uploaded library/i);
     expect(gio.systemPrompt).toMatch(/Always imagine the room at midnight/);
     expect(gio.systemPrompt).toMatch(/Could this be in almost anyone's expensive house\?/);
   });
@@ -366,6 +370,47 @@ describe("Alden", () => {
   it("chooses from a photo alone", () => {
     const [turn] = toChatTurns([{ role: "user", text: "", images: [img()] }], alden.photosOnly);
     expect(textOf(turn.content)).toMatch(/^\(A photo, no question\. Read what's there, whether a list, a menu, a bottle or a shelf, and say what you would order or buy, and why\.\)$/);
+  });
+});
+
+describe("Cinq's advisors know one another", () => {
+  const lineup = { tony: "Amar", martini: "Martine", gio: "Gio", alden: "Alden", goldie: "Goldie" } as const;
+
+  it.each(Object.keys(lineup) as (keyof typeof lineup)[])("tells %s about the other four, and only them", (id) => {
+    const line = cinqAdvisors(id);
+    expect(capabilitiesBlock(COMPANIONS[id], true).body.split("\n")).toContain(line);
+    for (const [other, name] of Object.entries(lineup)) {
+      if (other === id) expect(line).not.toMatch(new RegExp(`\\b${name} \\(`));
+      else expect(line).toMatch(new RegExp(`\\b${name} \\(`));
+    }
+    expect(line).toMatch(/^You are one of Cinq's five advisors, each with independent judgment\. The others are /);
+    expect(line).not.toContain("—");
+  });
+
+  it("describes each advisor's area of judgment", () => {
+    const line = cinqAdvisors("goldie");
+    expect(line).toContain("Amar (travel, places and experiences)");
+    expect(line).toContain("Martine (personal style)");
+    expect(line).toContain("Gio (homes and interiors)");
+    expect(line).toContain("Alden (wine, cocktails and other drinks)");
+    expect(cinqAdvisors("tony")).toContain("Goldie (complex personal and professional decisions)");
+  });
+
+  it("answers first, refers only when it helps, briefly, and never routinely", () => {
+    const line = cinqAdvisors("gio");
+    expect(line).toMatch(/Answer what is within your expertise first\./);
+    expect(line).toMatch(/Mention one of them only when there is a clear, useful next decision that belongs to them, in a brief, natural sentence, never as a routine closing line or a tour of the lineup\./);
+    expect(line).toMatch(/If a question clearly belongs to another advisor, say who and why, and still offer whatever useful help you can within your own scope\./);
+  });
+
+  it("keeps each advisor's own view, and claims no shared context", () => {
+    const line = cinqAdvisors("martini");
+    expect(line).toMatch(/They may see things differently from you: do not speak for them or imply you have consulted them\./);
+    expect(line).toMatch(/You cannot transfer the conversation, share anything with them, or know what they have told the person; if the person goes to another advisor, they will need to share the relevant details again\./);
+  });
+
+  it("is not given to the retired Jack", () => {
+    expect(capabilitiesBlock(jack, true).body).not.toMatch(/one of Cinq's five advisors/);
   });
 });
 

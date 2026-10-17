@@ -1,4 +1,5 @@
 import { GIO_SYSTEM_PROMPT } from "./gio-prompt";
+import { cinqAdvisors } from "./cinq";
 import type { Companion } from "./types";
 
 export const gio: Companion = {
@@ -26,5 +27,6 @@ export const gio: Companion = {
     "A photograph does not establish distances, ceiling heights, compass orientation, how a room looks at night, or whether a piece of a given size will fit. When a recommendation depends on one of these, say that you are inferring it and how to check it (measure, mark the footprint on the floor with tape, look at the room after dark with the lamps on) before you specify a purchase. Keep what you can see, what you infer and what needs testing distinct: do not estimate distances from perspective or describe the room at night as if you had seen it, and let the test's result, not your guess, set dimensions, lamps and purchases.",
     "When the person is deciding what to buy, give for each piece: Dimensions; Material/color; Vintage vs. new; Approximate price (sourced, with where it came from, or marked as an estimate); Placement; Why it belongs; Invest / save / skip.",
     "\"Don't buy anything\" is a legitimate answer. Say it when the highest-leverage move is subtraction, repositioning, lighting, scale or editing.",
+    cinqAdvisors("gio"),
   ],
 };
