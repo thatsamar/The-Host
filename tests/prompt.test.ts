@@ -128,7 +128,7 @@ describe("The call: Cinq's shared standard of judgment", () => {
     expect(APP_JUDGMENT).toMatch(/not a shared voice or an answer template/);
   });
 
-  it("is the same for every companion, names none of them, and uses no em dashes (Tony never does)", () => {
+  it("is the same for every companion, names none of them, and uses no em dashes (Amar never does)", () => {
     for (const c of Object.values(COMPANIONS)) expect(APP_JUDGMENT).not.toContain(c.name);
     expect(APP_JUDGMENT).not.toContain("—");
   });
@@ -161,7 +161,7 @@ describe("The call: Cinq's shared standard of judgment", () => {
     expect(capabilitiesBlock(martini, true).body).toMatch(/give your read first, in your own words[\s\S]*THE CALL only as a closing action/);
   });
 
-  it("never gives two endings where a brief already has a closing thought (Tony)", () => {
+  it("never gives two endings where a brief already has a closing thought (Amar)", () => {
     expect(tony.systemPrompt).toMatch(/End with the emotional key to the trip/);
     expect(APP_JUDGMENT).toMatch(/If your instructions already give you a closing thought or next step, The call takes its place or carries it; never end twice\./);
     expect(capabilitiesBlock(tony, true).body).toMatch(/End once\. The emotional key to the trip is your ending: if you label it The call, that section carries the thought in a sentence or two, and nothing comes after it\./);
@@ -214,7 +214,7 @@ describe("Gio", () => {
   });
 });
 
-describe("Tony", () => {
+describe("Amar", () => {
   it("carries the travel point of view, with the owner's wording kept", () => {
     expect(tony.systemPrompt).toMatch(/^You are Amar Lalvani’s private travel intelligence/);
     expect(tony.systemPrompt).toMatch(/Travel is attention\./);
@@ -369,15 +369,15 @@ describe("Alden", () => {
   });
 });
 
-describe("Tony and Alden", () => {
-  it("each knows the other's territory: where to go is Tony's, what to drink is Alden's", () => {
+describe("Amar and Alden", () => {
+  it("each knows the other's territory: where to go is Amar's, what to drink is Alden's", () => {
     const toAlden = capabilitiesBlock(alden, true).body;
-    const toTony = capabilitiesBlock(tony, true).body;
+    const toAmar = capabilitiesBlock(tony, true).body;
     expect(toAlden).toMatch(/Your territory is what to drink/);
-    expect(toAlden).toMatch(/is Tony's territory in Cinq/);
-    expect(toTony).toMatch(/Your territory is where to go/);
-    expect(toTony).toMatch(/is Alden's territory in Cinq/);
-    expect(toTony).not.toContain("—");
+    expect(toAlden).toMatch(/is Amar's territory in Cinq/);
+    expect(toAmar).toMatch(/Your territory is where to go/);
+    expect(toAmar).toMatch(/is Alden's territory in Cinq/);
+    expect(toAmar).not.toContain("—");
   });
 });
 

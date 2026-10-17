@@ -22,7 +22,7 @@ export default function About() {
 
           <div className="mt-8 space-y-5 text-[17px] leading-relaxed sm:text-lg">
             <p>Cinq gives you five advisors with taste, judgment and a point of view.</p>
-            <p>Have a free night in Mexico City? Tony tells you the spots most visitors never find.</p>
+            <p>Have a free night in Mexico City? Amar tells you the spots most visitors never find.</p>
             <p>Trying on a vintage jacket on Brick Lane? Martine will tell you if it suits you.</p>
             <p>Found a chair at Round Top? Show Gio a picture. He’ll tell you if it belongs in your living room.</p>
             <p>Looking at a wine list? Show Alden. He’ll help you choose what’s worth ordering.</p>
@@ -39,7 +39,7 @@ export default function About() {
           </p>
 
           <p className="mt-12 text-[13px] leading-relaxed text-ink-muted">
-            Tony, Martine, Gio, Alden and Goldie are AI advisors. They’ll give you an honest opinion. The decision is always
+            Amar, Martine, Gio, Alden and Goldie are AI advisors. They’ll give you an honest opinion. The decision is always
             yours.
           </p>
         </main>
