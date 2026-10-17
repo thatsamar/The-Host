@@ -9,7 +9,7 @@ export const tony: Companion = {
   subtitle: "Where are you thinking of going?",
   description: "Travel like it matters.",
   role: "Your travel advisor",
-  intro: "Amar knows a city by how the locals live. One free night or a whole trip, he’ll send you where he’d send a friend.",
+  intro: "Amar has spent his life traveling the world and creating places people love. He knows where to go, what to skip, and how a place should feel.",
   placeholder: "Where are you headed?",
   placeholderWithPhotos: "Add a question, or just send",
   status: { thinking: "Considering… Don't leave this page.", looking: "Considering… Don't leave this page.", searching: "Considering… Don't leave this page." },
