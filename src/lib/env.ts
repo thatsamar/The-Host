@@ -16,7 +16,7 @@ const schema = z.object({
   ANTHROPIC_BASE_URL: z.string().url().optional(),
   CHAT_MODEL: z.string().min(1).default("claude-opus-5-5"),
   CHAT_EFFORT: z.enum(["low", "medium", "high", "xhigh", "max"]).default("high"),
-  // Unset means the companion's own default (Gio 5, Tony 8).
+  // Unset means the companion's own default (Gio 5, Amar 8).
   WEB_SEARCH_MAX_USES: z.coerce.number().int().min(0).max(20).optional(),
 });
 

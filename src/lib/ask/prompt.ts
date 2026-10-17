@@ -1,4 +1,4 @@
-// Prompt assembly for every turn, for whichever companion (Gio, Tony) this
+// Prompt assembly for every turn, for whichever companion (Gio, Amar) this
 // deployment is. The context the model sees is always, in order:
 //
 //   1. SYSTEM PROMPT     – the companion's prompt (src/lib/companions)

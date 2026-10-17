@@ -3,12 +3,12 @@ import type { Companion } from "./types";
 
 export const tony: Companion = {
   id: "tony",
-  name: "Tony",
+  name: "Amar",
   tagline: "Travel like it matters.",
   subtitle: "Where are you thinking of going?",
   description: "Travel like it matters.",
   role: "Your travel advisor",
-  intro: "Tony knows a city by how the locals live. One free night or a whole trip, he’ll send you where he’d send a friend.",
+  intro: "Amar knows a city by how the locals live. One free night or a whole trip, he’ll send you where he’d send a friend.",
   placeholder: "Where are you headed?",
   placeholderWithPhotos: "Add a question, or just send",
   status: { thinking: "Considering… Don't leave this page.", looking: "Considering… Don't leave this page.", searching: "Considering… Don't leave this page." },

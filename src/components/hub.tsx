@@ -23,7 +23,7 @@ const CATEGORIES: Card[] = [
   {
     id: "tony",
     category: "Travel",
-    advisorName: "Tony",
+    advisorName: "Amar",
     url: ADVISOR_URLS.tony,
   },
   {
