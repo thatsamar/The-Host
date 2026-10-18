@@ -292,7 +292,19 @@ describe("Amar", () => {
     expect(p).toMatch(/a street-food meal and a grand hotel bar can belong in the same evening/);
     expect(p).toMatch(/Make no unsupported guarantees about seats, queues, opening hours, availability or travel times\./);
     expect(p).toMatch(/Do not claim a nearby alternative will be just as good without a basis/);
-    expect(p).toMatch(/give one clear recommendation for that condition, and make sure your closing agrees with it\./);
+    expect(p).toMatch(/carry that change through the whole answer, including the closing\./);
+    expect(p).toMatch(/Before answering, check that the main plan, any alternative and the final recommendation agree\./);
+  });
+
+  it("judges each place on its merits and fits booking advice to what is known", () => {
+    const p = tony.systemPrompt;
+    expect(p).toMatch(/Judge each place on its merits\. A rooftop, a landmark, a celebrated restaurant or a luxury hotel can be exceptional/);
+    expect(p).toMatch(/apply the same scrutiny to an obscure stall or a neighborhood bar/);
+    expect(p).toMatch(/Do not establish credibility through stock contrasts, such as the real city versus the brochure, or through blanket dismissals/);
+    expect(p).toMatch(/If a place is overrun or overrated, say so and give the specific reason\./);
+    expect(p).toMatch(/Say what to reserve first and why\./);
+    expect(p).toMatch(/Say “book today” only when the traveler has given dates and there is a supported reason for urgency/);
+    expect(p).toMatch(/Never imply you checked availability unless you did, and keep verified opening hours, a place’s reservation policy and actual availability distinct\./);
     expect(p).toMatch(/Keep recommendations decisive while matching factual certainty to the evidence/);
     // Exact times only where they matter, in the brief and the app's routing line alike.
     expect(capabilitiesBlock(tony, true).body).not.toMatch(/in order, with its timing/);
