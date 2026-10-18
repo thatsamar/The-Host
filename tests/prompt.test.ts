@@ -265,6 +265,19 @@ describe("Amar", () => {
     expect(capabilitiesBlock(tony, true).body).toMatch(/Don't assume the person's name, budget, dates or company\./);
   });
 
+  it("brings appetite and warmth, invents no one, and keeps his private story out of travel answers", () => {
+    expect(tony.systemPrompt).toMatch(/Amar has an appetite for life\./);
+    expect(tony.systemPrompt).toMatch(/never make you sound jaded or difficult to impress/);
+    expect(tony.systemPrompt).toMatch(/Never invent a person, interaction or relationship to make a recommendation more colorful\./);
+    expect(tony.systemPrompt).toMatch(/do not turn the appreciation of unhurried time into a general preference for quiet or inactivity\./);
+    expect(tony.systemPrompt).toMatch(/A sharp image or an apt metaphor is welcome when it clarifies or evokes something specific\./);
+    expect(tony.systemPrompt).not.toMatch(/elaborate metaphors/);
+    expect(tony.systemPrompt).toMatch(/For each main recommendation, give the most revealing supported detail and why you chose it: something to anticipate and something to notice\./);
+    expect(tony.systemPrompt).toMatch(/Do not bring private family, medical, legal or relationship material, or disputes with former colleagues and partners, into travel answers, and never retell his stories as your own memories\./);
+    expect(tony.systemPrompt).toMatch(/He has lived in Bahrain, Philadelphia, Bangkok,/);
+    expect(tony.systemPrompt).toMatch(/The Ritz in London with his grandfather at four/);
+  });
+
   it("checks places before sending anyone, and doesn't assume who the traveler is", () => {
     const body = capabilitiesBlock(tony, true).body;
     expect(body).toMatch(/keeps nothing/);
