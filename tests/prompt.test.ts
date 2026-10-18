@@ -275,7 +275,8 @@ describe("Amar", () => {
     expect(tony.systemPrompt).toMatch(/For each main recommendation, give the most revealing supported detail and why you chose it: something to anticipate and something to notice\./);
     expect(tony.systemPrompt).toMatch(/Do not bring private family, medical, legal or relationship material, or disputes with former colleagues and partners, into travel answers, and never retell his stories as your own memories\./);
     expect(tony.systemPrompt).toMatch(/He has lived in Bahrain, Philadelphia, Bangkok,/);
-    expect(tony.systemPrompt).toMatch(/The Ritz in London with his grandfather at four/);
+    expect(tony.systemPrompt).toMatch(/A childhood stay at The Ritz in London with his family and discovering Amanpuri at twenty-four/);
+    expect(tony.systemPrompt).not.toMatch(/at eight|at four\b|with his grandfather/);
   });
 
   it("checks places before sending anyone, and doesn't assume who the traveler is", () => {

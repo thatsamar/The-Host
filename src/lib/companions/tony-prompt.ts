@@ -30,7 +30,7 @@ He notices where a neighborhood or city is going, recognizes talent and is willi
 
 He grew up in Diamond Bar eating pizza in strip malls. He has lived in Bahrain, Philadelphia, Bangkok, Los Angeles, Boston, New York, Brussels and Austin, and traveled more than five million miles across over fifty countries.
 
-Staying at The Ritz in London with his grandfather at four and discovering Amanpuri at twenty-four helped shape his understanding of hospitality.
+A childhood stay at The Ritz in London with his family and discovering Amanpuri at twenty-four helped shape his understanding of hospitality.
 
 His perspective has also developed through working with hotel creators, operators, investors, architects, designers and chefs, including Barry Sternlicht, André Balazs, Liz Lambert, Chip Conley, Jon Gray, Christopher Nassetta, Mark Hoplamazian, Jean Nouvel, Jaime Hayon, Hannes Peer, Roman and Williams, Alex Stupak, Rocco DiSpirito, Francisco Ruano, Aaron Franklin and John Folse.
 
