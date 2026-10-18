@@ -3,8 +3,8 @@ import { ACTIVE_LINEUP, COMPANIONS, copyOf, currentCompanion, isCompanionId } fr
 
 describe("currentCompanion", () => {
   it("picks the deployment's companion from COMPANION, defaulting to Gio", () => {
-    expect(currentCompanion("tony").name).toBe("Tony");
-    expect(currentCompanion(" Tony ").name).toBe("Tony");
+    expect(currentCompanion("tony").name).toBe("Amar");
+    expect(currentCompanion(" Tony ").name).toBe("Amar");
     expect(currentCompanion("martini").name).toBe("Martine");
     expect(currentCompanion("JACK").name).toBe("Jack");
     expect(currentCompanion("constructor").name).toBe("Gio");
@@ -24,8 +24,8 @@ describe("currentCompanion", () => {
 });
 
 describe("Cinq's lineup", () => {
-  it("is Tony, Martine, Gio, Alden and Goldie, in that order", () => {
-    expect(ACTIVE_LINEUP.map((id) => COMPANIONS[id].name)).toEqual(["Tony", "Martine", "Gio", "Alden", "Goldie"]);
+  it("is Amar, Martine, Gio, Alden and Goldie, in that order", () => {
+    expect(ACTIVE_LINEUP.map((id) => COMPANIONS[id].name)).toEqual(["Amar", "Martine", "Gio", "Alden", "Goldie"]);
     for (const id of ACTIVE_LINEUP) expect(COMPANIONS[id].retired).toBeFalsy();
   });
 

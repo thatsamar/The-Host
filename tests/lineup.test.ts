@@ -29,9 +29,9 @@ afterEach(() => {
 });
 
 describe("the hub", () => {
-  it("lists Tony, Martine, Gio, Alden and Goldie, and not Jack", () => {
+  it("lists Amar, Martine, Gio, Alden and Goldie, and not Jack", () => {
     render(createElement(Hub));
-    const names = ["Tony", "Martine", "Gio", "Alden", "Goldie"];
+    const names = ["Amar", "Martine", "Gio", "Alden", "Goldie"];
     for (const name of names) expect(screen.getByText(new RegExp(`^${name}\\b`))).toBeTruthy();
     expect(screen.queryByText(/Jack/)).toBeNull();
     expect(screen.queryByText("Reality check")).toBeNull();

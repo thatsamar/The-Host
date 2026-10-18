@@ -8,6 +8,7 @@ import { jack } from "@/lib/companions/jack";
 import { martini } from "@/lib/companions/martini";
 import { tony } from "@/lib/companions/tony";
 import { goldie } from "@/lib/companions/goldie";
+import { cinqAdvisors } from "@/lib/companions/cinq";
 
 const textOf = (parts: ChatContentPart[]) =>
   parts.flatMap((p) => (p.type === "text" ? [p.text] : [])).join("\n");
@@ -128,7 +129,7 @@ describe("The call: Cinq's shared standard of judgment", () => {
     expect(APP_JUDGMENT).toMatch(/not a shared voice or an answer template/);
   });
 
-  it("is the same for every companion, names none of them, and uses no em dashes (Tony never does)", () => {
+  it("is the same for every companion, names none of them, and uses no em dashes (Amar never does)", () => {
     for (const c of Object.values(COMPANIONS)) expect(APP_JUDGMENT).not.toContain(c.name);
     expect(APP_JUDGMENT).not.toContain("—");
   });
@@ -161,10 +162,11 @@ describe("The call: Cinq's shared standard of judgment", () => {
     expect(capabilitiesBlock(martini, true).body).toMatch(/give your read first, in your own words[\s\S]*THE CALL only as a closing action/);
   });
 
-  it("never gives two endings where a brief already has a closing thought (Tony)", () => {
-    expect(tony.systemPrompt).toMatch(/End with the emotional key to the trip/);
+  it("never gives two endings where a brief already has a closing thought (Amar)", () => {
+    expect(tony.systemPrompt).not.toMatch(/End with the emotional key to the trip/);
+    expect(tony.systemPrompt).toMatch(/Do not require an evocative opening, a metaphor or an emotional conclusion\./);
     expect(APP_JUDGMENT).toMatch(/If your instructions already give you a closing thought or next step, The call takes its place or carries it; never end twice\./);
-    expect(capabilitiesBlock(tony, true).body).toMatch(/End once\. The emotional key to the trip is your ending: if you label it The call, that section carries the thought in a sentence or two, and nothing comes after it\./);
+    expect(capabilitiesBlock(tony, true).body).toMatch(/End once\. If you close with The call, it is your only ending, in a sentence or two, and nothing comes after it\./);
   });
 
   it("lets Goldie close with a next step without directing someone's life", () => {
@@ -186,7 +188,10 @@ describe("The call: Cinq's shared standard of judgment", () => {
 describe("Gio", () => {
   it("isn't addressed to any one household", () => {
     const req = assemblePrompt({ companion: gio, turns: [{ role: "user", text: "Hi" }] });
-    for (const block of req.system) expect(block.body).not.toMatch(/Courtney|Amar\b|speaker|memories are provided|uploaded library/i);
+    // The shared Cinq line names Amar only as the travel advisor; nothing else may name a person.
+    const advisors = cinqAdvisors("gio");
+    expect(advisors.match(/Amar\b[^,]*/g)).toEqual(["Amar (travel"]);
+    for (const block of req.system) expect(block.body.replace(advisors, "")).not.toMatch(/Courtney|Amar\b|speaker|memories are provided|uploaded library/i);
     expect(gio.systemPrompt).toMatch(/Always imagine the room at midnight/);
     expect(gio.systemPrompt).toMatch(/Could this be in almost anyone's expensive house\?/);
   });
@@ -214,20 +219,57 @@ describe("Gio", () => {
   });
 });
 
-describe("Tony", () => {
-  it("carries the travel point of view, with the owner's wording kept", () => {
-    expect(tony.systemPrompt).toMatch(/^You are Amar Lalvani’s private travel intelligence/);
-    expect(tony.systemPrompt).toMatch(/Travel is attention\./);
+describe("Amar", () => {
+  it("is Amar, Cinq's travel advisor: named for Amar Lalvani, an AI that claims none of his experiences", () => {
+    expect(tony.systemPrompt).toMatch(/^IDENTITY\n\nYou are Amar, Cinq’s travel advisor, named for Amar Lalvani and shaped by his taste, experience and judgment\./);
+    expect(tony.systemPrompt).toMatch(/You are an AI advisor\. You do not possess Amar Lalvani’s personal memories, relationships or access\. Never invent experiences, visits, endorsements or connections\./);
+    expect(tony.systemPrompt).toMatch(/Do not recite his achievements, repeatedly invoke his name or imply that he personally endorses every recommendation\./);
+    expect(tony.systemPrompt).toMatch(/Do not assume the traveler is Amar Lalvani\./);
+    expect(tony.systemPrompt).toMatch(/Never name-drop to establish authority or imply access to these people\./);
+    expect(tony.systemPrompt).toMatch(/They do not establish the current opening, ownership or operating status of any property\./);
+    expect(tony.systemPrompt).toMatch(/Scarr’s pizza and Ivan Ramen are examples/);
+    expect(tony.systemPrompt).not.toMatch(/Orchard Street|private travel intelligence|Never AI|Be irreverent/);
+  });
+
+  it("keeps the owner's sections in order, then the practical rules", () => {
+    const headings = ["IDENTITY", "THE EXPERIENCE BEHIND THE ADVISOR", "WHAT HE ENJOYS", "POINT OF VIEW", "COMPANY MATTERS", "INFLUENCES", "VOICE", "JUDGING PLACES", "RECOMMENDATIONS AND PLANNING"];
+    const at = headings.map((h) => tony.systemPrompt.indexOf(`${h}\n\n`));
+    expect(at.every((i) => i >= 0)).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+    expect(tony.systemPrompt).toMatch(/Do not imitate their distinctive speaking styles, routinely mention their names or invent what they would think about a particular place\./);
+    expect(tony.systemPrompt).toMatch(/Check a reliable source before quoting or making a specific attribution\./);
+    expect(tony.systemPrompt).toMatch(/When asked about yourself, briefly explain your purpose, point of view and connection to Amar Lalvani\./);
+    // Practical judgment kept from the original brief.
+    expect(tony.systemPrompt).toMatch(/For food, say what to order, why it matters, and what kind of meal it is/);
+    expect(tony.systemPrompt).toMatch(/For bars, consider who is in the room, the hour, whether there is music/);
+    expect(tony.systemPrompt).toMatch(/Ask one clarifying question only when it materially changes the trip\./);
     expect(tony.systemPrompt).toMatch(/Never invent access, relationships, secret doors, bookings, or insider knowledge\./);
-    expect(tony.systemPrompt).toMatch(/No em dashes\.\n\nBe irreverent, even profane\./);
-    expect(tony.systemPrompt).not.toMatch(/em--|Boardain|a rooms/);
+    expect(tony.systemPrompt).toMatch(/If hours, closures, pricing, chefs, or ownership matter, verify them or advise verification\./);
+    expect(tony.systemPrompt).toMatch(/No em dashes\./);
     expect(tony.systemPrompt).not.toContain("—");
   });
 
-  it("checks places before sending anyone, and doesn't treat the traveler as Amar", () => {
+  it("fits recommendations to the company, without assumptions or a section per kind of traveler", () => {
+    expect(tony.systemPrompt).toMatch(/Who someone is traveling with matters as much as where they are going\./);
+    expect(tony.systemPrompt).toMatch(/A place provides the setting for time with people who matter\./);
+    for (const kind of ["Romance", "Friends", "Family", "Solo"]) expect(tony.systemPrompt).toContain(`\n\n${kind}:\n`);
+    expect(tony.systemPrompt).toMatch(/Do not assume a solo traveler wants company or needs a full schedule\./);
+    expect(tony.systemPrompt).toMatch(/Explain why a recommendation fits these people and this occasion\./);
+    expect(tony.systemPrompt).toMatch(/Ask about company only when it would materially change the advice\. Avoid assumptions about relationships, gender or family structure\./);
+    expect(tony.systemPrompt).toMatch(/Do not automatically produce separate sections for couples, friends and families\./);
+    // Kept alongside it: company in POINT OF VIEW, "who to bring", his solo dining, one clarifying question, and the app's no-assumptions rule.
+    expect(tony.systemPrompt).toMatch(/adapted to the traveler’s budget, interests, mobility, company and circumstances\./);
+    expect(tony.systemPrompt).toMatch(/when to go, who to bring, what to order or notice/);
+    expect(tony.systemPrompt).toMatch(/He loves dining alone/);
+    expect(tony.systemPrompt).toMatch(/Ask one clarifying question only when it materially changes the trip\./);
+    expect(capabilitiesBlock(tony, true).body).toMatch(/Don't assume the person's name, budget, dates or company\./);
+  });
+
+  it("checks places before sending anyone, and doesn't assume who the traveler is", () => {
     const body = capabilitiesBlock(tony, true).body;
     expect(body).toMatch(/keeps nothing/);
-    expect(body).toMatch(/don't call them Amar/);
+    expect(body).toMatch(/Don't assume the person's name, budget, dates or company\./);
+    expect(body).not.toMatch(/don't call them Amar|The taste in your instructions/);
     expect(body).toMatch(/web_search tool\. Use it to check that a place still exists/);
     expect(body).toMatch(/Never use em dashes/);
     expect(body).not.toContain("—");
@@ -369,15 +411,63 @@ describe("Alden", () => {
   });
 });
 
-describe("Tony and Alden", () => {
-  it("each knows the other's territory: where to go is Tony's, what to drink is Alden's", () => {
+describe("Cinq's advisors know one another", () => {
+  const lineup = { tony: "Amar", martini: "Martine", gio: "Gio", alden: "Alden", goldie: "Goldie" } as const;
+
+  it.each(Object.keys(lineup) as (keyof typeof lineup)[])("tells %s about the other four, and only them", (id) => {
+    const line = cinqAdvisors(id);
+    expect(capabilitiesBlock(COMPANIONS[id], true).body.split("\n")).toContain(line);
+    for (const [other, name] of Object.entries(lineup)) {
+      if (other === id) expect(line).not.toMatch(new RegExp(`\\b${name} \\(`));
+      else expect(line).toMatch(new RegExp(`\\b${name} \\(`));
+    }
+    expect(line).toMatch(/^You are one of Cinq's five advisors, each with independent judgment\. The others are /);
+    expect(line).not.toContain("—");
+  });
+
+  it("describes each advisor's area of judgment", () => {
+    const line = cinqAdvisors("goldie");
+    expect(line).toContain("Amar (travel, places and experiences)");
+    expect(line).toContain("Martine (personal style)");
+    expect(line).toContain("Gio (homes and interiors)");
+    expect(line).toContain("Alden (wine, cocktails and other drinks)");
+    expect(cinqAdvisors("tony")).toContain("Goldie (complex personal and professional decisions)");
+  });
+
+  it("answers first, refers only when it helps, briefly, and never routinely", () => {
+    const line = cinqAdvisors("gio");
+    expect(line).toMatch(/Answer what is within your expertise first\./);
+    expect(line).toMatch(/Mention one of them only when there is a clear, useful next decision that belongs to them, in a brief, natural sentence, never as a routine closing line or a tour of the lineup\./);
+    expect(line).toMatch(/If a question clearly belongs to another advisor, say who and why, and still offer whatever useful help you can within your own scope\./);
+  });
+
+  it("keeps each advisor's own view, and claims no shared context", () => {
+    const line = cinqAdvisors("martini");
+    expect(line).toMatch(/They may see things differently from you: do not speak for them or imply you have consulted them\./);
+    expect(line).toMatch(/You cannot transfer the conversation, share anything with them, or know what they have told the person; if the person goes to another advisor, they will need to share the relevant details again\./);
+  });
+
+  it("is not given to the retired Jack", () => {
+    expect(capabilitiesBlock(jack, true).body).not.toMatch(/one of Cinq's five advisors/);
+  });
+});
+
+describe("Amar and Alden", () => {
+  it("each knows the other's territory: where to go is Amar's, what to drink is Alden's", () => {
     const toAlden = capabilitiesBlock(alden, true).body;
-    const toTony = capabilitiesBlock(tony, true).body;
+    const toAmar = capabilitiesBlock(tony, true).body;
     expect(toAlden).toMatch(/Your territory is what to drink/);
-    expect(toAlden).toMatch(/is Tony's territory in Cinq/);
-    expect(toTony).toMatch(/Your territory is where to go/);
-    expect(toTony).toMatch(/is Alden's territory in Cinq/);
-    expect(toTony).not.toContain("—");
+    expect(toAlden).toMatch(/is Amar's territory in Cinq/);
+    expect(toAmar).toMatch(/Your territory is where to go/);
+    expect(toAmar).toMatch(/are Alden's territory in Cinq/);
+    expect(toAmar).not.toContain("—");
+  });
+
+  it("lets Amar mention a bar's signature drink without a referral, and leaves detailed drink choices to Alden", () => {
+    const toAmar = capabilitiesBlock(tony, true).body;
+    expect(toAmar).toMatch(/You can recommend a bar and mention its signature drink or experience, or Amar Lalvani's stated preference\./);
+    expect(toAmar).toMatch(/Detailed bottle selection, judging a wine list and cocktail recipes are Alden's territory in Cinq: if someone wants that choice made, mention Alden briefly\./);
+    expect(toAmar).toMatch(/A simple mention of a drink does not call for a referral\./);
   });
 });
 
