@@ -272,11 +272,30 @@ describe("Amar", () => {
     expect(tony.systemPrompt).toMatch(/do not turn the appreciation of unhurried time into a general preference for quiet or inactivity\./);
     expect(tony.systemPrompt).toMatch(/A sharp image or an apt metaphor is welcome when it clarifies or evokes something specific\./);
     expect(tony.systemPrompt).not.toMatch(/elaborate metaphors/);
-    expect(tony.systemPrompt).toMatch(/For each main recommendation, give the most revealing supported detail and why you chose it: something to anticipate and something to notice\./);
+    expect(tony.systemPrompt).toMatch(/give the most revealing supported detail and why you chose it, something to anticipate and something to notice\./);
     expect(tony.systemPrompt).toMatch(/Do not bring private family, medical, legal or relationship material, or disputes with former colleagues and partners, into travel answers, and never retell his stories as your own memories\./);
     expect(tony.systemPrompt).toMatch(/He has lived in Bahrain, Philadelphia, Bangkok,/);
     expect(tony.systemPrompt).toMatch(/A childhood stay at The Ritz in London with his family and discovering Amanpuri at twenty-four/);
     expect(tony.systemPrompt).not.toMatch(/at eight|at four\b|with his grandfather/);
+  });
+
+  it("shows character through judgment, makes each stop earn its place, and matches certainty to evidence", () => {
+    const p = tony.systemPrompt;
+    expect(tony.intro).toBe("Knows where to go, what to skip, and how to find its soul.");
+    expect(p).toMatch(/Let character emerge through what you choose, what you notice and why it matters/);
+    expect(p).toMatch(/Find a place’s soul through its people, culture, history, everyday life and individual character\. Avoid vague declarations about authenticity, and never claim one experience captures an entire city\./);
+    expect(p).toMatch(/Go beyond categories such as “moody bar,” “heritage hotel” or “lively neighborhood”/);
+    expect(p).toMatch(/Connect atmosphere to enjoyment/);
+    expect(p).toMatch(/invented memories, encounters or sensory observations\./);
+    expect(p).toMatch(/Make each stop earn its place\./);
+    expect(p).toMatch(/Say what you would protect and what can be dropped, and give people permission to stay/);
+    expect(p).toMatch(/a street-food meal and a grand hotel bar can belong in the same evening/);
+    expect(p).toMatch(/Make no unsupported guarantees about seats, queues, opening hours, availability or travel times\./);
+    expect(p).toMatch(/Do not claim a nearby alternative will be just as good without a basis/);
+    expect(p).toMatch(/give one clear recommendation for that condition, and make sure your closing agrees with it\./);
+    expect(p).toMatch(/Keep recommendations decisive while matching factual certainty to the evidence/);
+    // Exact times only where they matter, in the brief and the app's routing line alike.
+    expect(capabilitiesBlock(tony, true).body).not.toMatch(/in order, with its timing/);
   });
 
   it("checks places before sending anyone, and doesn't assume who the traveler is", () => {
@@ -292,7 +311,7 @@ describe("Amar", () => {
 
   it("gives one feasible route, checks what decides it, and keeps an alternative brief", () => {
     const body = capabilitiesBlock(tony, true).body;
-    expect(body).toMatch(/For one night or one day, give one route someone could actually follow, in order, with its timing\./);
+    expect(body).toMatch(/For one night or one day, give one route someone could actually follow, in order, with exact times where reservations, transport or performances require them\./);
     expect(body).toMatch(/A materially different alternative gets a sentence or two, never a second itinerary\./);
     expect(body).toMatch(/timing, distance between stops, opening hours or reservations decide whether the plan works, check them/);
     expect(body).toMatch(/Fit the stops to the hours with the travel between them included, say how to get from one to the next, and cut a stop rather than rush the night\./);
