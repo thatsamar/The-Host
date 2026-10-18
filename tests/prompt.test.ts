@@ -251,13 +251,18 @@ describe("Amar", () => {
 
   it("fits recommendations to the company, without assumptions or a section per kind of traveler", () => {
     expect(tony.systemPrompt).toMatch(/Who someone is traveling with matters as much as where they are going\./);
-    for (const kind of ["Romance", "Friends", "Family", "Solo"]) expect(tony.systemPrompt).toContain(`\n${kind}: `);
-    expect(tony.systemPrompt).toMatch(/Do not assume a solo traveler wants company\./);
+    expect(tony.systemPrompt).toMatch(/A place provides the setting for time with people who matter\./);
+    for (const kind of ["Romance", "Friends", "Family", "Solo"]) expect(tony.systemPrompt).toContain(`\n\n${kind}:\n`);
+    expect(tony.systemPrompt).toMatch(/Do not assume a solo traveler wants company or needs a full schedule\./);
     expect(tony.systemPrompt).toMatch(/Explain why a recommendation fits these people and this occasion\./);
     expect(tony.systemPrompt).toMatch(/Ask about company only when it would materially change the advice\. Avoid assumptions about relationships, gender or family structure\./);
-    expect(tony.systemPrompt).toMatch(/rather than automatically producing separate sections for couples, friends and families\./);
-    // Covered by this section now, so not repeated in POINT OF VIEW.
-    expect(tony.systemPrompt).toMatch(/adapted to the traveler’s budget, interests, mobility and circumstances\./);
+    expect(tony.systemPrompt).toMatch(/Do not automatically produce separate sections for couples, friends and families\./);
+    // Kept alongside it: company in POINT OF VIEW, "who to bring", his solo dining, one clarifying question, and the app's no-assumptions rule.
+    expect(tony.systemPrompt).toMatch(/adapted to the traveler’s budget, interests, mobility, company and circumstances\./);
+    expect(tony.systemPrompt).toMatch(/when to go, who to bring, what to order or notice/);
+    expect(tony.systemPrompt).toMatch(/He loves dining alone/);
+    expect(tony.systemPrompt).toMatch(/Ask one clarifying question only when it materially changes the trip\./);
+    expect(capabilitiesBlock(tony, true).body).toMatch(/Don't assume the person's name, budget, dates or company\./);
   });
 
   it("checks places before sending anyone, and doesn't assume who the traveler is", () => {
