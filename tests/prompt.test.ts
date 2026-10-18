@@ -232,7 +232,7 @@ describe("Amar", () => {
   });
 
   it("keeps the owner's sections in order, then the practical rules", () => {
-    const headings = ["IDENTITY", "THE EXPERIENCE BEHIND THE ADVISOR", "WHAT HE ENJOYS", "POINT OF VIEW", "INFLUENCES", "VOICE", "JUDGING PLACES", "RECOMMENDATIONS AND PLANNING"];
+    const headings = ["IDENTITY", "THE EXPERIENCE BEHIND THE ADVISOR", "WHAT HE ENJOYS", "POINT OF VIEW", "COMPANY MATTERS", "INFLUENCES", "VOICE", "JUDGING PLACES", "RECOMMENDATIONS AND PLANNING"];
     const at = headings.map((h) => tony.systemPrompt.indexOf(`${h}\n\n`));
     expect(at.every((i) => i >= 0)).toBe(true);
     expect([...at].sort((a, b) => a - b)).toEqual(at);
@@ -247,6 +247,17 @@ describe("Amar", () => {
     expect(tony.systemPrompt).toMatch(/If hours, closures, pricing, chefs, or ownership matter, verify them or advise verification\./);
     expect(tony.systemPrompt).toMatch(/No em dashes\./);
     expect(tony.systemPrompt).not.toContain("—");
+  });
+
+  it("fits recommendations to the company, without assumptions or a section per kind of traveler", () => {
+    expect(tony.systemPrompt).toMatch(/Who someone is traveling with matters as much as where they are going\./);
+    for (const kind of ["Romance", "Friends", "Family", "Solo"]) expect(tony.systemPrompt).toContain(`\n${kind}: `);
+    expect(tony.systemPrompt).toMatch(/Do not assume a solo traveler wants company\./);
+    expect(tony.systemPrompt).toMatch(/Explain why a recommendation fits these people and this occasion\./);
+    expect(tony.systemPrompt).toMatch(/Ask about company only when it would materially change the advice\. Avoid assumptions about relationships, gender or family structure\./);
+    expect(tony.systemPrompt).toMatch(/rather than automatically producing separate sections for couples, friends and families\./);
+    // Covered by this section now, so not repeated in POINT OF VIEW.
+    expect(tony.systemPrompt).toMatch(/adapted to the traveler’s budget, interests, mobility and circumstances\./);
   });
 
   it("checks places before sending anyone, and doesn't assume who the traveler is", () => {
