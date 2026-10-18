@@ -163,9 +163,10 @@ describe("The call: Cinq's shared standard of judgment", () => {
   });
 
   it("never gives two endings where a brief already has a closing thought (Amar)", () => {
-    expect(tony.systemPrompt).toMatch(/End with the emotional key to the trip/);
+    expect(tony.systemPrompt).not.toMatch(/End with the emotional key to the trip/);
+    expect(tony.systemPrompt).toMatch(/Do not require an evocative opening, a metaphor or an emotional conclusion\./);
     expect(APP_JUDGMENT).toMatch(/If your instructions already give you a closing thought or next step, The call takes its place or carries it; never end twice\./);
-    expect(capabilitiesBlock(tony, true).body).toMatch(/End once\. The emotional key to the trip is your ending: if you label it The call, that section carries the thought in a sentence or two, and nothing comes after it\./);
+    expect(capabilitiesBlock(tony, true).body).toMatch(/End once\. If you close with The call, it is your only ending, in a sentence or two, and nothing comes after it\./);
   });
 
   it("lets Goldie close with a next step without directing someone's life", () => {
@@ -219,19 +220,40 @@ describe("Gio", () => {
 });
 
 describe("Amar", () => {
-  it("carries the travel point of view, with the owner's wording kept", () => {
-    expect(tony.systemPrompt).toMatch(/^You are Amar Lalvani’s private travel intelligence/);
-    expect(tony.systemPrompt).toMatch(/Travel is attention\./);
+  it("is Amar, Cinq's travel advisor: named for Amar Lalvani, an AI that claims none of his experiences", () => {
+    expect(tony.systemPrompt).toMatch(/^IDENTITY\n\nYou are Amar, Cinq’s travel advisor, named for Amar Lalvani and shaped by his taste, experience and judgment\./);
+    expect(tony.systemPrompt).toMatch(/You are an AI advisor\. You do not possess Amar Lalvani’s personal memories, relationships or access\. Never invent experiences, visits, endorsements or connections\./);
+    expect(tony.systemPrompt).toMatch(/Do not recite his achievements, repeatedly invoke his name or imply that he personally endorses every recommendation\./);
+    expect(tony.systemPrompt).toMatch(/Do not assume the traveler is Amar Lalvani\./);
+    expect(tony.systemPrompt).toMatch(/Never name-drop to establish authority or imply access to these people\./);
+    expect(tony.systemPrompt).toMatch(/They do not establish the current opening, ownership or operating status of any property\./);
+    expect(tony.systemPrompt).toMatch(/Scarr’s pizza and Ivan Ramen are examples/);
+    expect(tony.systemPrompt).not.toMatch(/Orchard Street|private travel intelligence|Never AI|Be irreverent/);
+  });
+
+  it("keeps the owner's sections in order, then the practical rules", () => {
+    const headings = ["IDENTITY", "THE EXPERIENCE BEHIND THE ADVISOR", "WHAT HE ENJOYS", "POINT OF VIEW", "INFLUENCES", "VOICE", "JUDGING PLACES", "RECOMMENDATIONS AND PLANNING"];
+    const at = headings.map((h) => tony.systemPrompt.indexOf(`${h}\n\n`));
+    expect(at.every((i) => i >= 0)).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+    expect(tony.systemPrompt).toMatch(/Do not imitate their distinctive speaking styles, routinely mention their names or invent what they would think about a particular place\./);
+    expect(tony.systemPrompt).toMatch(/Check a reliable source before quoting or making a specific attribution\./);
+    expect(tony.systemPrompt).toMatch(/When asked about yourself, briefly explain your purpose, point of view and connection to Amar Lalvani\./);
+    // Practical judgment kept from the original brief.
+    expect(tony.systemPrompt).toMatch(/For food, say what to order, why it matters, and what kind of meal it is/);
+    expect(tony.systemPrompt).toMatch(/For bars, consider who is in the room, the hour, whether there is music/);
+    expect(tony.systemPrompt).toMatch(/Ask one clarifying question only when it materially changes the trip\./);
     expect(tony.systemPrompt).toMatch(/Never invent access, relationships, secret doors, bookings, or insider knowledge\./);
-    expect(tony.systemPrompt).toMatch(/No em dashes\.\n\nBe irreverent, even profane\./);
-    expect(tony.systemPrompt).not.toMatch(/em--|Boardain|a rooms/);
+    expect(tony.systemPrompt).toMatch(/If hours, closures, pricing, chefs, or ownership matter, verify them or advise verification\./);
+    expect(tony.systemPrompt).toMatch(/No em dashes\./);
     expect(tony.systemPrompt).not.toContain("—");
   });
 
-  it("checks places before sending anyone, and doesn't treat the traveler as Amar", () => {
+  it("checks places before sending anyone, and doesn't assume who the traveler is", () => {
     const body = capabilitiesBlock(tony, true).body;
     expect(body).toMatch(/keeps nothing/);
-    expect(body).toMatch(/don't call them Amar/);
+    expect(body).toMatch(/Don't assume the person's name, budget, dates or company\./);
+    expect(body).not.toMatch(/don't call them Amar|The taste in your instructions/);
     expect(body).toMatch(/web_search tool\. Use it to check that a place still exists/);
     expect(body).toMatch(/Never use em dashes/);
     expect(body).not.toContain("—");
@@ -421,8 +443,15 @@ describe("Amar and Alden", () => {
     expect(toAlden).toMatch(/Your territory is what to drink/);
     expect(toAlden).toMatch(/is Amar's territory in Cinq/);
     expect(toAmar).toMatch(/Your territory is where to go/);
-    expect(toAmar).toMatch(/is Alden's territory in Cinq/);
+    expect(toAmar).toMatch(/are Alden's territory in Cinq/);
     expect(toAmar).not.toContain("—");
+  });
+
+  it("lets Amar mention a bar's signature drink without a referral, and leaves detailed drink choices to Alden", () => {
+    const toAmar = capabilitiesBlock(tony, true).body;
+    expect(toAmar).toMatch(/You can recommend a bar and mention its signature drink or experience, or Amar Lalvani's stated preference\./);
+    expect(toAmar).toMatch(/Detailed bottle selection, judging a wine list and cocktail recipes are Alden's territory in Cinq: if someone wants that choice made, mention Alden briefly\./);
+    expect(toAmar).toMatch(/A simple mention of a drink does not call for a referral\./);
   });
 });
 

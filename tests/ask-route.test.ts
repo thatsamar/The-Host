@@ -37,7 +37,7 @@ describe("POST /api/ask", () => {
       const provider = state.provider as ScriptedProvider;
       const res = await post({ turns: [{ role: "user", text: "First night in Mexico City?" }] });
       await collect(readNdjson(res.body!));
-      expect(provider.requests[0].system[0].body).toMatch(/^You are Amar Lalvani’s private travel intelligence/);
+      expect(provider.requests[0].system[0].body).toMatch(/^IDENTITY\n\nYou are Amar, Cinq’s travel advisor/);
     } finally {
       delete process.env.COMPANION;
     }

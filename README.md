@@ -3,7 +3,7 @@
 Five private-beta companions on one engine. Each is one page: add up to 10 photos, ask a question, or both, and get an answer with a point of view.
 
 - **Gio** (design): *See with a designer's eye.* The custom GPT's design point of view, addressed to whoever is asking.
-- **Amar** (travel): *Travel like it matters.* A travel companion for going beneath the surface of a place, in Amar Lalvani's voice and taste.
+- **Amar** (travel): *Travel like it matters.* Cinq's travel advisor, named for Amar Lalvani and shaped by his taste and experience.
 - **Martini** (style): *Dress like you.* A personal style advisor for men's, women's and mixed wardrobes: outfit checks, shopping, packing, dress codes, invest / save / skip.
 - **Alden** (wine, cocktails & spirits): *The right drink at the right time* Helps you choose what to drink, from a bottle on a wine list to a cocktail at the bar, with sake and beer taken just as seriously. Deep knowledge, no pretense.
 - **Untangled** (clarity): *Clear decisions from complexity.* Map a tangle of people, incentives, facts and assumptions. Separate signal from noise, control from non-control, labor from fruits. Restore your ability to decide.
