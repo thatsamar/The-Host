@@ -9,6 +9,7 @@ export const tony: Companion = {
   subtitle: "Where are you thinking of going?",
   description: "Travel like it matters.",
   role: "Your travel advisor",
+  category: "Travel",
   intro: "Knows where to go, what to skip, and what makes a place worth your time.",
   placeholder: "Where are you headed?",
   placeholderWithPhotos: "Add a question, or just send",

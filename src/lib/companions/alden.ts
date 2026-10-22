@@ -9,6 +9,7 @@ export const alden: Companion = {
   subtitle: "Show him the list, the bottle or the bar.",
   description: "The right drink at the right time",
   role: "Wine, Cocktails & Spirits Advisor",
+  category: "Drinks",
   intro: "The right drink at the right time",
   placeholder: "What are we drinking?",
   placeholderWithPhotos: "Add what you're eating, or just send",

@@ -11,7 +11,10 @@
     "test:watch": "vitest",
     "typecheck": "next typegen && tsc --noEmit",
     "check:migrations": "bash scripts/check-migrations.sh",
-    "build:setup-sql": "node scripts/build-setup-sql.mjs"
+    "build:setup-sql": "node scripts/build-setup-sql.mjs",
+    "messages:harness": "tsx --tsconfig tsconfig.json scripts/messages-harness.mts",
+    "messages:sql": "tsx --tsconfig tsconfig.json scripts/messages-sql.mts",
+    "messages:migrate": "tsx --tsconfig tsconfig.json scripts/messages-migrate.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.129.0",
@@ -19,17 +22,22 @@
     "@supabase/supabase-js": "^2.117.2",
     "@vercel/functions": "^3.9.11",
     "clsx": "^2.1.1",
+    "heic-decode": "2.1.0",
     "lucide-react": "^1.48.0",
     "next": "16.3.6",
+    "postgres": "3.4.9",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
     "server-only": "^0.0.1",
+    "sharp": "0.35.5",
     "tailwind-merge": "^3.7.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
+    "@electric-sql/pglite-socket": "0.2.11",
     "@tailwindcss/postcss": "^4",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
@@ -41,6 +49,7 @@
     "jsdom": "^30.1.2",
     "supabase": "^2.118.0",
     "tailwindcss": "^4",
+    "tsx": "4.23.15",
     "typescript": "^5",
     "vite-tsconfig-paths": "^6.1.1",
     "vitest": "^5.0.2"

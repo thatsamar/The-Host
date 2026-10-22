@@ -3,8 +3,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { signInRequired } from "@/lib/auth/access";
 import { missingSupabaseConfig } from "@/lib/auth/sign-in-error";
 
-// Sign-in, plus what a logged-out browser or a link preview needs to show the app.
-const PUBLIC_PATHS = ["/login", "/join", "/icon", "/apple-icon", "/opengraph-image", "/manifest.webmanifest"];
+// Sign-in, plus what a logged-out browser or a link preview needs to show the
+// app, plus the messaging channel's routes, which a provider or a scheduler
+// calls and which check their own signature or secret (and 404 unless enabled).
+const PUBLIC_PATHS = ["/login", "/join", "/icon", "/apple-icon", "/opengraph-image", "/manifest.webmanifest", "/api/messages"];
 
 /** Refreshes the auth session on every request and, where sign-in is on, gates the app behind it. */
 export async function updateSession(request: NextRequest) {
