@@ -12,7 +12,9 @@
     "typecheck": "next typegen && tsc --noEmit",
     "check:migrations": "bash scripts/check-migrations.sh",
     "build:setup-sql": "node scripts/build-setup-sql.mjs",
-    "messages:harness": "tsx --tsconfig tsconfig.json scripts/messages-harness.mts"
+    "messages:harness": "tsx --tsconfig tsconfig.json scripts/messages-harness.mts",
+    "messages:sql": "tsx --tsconfig tsconfig.json scripts/messages-sql.mts",
+    "messages:migrate": "tsx --tsconfig tsconfig.json scripts/messages-migrate.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.129.0",
@@ -23,6 +25,7 @@
     "heic-decode": "2.1.0",
     "lucide-react": "^1.48.0",
     "next": "16.3.6",
+    "postgres": "3.4.9",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-markdown": "^10.1.0",
@@ -34,6 +37,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.8",
+    "@electric-sql/pglite-socket": "0.2.11",
     "@tailwindcss/postcss": "^4",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",

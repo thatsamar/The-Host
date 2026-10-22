@@ -59,6 +59,12 @@ describe("photos from a messaging provider, prepared on the server like the webs
     expect(await pixel(result.full.data, 5, 5)).toEqual([255, 255, 255]);
   });
 
+  it("can leave HEIC decoding off, refusing HEIC plainly but still taking JPEG", async () => {
+    expect(await prepareServerPhoto(HEIC, { heic: false })).toEqual({ ok: false, reason: "heic_off" });
+    const jpeg = await sharp({ create: { width: 20, height: 20, channels: 3, background: "#123456" } }).jpeg().toBuffer();
+    expect((await prepareServerPhoto(new Uint8Array(jpeg), { heic: false })).ok).toBe(true);
+  });
+
   it("refuses what isn't a photo, or is too big to read safely", async () => {
     expect(await prepareServerPhoto(new TextEncoder().encode("%PDF-1.7 not a photo"))).toEqual({ ok: false, reason: "unsupported" });
     expect(await prepareServerPhoto(new Uint8Array())).toEqual({ ok: false, reason: "empty" });

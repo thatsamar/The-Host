@@ -1,4 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
+import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
+import { createPostgresClient } from "@/lib/channel/postgres-client";
 
 vi.setConfig({ testTimeout: 30_000 });
 import { PGlite } from "@electric-sql/pglite";
@@ -35,6 +37,31 @@ const stores: [string, () => Promise<ChannelStore>][] = [
   ],
 ];
 let db: PGlite | undefined;
+
+// The production driver (postgres.js) over the Postgres wire protocol, against
+// PGlite's socket server: the same SQL, parameters and JSON handling as a
+// hosted database. One connection, since PGlite is a single session.
+let wire: { server: PGLiteSocketServer; client: ReturnType<typeof createPostgresClient>; db: PGlite } | undefined;
+stores.push([
+  "postgres over the wire (postgres.js)",
+  async () => {
+    if (!wire) {
+      const pg = new PGlite();
+      const server = new PGLiteSocketServer({ db: pg, port: 0, maxConnections: 1 });
+      await server.start();
+      const conn = server.getServerConn();
+      wire = { server, db: pg, client: createPostgresClient(`postgres://postgres@${conn}/postgres?sslmode=disable`, { max: 1 }) };
+    }
+    const store = new PostgresStore(wire.client, R);
+    await store.migrate();
+    await wire.client.query("truncate channel_inbound, channel_sessions, channel_locks, channel_outbox");
+    return store;
+  },
+]);
+afterAll(async () => {
+  await wire?.client.end();
+  await wire?.server.stop();
+});
 
 describe.each(stores)("%s store", (_name, make) => {
   it("records an event once; a redelivery is a duplicate", async () => {
@@ -178,5 +205,31 @@ describe("the database's own retention job", () => {
     const left = JSON.stringify([(await pg.query("select * from channel_sessions")).rows, (await pg.query("select * from channel_outbox")).rows]);
     expect(left).not.toContain("private");
     expect((await pg.query("select * from channel_sessions")).rows).toEqual([]);
+  });
+});
+
+describe("the migration files", () => {
+  it("match the code that owns them (npm run messages:sql)", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { CHANNEL_SCHEMA, sweepSchedule } = await import("@/lib/channel/postgres-store");
+    const file = (name: string) => readFileSync(new URL(`../db/messages/${name}`, import.meta.url), "utf8");
+    expect(file("0001_channel.sql")).toContain(CHANNEL_SCHEMA.trim());
+    expect(file("0002_retention_schedule.sql")).toContain(sweepSchedule(R));
+  });
+
+  it("apply cleanly, with row-level security on every table", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { splitSql } = await import("@/lib/channel/postgres-store");
+    const pg = new PGlite();
+    for (const statement of splitSql(readFileSync(new URL("../db/messages/0001_channel.sql", import.meta.url), "utf8"))) await pg.query(statement);
+    const { rows } = await pg.query<{ relname: string; relrowsecurity: boolean }>(
+      "select relname, relrowsecurity from pg_class where relname in ('channel_inbound', 'channel_sessions', 'channel_locks', 'channel_outbox') order by relname",
+    );
+    expect(rows).toEqual([
+      { relname: "channel_inbound", relrowsecurity: true },
+      { relname: "channel_locks", relrowsecurity: true },
+      { relname: "channel_outbox", relrowsecurity: true },
+      { relname: "channel_sessions", relrowsecurity: true },
+    ]);
   });
 });

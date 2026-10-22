@@ -2,6 +2,8 @@
 // and `transaction` (PGlite has exactly these; a node-postgres or serverless
 // driver needs a few lines of wrapping), so choosing the database stays a
 // launch decision. Times are ms since epoch, passed in, so tests control them.
+// JSON goes in as text cast to jsonb, so every driver stores an object, not a
+// JSON string (postgres.js would otherwise encode a string parameter twice).
 // Content (text, attachment references, replies, sessions) is cleared on the
 // schedule in retention.ts; ids and statuses outlive it briefly to stop
 // redelivered events from being answered twice.
@@ -55,6 +57,14 @@ create table if not exists channel_outbox (
 );
 create index if not exists channel_outbox_open on channel_outbox (conversation_id, position) where status in ('pending', 'sending');
 
+-- Row-level security on, with no policies: only the server's own database
+-- role (which bypasses it) can read or write. On Supabase this keeps the
+-- tables out of reach of the public API keys.
+alter table channel_inbound enable row level security;
+alter table channel_sessions enable row level security;
+alter table channel_locks enable row level security;
+alter table channel_outbox enable row level security;
+
 create or replace function channel_sweep(now_ms double precision, context_ms double precision, event_id_ms double precision, outbox_record_ms double precision)
 returns void language sql as $fn$
   delete from channel_sessions where expires_at <= now_ms;
@@ -76,21 +86,42 @@ export function sweepSchedule(retention: Retention, every = "*/15 * * * *"): str
   return `select cron.schedule('cinq-messages-sweep', '${every}', $job$select channel_sweep(extract(epoch from now()) * 1000, ${retention.contextMs}, ${retention.eventIdMs}, ${retention.outboxRecordMs})$job$);`;
 }
 
+/**
+ * Splits a migration into statements: at semicolons that end a line,
+ * except inside a dollar-quoted body ($fn$ … $fn$), with comment lines dropped.
+ */
+export function splitSql(sql: string): string[] {
+  const statements: string[] = [];
+  let current = "";
+  let quote: string | undefined;
+  for (const line of sql.split("\n")) {
+    if (!quote && /^\s*--/.test(line)) continue;
+    current += `${line}\n`;
+    for (const tag of line.match(/\$[A-Za-z_]*\$/g) ?? []) quote = quote === tag ? undefined : (quote ?? tag);
+    if (!quote && /;\s*$/.test(line)) {
+      statements.push(current.trim().replace(/;$/, ""));
+      current = "";
+    }
+  }
+  if (current.trim()) statements.push(current.trim());
+  return statements;
+}
+
 export class PostgresStore implements ChannelStore {
   constructor(
     private readonly sql: SqlClient,
     private readonly retention: Retention,
   ) {}
 
+  /** Creates the tables for tests and local runs. A hosted database gets them from db/messages/ at launch. */
   async migrate() {
-    // Statements end at a semicolon and a line break; the sweep function's body keeps its own.
-    for (const statement of CHANNEL_SCHEMA.split(/;\n(?=\s*(?:create|$))/).map((s) => s.trim()).filter(Boolean)) await this.sql.query(statement);
+    for (const statement of splitSql(CHANNEL_SCHEMA)) await this.sql.query(statement);
   }
 
   async recordInbound(event: InboundEvent, now: number) {
     const { rows } = await this.sql.query(
       `insert into channel_inbound (event_id, conversation_id, sent_at, status, payload, updated_at)
-       values ($1, $2, $3, 'pending', $4, $5) on conflict (event_id) do nothing returning event_id`,
+       values ($1, $2, $3, 'pending', $4::text::jsonb, $5) on conflict (event_id) do nothing returning event_id`,
       [event.id, event.conversationId, event.sentAt, JSON.stringify(event.payload), now],
     );
     return rows.length ? ("new" as const) : ("duplicate" as const);
@@ -147,7 +178,7 @@ export class PostgresStore implements ChannelStore {
   private async enqueue(tx: SqlQuery, conversationId: string, id: string, message: OutboundMessage, now: number) {
     await tx.query(
       `insert into channel_outbox (id, conversation_id, status, message, next_attempt_at, updated_at)
-       values ($1, $2, 'pending', $3, $4, $4) on conflict (id) do nothing`,
+       values ($1, $2, 'pending', $3::text::jsonb, $4, $4) on conflict (id) do nothing`,
       [id, conversationId, JSON.stringify(message), now],
     );
   }
@@ -181,7 +212,7 @@ export class PostgresStore implements ChannelStore {
       if (!rows.length) return false;
       if (change.session)
         await tx.query(
-          `insert into channel_sessions (conversation_id, state, expires_at) values ($1, $2, $3)
+          `insert into channel_sessions (conversation_id, state, expires_at) values ($1, $2::text::jsonb, $3)
            on conflict (conversation_id) do update set state = excluded.state, expires_at = excluded.expires_at`,
           [conversationId, JSON.stringify(change.session), now + this.retention.contextMs],
         );

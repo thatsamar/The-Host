@@ -2,9 +2,10 @@
 // messaging provider instead of a browser. It produces exactly what the
 // browser does: a JPEG at most 1280px on its longest edge for the question,
 // and a 512px copy kept for follow-ups, upright and on white. iPhone HEIC
-// photos are decoded here (sharp's own HEIF support covers AVIF only).
+// photos are decoded here (sharp's own HEIF support covers AVIF only), with
+// heic-decode, loaded only when a HEIC photo arrives, and only while
+// MESSAGES_HEIC_DECODE isn't "false". A JPEG the provider delivers needs none of it.
 
-import decodeHeic from "heic-decode";
 import sharp, { type Sharp } from "sharp";
 import { imageSchema } from "./images";
 import type { AskImage } from "./prompt";
@@ -43,10 +44,14 @@ export function sniffPhotoType(bytes: Uint8Array): PhotoType | undefined {
   return undefined;
 }
 
-export type PhotoProblem = "unsupported" | "too_large" | "empty" | "unreadable";
+export type PhotoProblem = "unsupported" | "too_large" | "empty" | "unreadable" | "heic_off";
+
+/** Whether HEIC photos are decoded here. Off, a HEIC photo gets a plain request to send a JPEG instead. */
+export const heicDecodingEnabled = (value = process.env.MESSAGES_HEIC_DECODE) => value?.trim().toLowerCase() !== "false";
 export type PreparedServerPhoto = { ok: true; full: AskImage; small: AskImage; source: PhotoType } | { ok: false; reason: PhotoProblem };
 
 async function heicToRaw(bytes: Uint8Array): Promise<{ data: Uint8Array; width: number; height: number }> {
+  const { default: decodeHeic } = await import("heic-decode");
   const images = await decodeHeic.all({ buffer: bytes });
   try {
     const primary = images[0];
@@ -75,7 +80,7 @@ async function encode(source: () => Sharp, edge: number, quality: number): Promi
  * WebP, GIF (first frame), HEIC/HEIF and AVIF; anything else, or anything too
  * large to read safely, is refused with a reason to show.
  */
-export async function prepareServerPhoto(bytes: Uint8Array): Promise<PreparedServerPhoto> {
+export async function prepareServerPhoto(bytes: Uint8Array, options: { heic?: boolean } = {}): Promise<PreparedServerPhoto> {
   if (!bytes.length) return { ok: false, reason: "empty" };
   if (bytes.length > MAX_INPUT_BYTES) return { ok: false, reason: "too_large" };
   const type = sniffPhotoType(bytes);
@@ -83,6 +88,7 @@ export async function prepareServerPhoto(bytes: Uint8Array): Promise<PreparedSer
   try {
     let source: () => Sharp;
     if (type === "image/heic") {
+      if (!(options.heic ?? heicDecodingEnabled())) return { ok: false, reason: "heic_off" };
       const raw = await heicToRaw(bytes);
       source = () => sharp(raw.data, { raw: { width: raw.width, height: raw.height, channels: 4 } });
     } else {

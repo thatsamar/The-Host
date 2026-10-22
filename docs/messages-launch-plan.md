@@ -29,14 +29,11 @@ Blooio is the best fit for a small pilot because its Apple Messages integration 
 | Reliability features | Signed webhooks (HMAC-SHA256, `X-Blooio-Signature: t=…,v1=…`), `Idempotency-Key` on sends, typing indicator endpoint, `chat.closed` event, `409 chat_closed` ([webhooks](https://docs.blooio.com/webhooks), [idempotency](https://docs.blooio.com/idempotency)) | Mature | Mature | Mature |
 | Experience Review | Blooio records, submits and fixes, offered as a managed launch (**price: confirm**) | You | Through Zendesk (a 2025 customer comment describes difficulty finding the submission path) | Through vendor |
 
-**Ask Blooio, in writing, before committing:**
-1. That Blooio appears in Apple Business Register's MSP list today.
-2. The Apple Messages per-MAU price, any minimum or platform fee, and the managed-launch fee.
-3. That a brand of AI advisors with live-agent escalation is eligible, and that Blooio has launched similar.
-4. Inbox seats included, and how response hours and out-of-hours replies work.
-5. Message retention for Apple Messages conversations. Their iMessage plans list 90-day or 1-year history; Cinq's privacy wording must state this. Ask whether it can be shortened, and request their data processing terms.
-6. The attachment format delivered (HEIC or converted), size limits and signed-URL lifetime.
-7. The maximum text length per message (Cinq needs it for `maxTextChars`).
+**Ask Blooio, in writing, before committing.** The full inquiry, ready to send, is in [`messages-provider-inquiry.md`](messages-provider-inquiry.md). It covers:
+- its Apple listing, and confirmation that the connection is official Apple Messages for Business (its `amb` channel), not its separate iMessage-line product;
+- eligibility, pilot pricing, seats, human-support hours, retention and deletion;
+- photo formats, message limits and test accounts;
+- the gaps found in its docs: no handoff API, no text limit, rich links, conversation-state limits.
 
 Fallback if Blooio can't confirm: Twilio once Apple Messages leaves private beta (published per-user pricing), or Zendesk if a contact-centre suite is wanted anyway.
 
@@ -57,16 +54,16 @@ Recommendation:
 
 ## Launch plan
 
-### 1. Work I can complete now (no accounts or spending)
-1. ✅ Server-side iPhone photo handling: HEIC/HEIF decoding, EXIF orientation, resizing to the website's sizes, and safe size limits (this commit).
-2. ✅ Reset cancels queued replies and stops an answer still being written. Apple's trigger words and five-second automated notice are in. A stalled worker's late answer is dropped (this commit).
-3. ✅ 24-hour deletion verified in a real Postgres. Retention runs as a database function with a pg_cron schedule (this commit).
-4. The Postgres driver wrapper (`SqlClient` over a pooled connection) and the migration file for `CHANNEL_SCHEMA` and `sweepSchedule()`, ready to apply. *Needs your OK to add a database driver dependency.*
-5. The webhook route and the `runDue()` retry job route, both refusing every request unless `MESSAGES_CHANNEL_ENABLED` is set. *Can be built now, but stays off.*
-6. The Blooio adapter, written from Blooio's public docs:
-   - signature check, `message.received` with attachments, `chat.closed` and `handoff.*` events;
-   - sends with `Idempotency-Key`, the list picker, rich links and typing.
-   *Can be drafted now; finished against a test account.*
+### 1. Work completed (no accounts or spending)
+1. ✅ Server-side iPhone photos (HEIC/HEIF decoding, orientation, the website's sizes), with a provider JPEG preferred when offered and an off switch for the decoder.
+2. ✅ Reset cancels unsent replies and stops an answer being written. Apple's trigger words and the five-second automated notice are in.
+3. ✅ 24-hour deletion, run inside the database every 15 minutes and verified by a table dump.
+4. ✅ The Postgres driver (`postgres`), tested over the wire. Migrations in `db/messages/` with row-level security, plus a migration script. None of it has been run against a hosted database.
+5. ✅ Webhook and retry routes, 404 everywhere unless `MESSAGES_CHANNEL_ENABLED=true`.
+6. ✅ The Blooio adapter, written from Blooio's public docs and tested against them. It accepts Apple Messages for Business events only.
+7. ✅ Optional summary handoff when switching advisors: shown first, shared only on request, photos only if included.
+
+Left for launch, once accounts exist: run the migrations, set the variables, point a scheduler at `/api/messages/run-due`, and check the HEIC decoder on the hosting project's preview.
 
 ### 2. Account setup and business details you must supply
 1. **Legal business entity and brand ownership** for "Cinq". Apple allows one commercial account per business, and the brand must be yours.
@@ -84,14 +81,13 @@ Recommendation:
 7. **Which Vercel project hosts the channel** (one only), and the entry points you want: a website button, QR code, Apple Maps or Message Suggest.
 
 ### 3. Costs and decisions needing your approval
-1. **Provider:** Blooio, subject to the seven written confirmations above. Its Apple Messages per-MAU price and any managed-launch fee are unpublished, so you approve once they're quoted.
-2. **Database plan:** Supabase Free for building, then Pro at $25/month at launch. Pro avoids pausing but adds 7-day backups, which the privacy wording must reflect.
-3. **Model usage:** every answer is a paid Anthropic call, as on the website. The channel caps it at 40 questions per conversation per hour (`QUESTIONS_PER_HOUR`). Keep a monthly spend limit set.
-4. **Live-agent staffing:** Apple requires it during business hours, with real hours and a person behind `agent`.
-5. **Separate advisor histories vs Apple's "never ask the customer to repeat information" guidance:**
-   - Today, switching advisors keeps conversations separate and asks the person to share what the new advisor needs.
-   - The alternative is to offer, with the person's consent, to pass a short summary to the new advisor.
-   - Your call before the Experience Review.
-6. **Context window:** 24 hours by default (`MESSAGES_CONTEXT_HOURS`, 1 to 72).
-7. **Licences:** the HEIC decoder (libheif and libde265, LGPL-3.0) and HEVC patent exposure for server-side decoding. Have counsel confirm, or ask the provider to deliver JPEG.
-8. **Go-live:** turning on `MESSAGES_CHANNEL_ENABLED` on one project after Apple approves the Experience Review. Production messaging stays off until then.
+1. **Provider:** Blooio, after its written answers to the inquiry. Its Apple Messages price per monthly active user, any setup or managed-launch fee, the minimum term and seat prices are **not published**, so there's no confirmed cost yet.
+2. **Database:** Supabase, in a new project.
+   - Free ($0) for building, but it pauses after a week of inactivity and has no backups.
+   - Pro is **$25/month** (published). It never pauses and keeps daily backups for 7 days, which the privacy wording then states.
+   - Point-in-time recovery isn't needed (it would be $100/month per 7 days).
+3. **Model usage:** every answer is a paid Anthropic call at the website's settings, capped at 40 questions per conversation per hour. There's no new fixed cost; keep the monthly spend limit.
+4. **Live-agent staffing and published hours:** Apple requires a person during business hours.
+5. **HEIC decoding:** decode on our server (LGPL and HEVC-patent questions open; get a qualified review), or switch it off (`MESSAGES_HEIC_DECODE=false`) and rely on a provider JPEG or ask people to send JPEG.
+6. **Context window:** 24 hours of inactivity, kept as decided. Content can stay in the database up to 24 h 15 min.
+7. **Go-live:** `MESSAGES_CHANNEL_ENABLED=true` on one project, after Apple approves the Experience Review.

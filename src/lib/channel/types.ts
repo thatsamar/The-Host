@@ -18,6 +18,16 @@ export interface AttachmentRef {
   mediaType?: string;
   /** Size in bytes, when the provider says. */
   size?: number;
+  /** Other renditions of the same photo the provider offers. A JPEG among them is used in place of a HEIC original. */
+  alternates?: AttachmentRef[];
+}
+
+const isJpeg = (r: AttachmentRef) => /^image\/(jpeg|jpg)$/i.test(r.mediaType ?? "");
+
+/** The rendition to download: the provider's JPEG when it offers one, so nothing needs decoding here. */
+export function preferredRendition(ref: AttachmentRef): AttachmentRef {
+  if (isJpeg(ref)) return ref;
+  return ref.alternates?.find(isJpeg) ?? ref;
 }
 
 /** What a person did, as Cinq needs to know it. */
@@ -127,6 +137,12 @@ export interface Session {
   introduced: CompanionId[];
   /** A person from Cinq's team has the conversation; advisors stay quiet. */
   withSupport?: boolean;
+  /**
+   * An offer, after switching advisors, to share a summary of the previous
+   * conversation. `summary` is set once the person has seen it, and is
+   * exactly what would be shared.
+   */
+  offer?: { from: CompanionId; to: CompanionId; summary?: string; photos?: number };
 }
 
 export const newSession = (): Session => ({ welcomed: false, histories: {}, introduced: [] });

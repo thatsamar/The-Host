@@ -26,7 +26,7 @@ import * as copy from "./copy";
 import { splitMessages, toPlainText } from "./format";
 import { MAX_SEND_ATTEMPTS, RETRY_BACKOFF_MS } from "./retention";
 import { decide, parseIntent, type Ask } from "./router";
-import { newSession, type ChannelStore, type Engine, type InboundPayload, type MessagingAdapter, type OutboundMessage, type Session } from "./types";
+import { newSession, preferredRendition, type ChannelStore, type Engine, type InboundPayload, type MessagingAdapter, type OutboundMessage, type Session } from "./types";
 
 export interface ChannelOptions {
   adapter: MessagingAdapter;
@@ -194,7 +194,7 @@ export function createChannel(options: ChannelOptions) {
     for (const ref of ask.attachments) {
       let bytes: Uint8Array;
       try {
-        bytes = await withTimeout(providerTimeoutMs, (signal) => adapter.fetchAttachment(ref, signal));
+        bytes = await withTimeout(providerTimeoutMs, (signal) => adapter.fetchAttachment(preferredRendition(ref), signal));
       } catch (err) {
         log("attachment download failed", { provider: adapter.name, error: errorClass(err) });
         return { problem: "unreadable" };

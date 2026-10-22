@@ -6,6 +6,7 @@ import { COMPANIONS } from "@/lib/companions";
 import type { CompanionId } from "@/lib/companions/types";
 import { MAX_PHOTOS_PER_TURN } from "@/lib/ask/prompt";
 import * as copy from "./copy";
+import { photosIn, readOfferReply, sharedTurn, summarize } from "./handoff";
 import type { AttachmentRef, OutboundMessage, Session } from "./types";
 
 export type Command = "menu" | "reset" | "support" | "preferences";
@@ -90,6 +91,29 @@ export function decide(
   const session: Session = structuredClone(current);
   const intent = parseIntent(message.text, message.selection, lineup);
 
+  // A pending offer to share a summary: only an explicit reply shares anything.
+  if (session.offer) {
+    const offer = session.offer;
+    delete session.offer;
+    const reply = intent.kind === "question" && !message.attachments.length ? readOfferReply(intent.text) : "other";
+    const from = session.histories[offer.from] ?? [];
+    if (reply === "decline") return { session, replies: [{ kind: "text", text: copy.NOT_SHARED }] };
+    if (reply === "show" || ((reply === "share" || reply === "share_with_photos") && offer.summary === undefined)) {
+      // Always show it first.
+      const summary = summarize(offer.from, from);
+      const photos = photosIn(from).length;
+      session.offer = { ...offer, summary, photos };
+      return { session, replies: [{ kind: "text", text: copy.summaryPreview(offer.to, offer.from, summary, photos) }] };
+    }
+    if ((reply === "share" || reply === "share_with_photos") && offer.summary !== undefined) {
+      const withPhotos = reply === "share_with_photos" && (offer.photos ?? 0) > 0;
+      const turn = sharedTurn(offer.summary, withPhotos ? photosIn(from) : []);
+      session.histories[offer.to] = [...(session.histories[offer.to] ?? []), turn];
+      return { session, replies: [{ kind: "text", text: copy.shared(offer.to, withPhotos) }] };
+    }
+    // Anything else: the person moved on. Nothing is shared; handle the message as usual.
+  }
+
   if (intent.kind === "command") {
     if (intent.command === "reset") return { session: null, replies: [{ kind: "text", text: copy.RESET }], cancelQueued: true };
     if (intent.command === "support") return { session, replies: [], support: true };
@@ -117,7 +141,13 @@ export function decide(
     delete session.pending;
     if (ask) return { session, replies: [], ask };
     if (!session.introduced.includes(advisor)) session.introduced.push(advisor);
-    return { session, replies: [{ kind: "text", text: copy.switched(advisor, !!session.histories[advisor]?.length) }] };
+    const switchedText = copy.switched(advisor, !!session.histories[advisor]?.length);
+    // Coming from another advisor's conversation: offer, never assume, to carry a summary over.
+    if (before && before !== advisor && session.histories[before]?.some((t) => t.role === "user")) {
+      session.offer = { from: before, to: advisor };
+      return { session, replies: [{ kind: "text", text: `${switchedText} ${copy.offerSummary(advisor)}` }] };
+    }
+    return { session, replies: [{ kind: "text", text: switchedText }] };
   }
 
   if (!intent.text && !message.attachments.length) return { session, replies: [] };

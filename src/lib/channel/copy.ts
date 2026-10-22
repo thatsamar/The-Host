@@ -38,8 +38,23 @@ export function switched(id: CompanionId, returning: boolean): string {
   const name = COMPANIONS[id].name;
   return returning
     ? `Back with ${label(id)}, picking up your conversation with ${name}.`
-    : `You're with ${label(id)}. Each advisor keeps a separate conversation, so share anything ${name} should know.`;
+    : `You're with ${label(id)}. Each advisor keeps a separate conversation.`;
 }
+
+/** Added to the switch message when the previous advisor has a conversation worth carrying over. */
+export const offerSummary = (to: CompanionId) =>
+  `Would you like me to share a short summary with ${COMPANIONS[to].name}? Reply yes to see it first. Nothing is shared unless you say so.`;
+
+export function summaryPreview(to: CompanionId, from: CompanionId, summary: string, photos: number): string {
+  const photoNote = photos
+    ? ` Your conversation with ${COMPANIONS[from].name} included ${photos} photo${photos === 1 ? "" : "s"}; they stay out unless you reply share with photos.`
+    : "";
+  return `Here's what I'd share with ${COMPANIONS[to].name}:\n\n${summary}\n\nReply share to send it, or no to keep it to yourself.${photoNote}`;
+}
+
+export const shared = (to: CompanionId, withPhotos: boolean) =>
+  `Shared with ${COMPANIONS[to].name}${withPhotos ? ", photos included" : ""}. It will be part of what ${COMPANIONS[to].name} reads with your next message.`;
+export const NOT_SHARED = "Nothing shared.";
 
 /** The first line of an advisor's first reply in a session. */
 export const introduction = (id: CompanionId) => label(id);
@@ -55,8 +70,10 @@ export const INTERRUPTED = "That answer was interrupted before it finished. Send
 export const RETRY_HINT = "Send your question again to try once more.";
 export const UNAVAILABLE = "Cinq isn't available right now. Try again in a little while.";
 
-export function photoProblem(reason: "unsupported" | "too_large" | "empty" | "too_many" | "unreadable" | "budget"): string {
+export function photoProblem(reason: "unsupported" | "too_large" | "empty" | "too_many" | "unreadable" | "budget" | "heic_off"): string {
   switch (reason) {
+    case "heic_off":
+      return "I can't read that photo's format here. Send it as a JPEG: on iPhone, Settings > Camera > Formats > Most Compatible, or send a screenshot of it.";
     case "unsupported":
       return "One of those files isn't a photo I can read. Send photos from your camera roll or screenshots.";
     case "too_large":

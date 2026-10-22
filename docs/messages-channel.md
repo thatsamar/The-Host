@@ -1,6 +1,6 @@
 # Cinq in Apple Messages for Business: implementation note
 
-Status: **built and tested provider-neutrally; not connected to any provider, not mounted on any route, not launched.** Nothing here sends or receives a real message.
+Status: **built and tested; the Blooio adapter, database driver, migrations and routes are written but switched off.** No provider account, hosted database or production setting exists. The routes answer 404 everywhere unless `MESSAGES_CHANNEL_ENABLED=true`. Nothing here has sent or received a real message.
 
 ## What exists
 
@@ -14,12 +14,24 @@ One Cinq conversation in Messages reaches all five advisors: Amar (Travel), Mart
 | `types.ts` | The adapter boundary (`MessagingAdapter`), normalized events, the `Engine` and `ChannelStore` contracts. |
 | `format.ts` | Turns Markdown into plain text and groups paragraphs into messages within the provider's limits. Nothing is summarized or cut. |
 | `memory-store.ts` | A store for tests and the harness. **Not durable.** |
-| `postgres-store.ts` | A durable store with its schema (`CHANNEL_SCHEMA`). It is tested against a real Postgres (PGlite) but not applied to any database. |
+| `postgres-store.ts` | A durable store with its schema (`CHANNEL_SCHEMA`: tables, row-level security, and the `channel_sweep` retention function) and `sweepSchedule()` for pg_cron. |
+| `postgres-client.ts` | The connection, over the `postgres` driver (prepared statements off for a transaction pooler such as Supabase's). The store contract is tested through it over the Postgres wire protocol (PGlite's socket server). That test caught JSON being double-encoded, now fixed. |
+| `blooio.ts` | The Blooio adapter, written from Blooio's public documentation (see Provider). Accepts only Apple Messages for Business events (`channel_type: "amb"`). |
+| `runtime.ts` | Builds the channel from server settings, only when `MESSAGES_CHANNEL_ENABLED` is exactly `true`. Misconfiguration logs setting names, never values. |
+| `handoff.ts` | The optional summary offered when switching advisors (see Conversation behavior). |
 | `fixture.ts` | A test adapter and engine. Every reply they produce is labeled `[Fixture reply: no model was called]`. |
 | `copy.ts` | What Cinq itself says: the welcome, switching, reset, photo problems and support. Names and areas come from the companions. |
 | `retention.ts` | The cleanup schedule and the retry schedule. |
 
 The photo check is shared by both channels: `src/lib/ask/images.ts` holds the website's own schema, moved from the ask route unchanged.
+
+Routes (`src/app/api/messages/`):
+- `webhook`: the provider's webhook. Signature checked first, acknowledged at once, answered in the background.
+- `run-due`: for a scheduler; needs `Authorization: Bearer <CRON_SECRET>`. Retries due replies, finishes stranded events and sweeps.
+
+Both answer 404 unless enabled. Because the routes check their own signature or secret, `/api/messages` is exempt from the app's optional sign-in gate.
+
+Migrations: `db/messages/0001_channel.sql` (tables, row-level security, retention function) and `0002_retention_schedule.sql` (the pg_cron job). Both are generated from the code by `npm run messages:sql`, and a test keeps them in sync. `npm run messages:migrate` applies them to `MESSAGES_DATABASE_URL`; it has never been run against a hosted database.
 
 The local harness is `npm run messages:harness`. You type as the person and see what Cinq would send. It is fixture-only: no model, no provider, nothing leaves the machine.
 
@@ -28,13 +40,19 @@ The local harness is `npm run messages:harness`. You type as the person and see 
 None.
 - The ask route imports the same image schema from its new shared home.
 - Each companion gained a one-word `category` (Travel, Style and so on) that only the channel shows.
+- `/api/messages/*` routes exist but answer 404 unless the channel is enabled, and are exempt from the optional sign-in gate.
 - No prompt, page copy, model setting, tool or route changed.
 
 ## Conversation behavior
 
 1. **Welcome.** A first message with no advisor named gets one short welcome, which says these are AI advisors, plus a five-option picker. The message is kept and passed to whoever is chosen. Later messages before a choice are added to it, with a one-line reminder rather than another welcome.
 2. **Named requests.** "Amar: one night in Bangkok" (or "Amar, …") goes straight to Amar. A name or area on its own ("Martine", "Drinks") switches advisors. A name later in a sentence is just part of the question.
-3. **Identification and separate histories.** The advisor's name and area head their first reply, and any reply after they take over from someone else. Each advisor keeps a separate history within the session. Switching says so, and nothing from one advisor's conversation reaches another.
+3. **Identification and separate histories.** The advisor's name and area head their first reply, and any reply after they take over from someone else. Each advisor keeps a separate history within the session. Switching says so, and nothing from one advisor's conversation reaches another unless the person shares it.
+   - **Optional handoff.** Switching by name or picker from an advisor the person has talked with adds: "Would you like me to share a short summary with Alden? Reply yes to see it first. Nothing is shared unless you say so."
+   - **"yes"** shows exactly what would be shared. The summary is built from the conversation itself, with no model call: the person's last few questions, and the first sentences of the advisor's latest reply.
+   - **"share"** adds it to the new advisor's conversation as the person's own message. **"share with photos"** also includes that conversation's photos (the small copies). Otherwise photos stay out.
+   - **"no", any other message, or a command** ends the offer with nothing shared.
+   - Switching with a question attached ("Alden: …") answers straight away and makes no offer.
 4. **Photos.**
    - Attachments are downloaded only through the adapter's authenticated call, by the provider's reference. A URL in the text is never fetched.
    - Photos are prepared on the server exactly as the website's browser prepares them (`src/lib/ask/server-photos.ts`): a JPEG at most 1280 px on its longest edge for the question, and a 512 px copy kept for follow-ups. Each photo is turned upright from its EXIF orientation, and transparency goes onto white.
@@ -99,22 +117,32 @@ None.
 
 ## Still to do before launch
 
-### 1. Choose the messaging service provider (blocked: no provider selected)
+### 1. Provider: Blooio adapter drafted from its docs, pending written confirmation
 
-Apple Messages for Business runs through an Apple-approved Messaging Service Provider (MSP). The alternative is registering Cinq as its own MSP, which Apple must approve and which carries its own feature requirements. Once a provider is chosen, write `src/lib/channel/<provider>.ts` implementing `MessagingAdapter` **from that provider's documentation**, covering:
+`blooio.ts` uses only what Blooio's public docs (docs.blooio.com, read October 2026) state:
+- **Webhook verification.** `X-Blooio-Signature: t=<seconds>,v1=<hex HMAC-SHA256 of "{t}.{raw body}">` with the webhook's signing secret, rejected outside 5 minutes, compared in constant time.
+- **Events.** The v4 envelope (`id`, `type`, `created_at`, `data`). `message.received` gives text and attachments `{ url, media_type }`; a list-picker reply arrives with the chosen title as its text. `chat.closed` means nothing more may be sent; `handoff.resolved` means the person from Cinq's team has handed back.
+  - **Only `data.channel_type === "amb"` is accepted.** Blooio's iMessage, SMS, RCS and WhatsApp channels are ignored, so this connection can only be official Apple Messages for Business.
+- **Sending.** `POST https://api.blooio.com/v4/chats/{chat_id}/messages` with `Authorization: Bearer`, the outbox id as `Idempotency-Key`, and `{ text }` or an `interactive` list picker.
+  - 5xx, network errors and `service_unavailable` are retried.
+  - `delivery_unconfirmed` counts as sent, per Blooio's advice not to resend.
+  - 409 (chat closed), 429 (a limit that lifts only when the person replies) and other failures are not retried.
+- **Typing.** `POST /v4/chats/{chat_id}/typing` with `{ "state": "started" | "stopped" }`.
+- **Attachments.** Blooio's signed URLs, fetched only over https from hosts listed in `MESSAGES_ATTACHMENT_HOSTS`, with no redirects, within 30 MB. A JPEG rendition is preferred whenever an event offers one (`AttachmentRef.alternates`).
 
-- **Webhook verification.** Its documented signature or token check, run in `verify` before anything is parsed.
-- **Event normalization.** Messages, list-picker responses, attachments, conversation close or opt-out, and handback from a human agent. Read receipts, typing and tapbacks are ignored. Map the provider's event id and send time.
-- **Outbound.** Text, the list picker (`kind: "picker"`), rich links for URLs (Apple expects every URL to be sent as a rich link) and typing indicators. Map provider errors to retryable or permanent, and use the provider's idempotency mechanism if it has one.
-- **Attachments.** Download by reference with the provider's credentials, from the provider's own host only. Conversion and resizing are already done (see Photos).
-- **Limits.** Set `maxTextChars` from the provider's documented maximum, and `preferredTextChars` for readable groups.
-- **Human support.** The provider's handoff to its agent console, returning the real queue status or hours.
+**Not documented, so not assumed:**
+- **An API to start a handoff.** `requestSupport` reports "unavailable", and the reply says no one was notified.
+- **The per-message text limit.** `MESSAGES_MAX_TEXT_CHARS`, default 2000.
+- **Whether URLs become rich links automatically.**
+- **Whether Blooio's conversation-state limits (`conversation_streak_limit`, `conversation_awaiting_reply`) apply to Apple Messages.** They could cut off a multi-part answer.
 
-Then:
-- Pick the database. Apply `CHANNEL_SCHEMA` as a reviewed migration and wrap the driver in the `SqlClient` shape (a few lines).
-- Mount the webhook as `src/app/api/messages/<provider>/route.ts`. It should read the raw body, call `handleWebhook`, return the status, and pass `background` to `after()`. It must return 404 unless `MESSAGES_CHANNEL_ENABLED` is set, because this codebase deploys to every Cinq project, so the route belongs on one project only.
-- Add the scheduled `runDue()` job for retries. Its frequency depends on the hosting plan's cron limits; check before relying on one minute. Apply `sweepSchedule()` in the database for retention.
-- Set the variables in `.env.messages.example` (names only).
+All four are in `docs/messages-provider-inquiry.md`.
+
+Then, at launch:
+- **Database.** Create it, then run `npm run messages:migrate` (and `-- --schedule` once pg_cron is on).
+- **Variables.** Set those in `.env.messages.example` on the one hosting project.
+- **Scheduler.** Point a scheduler at `/api/messages/run-due` (retries, about every minute, within the hosting plan's cron limits).
+- **Switch it on.** Set `MESSAGES_CHANNEL_ENABLED=true` there only.
 
 ### 2. Apple business registration and experience review
 
@@ -127,22 +155,50 @@ Then:
 
 - Decide who staffs it and when.
 - Set up the provider's agent console and queue. Agents need the conversation history the provider keeps, since Cinq's own context is temporary.
-- Make `requestSupport` return real queue status and hours.
+- Make `requestSupport` return real queue status and hours, once Blooio confirms how a handoff is started.
 - Agree what agents say about Cinq's AI advisors, and how they hand a conversation back (the `support_ended` event).
+
+## Licences and deployment notes (facts, not legal conclusions)
+
+Read from each installed package's own metadata and licence files:
+
+| Package (version) | Used for | Licence |
+| --- | --- | --- |
+| `sharp` 0.35.5 | Rotating, resizing and encoding photos | Apache-2.0 |
+| `@img/sharp-libvips-linux-x64` 1.3.4 (installed by sharp on Linux) | Prebuilt libvips and its libraries | LGPL-3.0-or-later; its README lists each bundled library's licence (for example aom: BSD-2-Clause plus the AOMedia patent licence) |
+| `heic-decode` 2.1.0 | Decoding HEIC/HEIF | ISC |
+| `libheif-js` 1.23.5 (used by heic-decode) | An Emscripten build of libheif, loaded as WebAssembly (about 1.5 MB) | LGPL-3.0, per its LICENSE file. The compiled module contains the libde265 HEVC decoder (its strings are in `libheif.wasm`). libde265's own licence isn't restated in the package. |
+| `postgres` 3.4.9 | Database driver | Unlicense |
+| Dev only: `@electric-sql/pglite` 0.5.8, `@electric-sql/pglite-socket` 0.2.11, `tsx` 4.23.15 | Tests and scripts | Apache-2.0, Apache-2.0, MIT |
+
+**Unresolved, to review before launch:**
+- **LGPL obligations.** What they require for libheif, libde265 and libvips used on our servers and not distributed to users. This needs a qualified review.
+- **HEVC patents.** Whether HEVC patent licensing applies to decoding HEIC on the server. This needs a qualified review.
+  - In the meantime, `MESSAGES_HEIC_DECODE=false` switches the decoder off. HEIC photos then get a plain request to send a JPEG ("Most Compatible" camera setting, or a screenshot), and the decoder is never loaded; it is only imported when a HEIC photo arrives.
+  - A JPEG version supplied by the provider would avoid decoding altogether; asked in the inquiry.
+- **Deployment.** The decoder has run in a local production build (`next start`), not yet on Vercel, because the channel routes are off in every deployment. Check it on the hosting project's preview before enabling.
 
 ## Privacy wording (draft for review)
 
-> **Cinq in Messages.** Cinq's advisors are AI. When you message Cinq, your messages and photos go through Apple Messages for Business and [provider] to Cinq, and from Cinq to Anthropic to write each answer. An advisor may search the web for your question.
+> **Cinq in Messages.** Cinq's advisors are AI. When you message Cinq, your messages and photos go through Apple Messages for Business and [provider] to Cinq, and from Cinq to Anthropic, which writes each answer. An advisor may search the web for your question.
 >
-> Cinq keeps what it needs to continue the conversation (your messages with each advisor, your photos and which advisor you're talking to) for 24 hours after your last message, then deletes it. Type **reset** at any time to clear it sooner. Closing the conversation clears it too. Deleted data can remain in Cinq's database backups for up to [7] days before they expire. Cinq doesn't add your conversations to analytics or keep them in its logs.
+> **What Cinq keeps, and for how long.** To continue the conversation, Cinq keeps your messages with each advisor, your photos, and which advisor you're talking to.
+> - It deletes them after 24 hours with no new message.
+> - Deletion runs every 15 minutes, so they can stay in Cinq's database for up to 24 hours 15 minutes after your last message.
+> - Type **reset** to clear them sooner. Closing the conversation clears them too.
+> - Cinq keeps a record that a message arrived, without its content, for 7 days so a message delivered twice isn't answered twice.
+> - Cinq doesn't add your conversations to analytics or keep them in its logs.
 >
-> Clearing Cinq's copy doesn't remove anything from Messages on your devices, or from Apple's or [provider]'s systems. They keep messages under their own terms: [link to provider's retention terms]. [How messages are encrypted in transit, as Apple's and the provider's documentation describe it.]
+> **Sharing between advisors.** Advisors keep separate conversations. When you switch, Cinq can share a short summary with the new advisor, but only if you ask, after showing you exactly what it would share. Photos stay out unless you include them.
 >
-> Type **agent** to ask for a person from Cinq's team, [hours]. They see the conversation through [provider].
+> **Backups.** Cinq's database provider keeps backups of the database. Something deleted from the database can remain in those backups for up to [7 days on the chosen plan / none on a plan without backups] until they expire.
+>
+> **Apple and [provider].** Clearing Cinq's copy doesn't remove anything from Messages on your devices, or from Apple's or [provider]'s systems, which keep messages under their own terms: [link to the provider's retention terms, and how long it keeps messages and photos]. [How messages are encrypted in transit, as Apple's and the provider's documentation describe it.]
+>
+> **Talking to a person.** Type **agent** to ask for a person from Cinq's team, [hours]. They see the conversation through [provider].
 
-Points to confirm before using this:
-- The provider's name, its retention terms, and the encryption description (left as a placeholder rather than guessed).
+To confirm before using this:
+- The provider's name, its retention for messages and attachments, its deletion controls and its encryption description (all in the provider inquiry, `docs/messages-provider-inquiry.md`).
+- The database plan's backup period (Supabase Pro: daily backups kept 7 days; Free: no automatic backups).
 - Anthropic's data terms as they apply to Cinq's account.
 - The support hours.
-- That 24 hours is the chosen window, and the backup period of the chosen database plan.
-- The provider's own message-history retention. For example, Blooio's published plans list 90-day or 1-year message history for its iMessage lines; its retention for Apple Messages for Business conversations needs confirming.
