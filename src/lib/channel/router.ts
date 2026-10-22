@@ -8,13 +8,29 @@ import { MAX_PHOTOS_PER_TURN } from "@/lib/ask/prompt";
 import * as copy from "./copy";
 import type { AttachmentRef, OutboundMessage, Session } from "./types";
 
+export type Command = "menu" | "reset" | "support" | "preferences";
+
 export type Intent =
-  | { kind: "command"; command: "advisors" | "reset" | "help" }
+  | { kind: "command"; command: Command }
   /** An advisor named or picked; `question` is what followed "Name:" or "Name,". */
   | { kind: "choose"; advisor: CompanionId; question: string }
   | { kind: "question"; text: string };
 
-const COMMANDS = ["advisors", "reset", "help"] as const;
+// Apple's standard trigger words (Messages for Business policies), plus Cinq's own.
+const COMMANDS: Record<string, Command> = {
+  agent: "support",
+  support: "support",
+  help: "support",
+  menu: "menu",
+  list: "menu",
+  "?": "menu",
+  advisors: "menu",
+  reset: "reset",
+  unsubscribe: "preferences",
+  stop: "preferences",
+  spam: "preferences",
+  end: "preferences",
+};
 
 const plain = (s: string) => s.trim().toLowerCase().replace(/[.!?]+$/, "").trim();
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -22,8 +38,8 @@ const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 /** Reads what a message asks for: a command, an advisor, or a question. */
 export function parseIntent(text: string, selection: string | undefined, lineup: CompanionId[]): Intent {
   if (selection && (lineup as string[]).includes(selection)) return { kind: "choose", advisor: selection as CompanionId, question: "" };
-  const said = plain(text);
-  const command = COMMANDS.find((c) => c === said);
+  const said = text.trim() === "?" ? "?" : plain(text);
+  const command = Object.hasOwn(COMMANDS, said) ? COMMANDS[said] : undefined;
   if (command) return { kind: "command", command };
   for (const id of lineup) {
     const { name, category } = COMPANIONS[id];
@@ -51,6 +67,8 @@ export interface Decision {
   ask?: Ask;
   /** Ask the provider for a person from Cinq's team. */
   support?: boolean;
+  /** Cancel every reply still waiting to be sent (reset). */
+  cancelQueued?: boolean;
 }
 
 const picker = (): OutboundMessage => ({ kind: "picker", prompt: copy.PICKER_PROMPT, options: copy.pickerOptions() });
@@ -73,8 +91,9 @@ export function decide(
   const intent = parseIntent(message.text, message.selection, lineup);
 
   if (intent.kind === "command") {
-    if (intent.command === "reset") return { session: null, replies: [{ kind: "text", text: copy.RESET }] };
-    if (intent.command === "help") return { session, replies: [], support: true };
+    if (intent.command === "reset") return { session: null, replies: [{ kind: "text", text: copy.RESET }], cancelQueued: true };
+    if (intent.command === "support") return { session, replies: [], support: true };
+    if (intent.command === "preferences") return { session, replies: [{ kind: "text", text: copy.PREFERENCES }] };
     session.welcomed = true;
     return { session, replies: [picker()] };
   }

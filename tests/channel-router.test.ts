@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { decide, parseIntent } from "@/lib/channel/router";
+import * as copy from "@/lib/channel/copy";
 import { lineup, welcome } from "@/lib/channel/copy";
 import { newSession, type Session } from "@/lib/channel/types";
 
@@ -7,11 +8,13 @@ const L = lineup();
 const msg = (text: string, extra: Partial<{ attachments: { ref: string }[]; selection: string }> = {}) => ({ text, attachments: [], ...extra });
 
 describe("reading a message", () => {
-  it("knows the commands, exactly", () => {
-    expect(parseIntent("advisors", undefined, L)).toEqual({ kind: "command", command: "advisors" });
+  it("knows the commands, exactly, including Apple's standard trigger words", () => {
+    for (const word of ["agent", "Support", "HELP!"]) expect(parseIntent(word, undefined, L)).toEqual({ kind: "command", command: "support" });
+    for (const word of ["menu", "List", "?", "advisors"]) expect(parseIntent(word, undefined, L)).toEqual({ kind: "command", command: "menu" });
+    for (const word of ["unsubscribe", "STOP", "spam", "end"]) expect(parseIntent(word, undefined, L)).toEqual({ kind: "command", command: "preferences" });
     expect(parseIntent(" Reset. ", undefined, L)).toEqual({ kind: "command", command: "reset" });
-    expect(parseIntent("HELP!", undefined, L)).toEqual({ kind: "command", command: "help" });
     expect(parseIntent("help me plan Lisbon", undefined, L)).toEqual({ kind: "question", text: "help me plan Lisbon" });
+    expect(parseIntent("Is it worth it?", undefined, L).kind).toBe("question");
   });
 
   it("goes straight to a named advisor, with or without a question", () => {
@@ -77,7 +80,8 @@ describe("deciding who answers", () => {
   it("opens the picker, clears on reset, and asks for support on help", () => {
     const s: Session = { ...newSession(), active: "tony", histories: { tony: [{ role: "user", text: "x" }] } };
     expect(decide(s, msg("advisors"), L).replies[0].kind).toBe("picker");
-    expect(decide(s, msg("reset"), L)).toMatchObject({ session: null });
+    expect(decide(s, msg("reset"), L)).toMatchObject({ session: null, cancelQueued: true });
+    expect(decide(s, msg("stop"), L).replies).toEqual([{ kind: "text", text: copy.PREFERENCES }]);
     expect(decide(s, msg("help"), L)).toMatchObject({ support: true, replies: [] });
   });
 

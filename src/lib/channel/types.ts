@@ -159,17 +159,27 @@ export interface ChannelStore {
   claimNext(conversationId: string, now: number): Promise<StoredInbound | undefined>;
   /** The session, or nothing when there is none or it has expired. */
   getSession(conversationId: string, now: number): Promise<Session | undefined>;
+  /** What is still waiting in a conversation after the event being handled, oldest first (content included, nothing claimed). */
+  peekPending(conversationId: string, limit: number): Promise<InboundEvent["payload"][]>;
+  /**
+   * Queues replies ahead of an event's commit, under ids built from `key`,
+   * for a reply that must go out before a slow answer (Apple's five-second
+   * first reply). A repeated key is ignored.
+   */
+  queueReplies(conversationId: string, key: string, replies: OutboundMessage[], now: number): Promise<void>;
   /**
    * Finishes an event in one step: saves or deletes the session, queues the
-   * replies in order, and clears the event's content. With `close`, also
-   * cancels anything still waiting to be sent.
+   * replies in order, and clears the event's content. With `cancelQueued`,
+   * first cancels every reply still waiting to be sent (reset, or a closed
+   * conversation). Returns false, changing nothing, when the event is no
+   * longer in progress: another worker finished it after this one's lease ran out.
    */
   commit(
     conversationId: string,
     eventId: string,
-    change: { session: Session | null; replies: OutboundMessage[]; close?: boolean },
+    change: { session: Session | null; replies: OutboundMessage[]; cancelQueued?: boolean },
     now: number,
-  ): Promise<void>;
+  ): Promise<boolean>;
   /** The conversation's next message to send, if it is due; marks it as being sent until `now + leaseMs`. */
   claimOutbox(conversationId: string, now: number, leaseMs: number): Promise<OutboxItem | undefined>;
   markSent(itemId: string, now: number): Promise<void>;

@@ -65,6 +65,23 @@ export class MemoryStore implements ChannelStore {
     return { event: { ...next.event, payload: next.payload! }, interrupted: !!stuck };
   }
 
+  async peekPending(conversationId: string, limit: number) {
+    return [...this.inbound.values()]
+      .filter((r) => r.event.conversationId === conversationId && r.status === "pending" && r.payload)
+      .sort((a, b) => a.event.sentAt - b.event.sentAt || a.arrival - b.arrival)
+      .slice(0, limit)
+      .map((r) => structuredClone(r.payload!));
+  }
+
+  async queueReplies(conversationId: string, key: string, replies: OutboundMessage[], now: number) {
+    replies.forEach((message, i) => this.enqueue(conversationId, `${key}#${i}`, message, now));
+  }
+
+  private enqueue(conversationId: string, id: string, message: OutboundMessage, now: number) {
+    if (this.outbox.has(id)) return;
+    this.outbox.set(id, { id, conversationId, order: ++this.counter, message, status: "pending", attempts: 0, nextAttemptAt: now, leaseUntil: 0, updatedAt: now });
+  }
+
   async getSession(conversationId: string, now: number) {
     const found = this.sessions.get(conversationId);
     if (!found) return undefined;
@@ -78,21 +95,21 @@ export class MemoryStore implements ChannelStore {
   async commit(
     conversationId: string,
     eventId: string,
-    change: { session: Session | null; replies: OutboundMessage[]; close?: boolean },
+    change: { session: Session | null; replies: OutboundMessage[]; cancelQueued?: boolean },
     now: number,
   ) {
     const record = this.inbound.get(eventId);
-    if (record) Object.assign(record, { status: "done", payload: undefined, updatedAt: now });
+    // Already finished by another worker (this one was presumed dead): change nothing.
+    if (!record || record.status !== "processing") return false;
+    Object.assign(record, { status: "done", payload: undefined, updatedAt: now });
     if (change.session) this.sessions.set(conversationId, { session: structuredClone(change.session), expiresAt: now + this.retention.contextMs });
     else this.sessions.delete(conversationId);
-    if (change.close)
+    if (change.cancelQueued)
       for (const item of this.outbox.values())
         if (item.conversationId === conversationId && (item.status === "pending" || item.status === "sending"))
           Object.assign(item, { status: "cancelled", message: undefined, updatedAt: now });
-    change.replies.forEach((message, i) => {
-      const id = `${eventId}#${i}`;
-      this.outbox.set(id, { id, conversationId, order: ++this.counter, message, status: "pending", attempts: 0, nextAttemptAt: now, leaseUntil: 0, updatedAt: now });
-    });
+    change.replies.forEach((message, i) => this.enqueue(conversationId, `${eventId}#${i}`, message, now));
+    return true;
   }
 
   async claimOutbox(conversationId: string, now: number, leaseMs: number): Promise<OutboxItem | undefined> {

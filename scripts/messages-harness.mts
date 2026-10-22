@@ -6,10 +6,11 @@
 //
 //   npm run messages:harness
 //
-// Commands as the person: advisors, reset, help, a name ("Amar"), "Amar: ...".
-// Harness commands: /photo (attach a sample PNG to the next message),
+// Commands as the person: menu, reset, agent, stop, a name ("Amar"), "Amar: ...".
+// Harness commands: /photo (attach a sample iPhone HEIC photo to the next message),
 // /end (the person closes the conversation), /later <hours> (move the clock).
 
+import { readFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { stdin, stdout } from "node:process";
 import { createChannel } from "@/lib/channel/service";
@@ -18,11 +19,12 @@ import { MemoryStore } from "@/lib/channel/memory-store";
 import { retention } from "@/lib/channel/retention";
 import type { InboundEvent, InboundPayload } from "@/lib/channel/types";
 
-const SAMPLE_PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]);
+// A real iPhone-format (HEIC) photo, so /photo goes through the same decoding as a delivered one.
+const SAMPLE_PHOTO = new Uint8Array(readFileSync(new URL("../tests/fixtures/iphone-photo.heic", import.meta.url)));
 
 const clock = { t: Date.now() };
 const adapter = new FixtureAdapter({ secret: "local-harness-only", support: { status: "unavailable" } });
-adapter.attachments.set("sample-photo", SAMPLE_PNG);
+adapter.attachments.set("sample-photo", SAMPLE_PHOTO);
 const channel = createChannel({ adapter, store: new MemoryStore(retention()), engine: fixtureEngine(), now: () => clock.t });
 
 // Logs are codes and counts; keep them out of the way.

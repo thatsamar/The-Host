@@ -16,7 +16,7 @@
 
 import { randomUUID } from "node:crypto";
 import { fitToBudget } from "@/lib/ask/budget";
-import { imageFromBytes } from "@/lib/ask/images";
+import { prepareServerPhoto } from "@/lib/ask/server-photos";
 import { MAX_HISTORY_TURNS, MAX_PHOTOS_PER_TURN, type AskImage, type AskTurn } from "@/lib/ask/prompt";
 import { timeLimitMessage } from "@/lib/ask/ask";
 import { createRateLimiter, questionsPerHour } from "@/lib/ask/rate-limit";
@@ -25,7 +25,7 @@ import { errorClass } from "@/lib/diagnostics";
 import * as copy from "./copy";
 import { splitMessages, toPlainText } from "./format";
 import { MAX_SEND_ATTEMPTS, RETRY_BACKOFF_MS } from "./retention";
-import { decide, type Ask } from "./router";
+import { decide, parseIntent, type Ask } from "./router";
 import { newSession, type ChannelStore, type Engine, type InboundPayload, type MessagingAdapter, type OutboundMessage, type Session } from "./types";
 
 export interface ChannelOptions {
@@ -39,6 +39,8 @@ export interface ChannelOptions {
   answerTimeoutMs?: number;
   /** A provider call (send, download, support) is abandoned after this long. */
   providerTimeoutMs?: number;
+  /** How often a running answer checks whether a reset or close has arrived. */
+  cancelPollMs?: number;
 }
 
 const DEFAULT_ANSWER_TIMEOUT_MS = 240_000;
@@ -58,6 +60,7 @@ export function createChannel(options: ChannelOptions) {
   const now = options.now ?? Date.now;
   const answerTimeoutMs = options.answerTimeoutMs ?? DEFAULT_ANSWER_TIMEOUT_MS;
   const providerTimeoutMs = options.providerTimeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS;
+  const cancelPollMs = options.cancelPollMs ?? 2_000;
   // Long enough for the longest answer, so a live worker never loses its conversation.
   const leaseMs = answerTimeoutMs + 60_000;
   const limiter = createRateLimiter({ limit: options.questionsPerHour ?? questionsPerHour(), now });
@@ -92,7 +95,11 @@ export function createChannel(options: ChannelOptions) {
     return { status: 200, background };
   }
 
-  /** Works through a conversation's waiting events in order, then sends what's due. */
+  /**
+   * Works through a conversation's waiting events in order, then sends
+   * what's due, all while holding the conversation: replies only go out from
+   * the worker that would also see a reset or a close and cancel them.
+   */
   async function drain(conversationId: string): Promise<void> {
     const owner = randomUUID();
     // Another worker has it: that worker picks up anything new before letting go.
@@ -104,13 +111,23 @@ export function createChannel(options: ChannelOptions) {
           handled++;
           await store.acquire(conversationId, owner, now(), leaseMs);
         }
+        await sendDue(conversationId);
       } finally {
         await store.release(conversationId, owner);
       }
-      await flush(conversationId);
       // Something may have arrived between the last check and letting go: look once more.
       if (!handled) break;
     }
+  }
+
+  /** Whether something already waiting behind this event cancels it: a reset, or the person closing the conversation. */
+  async function cancelledByLater(conversationId: string): Promise<boolean> {
+    const isReset = (p: InboundPayload) => {
+      if (p.kind !== "message") return false;
+      const intent = parseIntent(p.text, p.selection, lineup);
+      return intent.kind === "command" && intent.command === "reset";
+    };
+    return (await store.peekPending(conversationId, 50)).some((p) => p.kind === "conversation_end" || isReset(p));
   }
 
   async function handle(conversationId: string, eventId: string, event: InboundPayload, interrupted: boolean) {
@@ -123,7 +140,7 @@ export function createChannel(options: ChannelOptions) {
     if (event.kind === "conversation_end") {
       // Closed by the person: clear everything and send nothing more.
       log("conversation ended", {});
-      return store.commit(conversationId, eventId, { session: null, replies: [], close: true }, now());
+      return store.commit(conversationId, eventId, { session: null, replies: [], cancelQueued: true }, now());
     }
     if (event.kind === "support_ended") {
       delete session.withSupport;
@@ -131,6 +148,11 @@ export function createChannel(options: ChannelOptions) {
     }
     // A person from Cinq's team is talking with them; the advisors stay out of it.
     if (session.withSupport) return store.commit(conversationId, eventId, { session, replies: [] }, now());
+    // A reset or close is already waiting: don't answer what it cancels.
+    if (await cancelledByLater(conversationId)) {
+      log("event skipped", { code: "cancelled" });
+      return store.commit(conversationId, eventId, { session, replies: [] }, now());
+    }
 
     const decision = decide(session, event, lineup);
     const replies: OutboundMessage[] = [...decision.replies];
@@ -147,16 +169,28 @@ export function createChannel(options: ChannelOptions) {
     }
 
     if (decision.ask && next) {
+      if (!session.welcomed) {
+        // First contact goes straight to an advisor: say at once, within
+        // Apple's five seconds, that this is automated and who is answering.
+        await store.queueReplies(conversationId, `${eventId}#notice`, [{ kind: "text", text: copy.firstAnswerNotice(decision.ask.advisor) }], now());
+        await sendDue(conversationId);
+      }
       const answered = await answer(conversationId, next, decision.ask);
+      if (answered.cancelled) {
+        log("answer cancelled", { advisor: decision.ask.advisor, code: "cancelled" });
+        return store.commit(conversationId, eventId, { session, replies: [] }, now());
+      }
       replies.push(...answered.replies);
       next = answered.session;
     }
-    await store.commit(conversationId, eventId, { session: next, replies }, now());
+    if (!(await store.commit(conversationId, eventId, { session: next, replies, cancelQueued: decision.cancelQueued }, now())))
+      log("answer dropped", { code: "superseded" });
   }
 
-  async function photos(ask: Ask): Promise<{ images: AskImage[] } | { problem: Parameters<typeof copy.photoProblem>[0] }> {
+  async function photos(ask: Ask): Promise<{ images: AskImage[]; small: AskImage[] } | { problem: Parameters<typeof copy.photoProblem>[0] }> {
     if (ask.attachments.length > MAX_PHOTOS_PER_TURN) return { problem: "too_many" };
     const images: AskImage[] = [];
+    const small: AskImage[] = [];
     for (const ref of ask.attachments) {
       let bytes: Uint8Array;
       try {
@@ -165,14 +199,16 @@ export function createChannel(options: ChannelOptions) {
         log("attachment download failed", { provider: adapter.name, error: errorClass(err) });
         return { problem: "unreadable" };
       }
-      const checked = imageFromBytes(bytes);
-      if (!checked.ok) return { problem: checked.reason };
-      images.push(checked.image);
+      // The same two sizes the website's browser makes; iPhone HEIC included.
+      const prepared = await prepareServerPhoto(bytes);
+      if (!prepared.ok) return { problem: prepared.reason };
+      images.push(prepared.full);
+      small.push(prepared.small);
     }
-    return { images };
+    return { images, small };
   }
 
-  async function answer(conversationId: string, session: Session, ask: Ask): Promise<{ session: Session; replies: OutboundMessage[] }> {
+  async function answer(conversationId: string, session: Session, ask: Ask): Promise<{ session: Session; replies: OutboundMessage[]; cancelled?: boolean }> {
     const say = (text: string): OutboundMessage => ({ kind: "text", text });
     const name = COMPANIONS[ask.advisor].name;
     const allowed = limiter(conversationId);
@@ -197,11 +233,31 @@ export function createChannel(options: ChannelOptions) {
     const started = now();
     await adapter.typing(conversationId, true).catch(() => {});
     let timedOut = false;
-    const result = await withTimeout(answerTimeoutMs, (signal) => {
-      signal.addEventListener("abort", () => (timedOut = true));
-      return engine.answer(ask.advisor, turns, signal);
-    }).catch((err) => ({ text: "", error: err instanceof Error && err.message ? err.message : copy.UNAVAILABLE }));
+    let cancelled = false;
+    const stop = new AbortController();
+    const timer = setTimeout(() => {
+      timedOut = true;
+      stop.abort();
+    }, answerTimeoutMs);
+    // A reset or close sent while the answer is being written stops it: no
+    // point paying for the rest of an answer that will never be sent.
+    const watch = setInterval(() => {
+      void cancelledByLater(conversationId).then((yes) => {
+        if (yes && !stop.signal.aborted) {
+          cancelled = true;
+          stop.abort();
+        }
+      }, () => {});
+    }, cancelPollMs);
+    const result = await engine
+      .answer(ask.advisor, turns, stop.signal)
+      .catch((err) => ({ text: "", error: err instanceof Error && err.message ? err.message : copy.UNAVAILABLE }))
+      .finally(() => {
+        clearTimeout(timer);
+        clearInterval(watch);
+      });
     await adapter.typing(conversationId, false).catch(() => {});
+    if (cancelled) return { session, replies: [], cancelled: true };
 
     const written = toPlainText(result.text);
     // The advisor's name heads their first reply, and stays with its first paragraph.
@@ -224,16 +280,31 @@ export function createChannel(options: ChannelOptions) {
       return { session, replies: [...parts.map(say), say(`${message} ${copy.RETRY_HINT}`)] };
     }
 
-    const kept = fitToBudget([...history, question, { role: "assistant", text: result.text }]).slice(-MAX_HISTORY_TURNS);
+    // Like the website, later questions carry the smaller copies of earlier photos.
+    const asked: AskTurn = { ...question, images: found.small.length ? found.small : undefined };
+    const kept = fitToBudget([...history, asked, { role: "assistant", text: result.text }]).slice(-MAX_HISTORY_TURNS);
     const next: Session = { ...session, histories: { ...session.histories, [ask.advisor]: kept } };
     if (!next.introduced.includes(ask.advisor)) next.introduced = [...next.introduced, ask.advisor];
     return { session: next, replies: parts.map(say) };
   }
 
-  /** Sends a conversation's due replies, in order, until one has to wait. */
+  /** Sends a conversation's due replies, unless another worker holds it (that worker sends them). */
   async function flush(conversationId: string): Promise<void> {
-    for (let item = await store.claimOutbox(conversationId, now(), SEND_LEASE_MS); item; item = await store.claimOutbox(conversationId, now(), SEND_LEASE_MS)) {
-      const result = await withTimeout(providerTimeoutMs, (signal) => adapter.send(conversationId, item!.message, item!.id, signal)).catch(
+    const owner = randomUUID();
+    if (!(await store.acquire(conversationId, owner, now(), leaseMs))) return;
+    try {
+      await sendDue(conversationId);
+    } finally {
+      await store.release(conversationId, owner);
+    }
+  }
+
+  /** Sends due replies in order until one has to wait, or a waiting reset or close will cancel the rest. Call while holding the conversation. */
+  async function sendDue(conversationId: string): Promise<void> {
+    while (!(await cancelledByLater(conversationId))) {
+      const item = await store.claimOutbox(conversationId, now(), SEND_LEASE_MS);
+      if (!item) return;
+      const result = await withTimeout(providerTimeoutMs, (signal) => adapter.send(conversationId, item.message, item.id, signal)).catch(
         (err) => ({ ok: false as const, retryable: true as const, code: errorClass(err) }),
       );
       if (result.ok) {

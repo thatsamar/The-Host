@@ -54,7 +54,27 @@ create table if not exists channel_outbox (
   updated_at double precision not null
 );
 create index if not exists channel_outbox_open on channel_outbox (conversation_id, position) where status in ('pending', 'sending');
+
+create or replace function channel_sweep(now_ms double precision, context_ms double precision, event_id_ms double precision, outbox_record_ms double precision)
+returns void language sql as $fn$
+  delete from channel_sessions where expires_at <= now_ms;
+  delete from channel_inbound where status = 'done' and updated_at <= now_ms - event_id_ms;
+  update channel_inbound set status = 'done', payload = null, updated_at = now_ms where status <> 'done' and updated_at <= now_ms - context_ms;
+  delete from channel_outbox where status in ('sent', 'dead', 'cancelled') and updated_at <= now_ms - outbox_record_ms;
+  update channel_outbox set status = 'dead', message = null, updated_at = now_ms where status in ('pending', 'sending') and updated_at <= now_ms - context_ms;
+  delete from channel_locks where lease_until <= now_ms;
+$fn$;
 `;
+
+/**
+ * The retention schedule run by the database itself, so deletion doesn't
+ * depend on traffic or the host's cron limits. For Postgres with pg_cron
+ * (Supabase: Integrations → Cron). Review and apply at launch; every
+ * webhook also runs the same sweep.
+ */
+export function sweepSchedule(retention: Retention, every = "*/15 * * * *"): string {
+  return `select cron.schedule('cinq-messages-sweep', '${every}', $job$select channel_sweep(extract(epoch from now()) * 1000, ${retention.contextMs}, ${retention.eventIdMs}, ${retention.outboxRecordMs})$job$);`;
+}
 
 export class PostgresStore implements ChannelStore {
   constructor(
@@ -63,7 +83,8 @@ export class PostgresStore implements ChannelStore {
   ) {}
 
   async migrate() {
-    for (const statement of CHANNEL_SCHEMA.split(";").map((s) => s.trim()).filter(Boolean)) await this.sql.query(statement);
+    // Statements end at a semicolon and a line break; the sweep function's body keeps its own.
+    for (const statement of CHANNEL_SCHEMA.split(/;\n(?=\s*(?:create|$))/).map((s) => s.trim()).filter(Boolean)) await this.sql.query(statement);
   }
 
   async recordInbound(event: InboundEvent, now: number) {
@@ -108,6 +129,29 @@ export class PostgresStore implements ChannelStore {
     });
   }
 
+  async peekPending(conversationId: string, limit: number) {
+    const { rows } = await this.sql.query<{ payload: InboundEvent["payload"] }>(
+      `select payload from channel_inbound where conversation_id = $1 and status = 'pending' and payload is not null
+       order by sent_at, arrival limit $2`,
+      [conversationId, limit],
+    );
+    return rows.map((r) => r.payload);
+  }
+
+  async queueReplies(conversationId: string, key: string, replies: OutboundMessage[], now: number) {
+    await this.sql.transaction(async (tx) => {
+      for (const [i, message] of replies.entries()) await this.enqueue(tx, conversationId, `${key}#${i}`, message, now);
+    });
+  }
+
+  private async enqueue(tx: SqlQuery, conversationId: string, id: string, message: OutboundMessage, now: number) {
+    await tx.query(
+      `insert into channel_outbox (id, conversation_id, status, message, next_attempt_at, updated_at)
+       values ($1, $2, 'pending', $3, $4, $4) on conflict (id) do nothing`,
+      [id, conversationId, JSON.stringify(message), now],
+    );
+  }
+
   async getSession(conversationId: string, now: number) {
     const { rows } = await this.sql.query<{ state: Session; expires_at: number }>(
       `select state, expires_at from channel_sessions where conversation_id = $1`,
@@ -125,11 +169,16 @@ export class PostgresStore implements ChannelStore {
   async commit(
     conversationId: string,
     eventId: string,
-    change: { session: Session | null; replies: OutboundMessage[]; close?: boolean },
+    change: { session: Session | null; replies: OutboundMessage[]; cancelQueued?: boolean },
     now: number,
   ) {
-    await this.sql.transaction(async (tx) => {
-      await tx.query(`update channel_inbound set status = 'done', payload = null, updated_at = $2 where event_id = $1`, [eventId, now]);
+    return this.sql.transaction(async (tx) => {
+      const { rows } = await tx.query(
+        `update channel_inbound set status = 'done', payload = null, updated_at = $2 where event_id = $1 and status = 'processing' returning event_id`,
+        [eventId, now],
+      );
+      // Already finished by another worker (this one was presumed dead): change nothing.
+      if (!rows.length) return false;
       if (change.session)
         await tx.query(
           `insert into channel_sessions (conversation_id, state, expires_at) values ($1, $2, $3)
@@ -137,18 +186,14 @@ export class PostgresStore implements ChannelStore {
           [conversationId, JSON.stringify(change.session), now + this.retention.contextMs],
         );
       else await tx.query(`delete from channel_sessions where conversation_id = $1`, [conversationId]);
-      if (change.close)
+      if (change.cancelQueued)
         await tx.query(
           `update channel_outbox set status = 'cancelled', message = null, updated_at = $2
            where conversation_id = $1 and status in ('pending', 'sending')`,
           [conversationId, now],
         );
-      for (const [i, message] of change.replies.entries())
-        await tx.query(
-          `insert into channel_outbox (id, conversation_id, status, message, next_attempt_at, updated_at)
-           values ($1, $2, 'pending', $3, $4, $4) on conflict (id) do nothing`,
-          [`${eventId}#${i}`, conversationId, JSON.stringify(message), now],
-        );
+      for (const [i, message] of change.replies.entries()) await this.enqueue(tx, conversationId, `${eventId}#${i}`, message, now);
+      return true;
     });
   }
 
@@ -206,16 +251,6 @@ export class PostgresStore implements ChannelStore {
 
   async sweep(now: number) {
     const { contextMs, eventIdMs, outboxRecordMs } = this.retention;
-    await this.sql.transaction(async (tx) => {
-      await tx.query(`delete from channel_sessions where expires_at <= $1`, [now]);
-      await tx.query(`delete from channel_inbound where status = 'done' and updated_at <= $1`, [now - eventIdMs]);
-      await tx.query(`update channel_inbound set status = 'done', payload = null, updated_at = $1 where status <> 'done' and updated_at <= $2`, [now, now - contextMs]);
-      await tx.query(`delete from channel_outbox where status in ('sent', 'dead', 'cancelled') and updated_at <= $1`, [now - outboxRecordMs]);
-      await tx.query(
-        `update channel_outbox set status = 'dead', message = null, updated_at = $1 where status in ('pending', 'sending') and updated_at <= $2`,
-        [now, now - contextMs],
-      );
-      await tx.query(`delete from channel_locks where lease_until <= $1`, [now]);
-    });
+    await this.sql.query(`select channel_sweep($1, $2, $3, $4)`, [now, contextMs, eventIdMs, outboxRecordMs]);
   }
 }

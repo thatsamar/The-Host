@@ -1,4 +1,6 @@
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import sharp from "sharp";
 import { PGlite } from "@electric-sql/pglite";
 import { createChannel } from "@/lib/channel/service";
 import { FixtureAdapter, FIXTURE_LABEL, fixtureEngine } from "@/lib/channel/fixture";
@@ -13,8 +15,9 @@ import type { CompanionId } from "@/lib/companions/types";
 // Starting Postgres in-process is slow under a full parallel run.
 vi.setConfig({ testTimeout: 30_000 });
 
-const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]);
-const HEIC = new Uint8Array([0, 0, 0, 0x18, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63]);
+// A real 40 x 30 PNG, made by the same image library the server uses.
+const PNG = new Uint8Array(await sharp({ create: { width: 40, height: 30, channels: 3, background: "#3366aa" } }).png().toBuffer());
+const HEIC_PHOTO = new Uint8Array(readFileSync(new URL("./fixtures/iphone-photo.heic", import.meta.url)));
 
 let logged: string[] = [];
 beforeEach(() => {
@@ -36,12 +39,14 @@ function scripted(reply: (advisor: CompanionId, turns: AskTurn[]) => EngineResul
   return { engine, calls };
 }
 
-function setup(opts: { engine?: Engine; store?: ChannelStore; limits?: ProviderLimits; support?: SupportResult; questionsPerHour?: number; answerTimeoutMs?: number } = {}) {
+const NOTICES = ["tony", "martini", "gio", "alden", "goldie"].map((id) => copy.firstAnswerNotice(id as CompanionId));
+
+function setup(opts: { engine?: Engine; store?: ChannelStore; limits?: ProviderLimits; support?: SupportResult; questionsPerHour?: number; answerTimeoutMs?: number; cancelPollMs?: number } = {}) {
   const clock = { t: 1_000_000_000 };
   const adapter = new FixtureAdapter({ secret: "test-secret", limits: opts.limits, support: opts.support });
   const store = opts.store ?? new MemoryStore(retention("24"));
   const engine = opts.engine ?? scripted().engine;
-  const channel = createChannel({ adapter, store, engine, now: () => clock.t, questionsPerHour: opts.questionsPerHour ?? 100, answerTimeoutMs: opts.answerTimeoutMs });
+  const channel = createChannel({ adapter, store, engine, now: () => clock.t, questionsPerHour: opts.questionsPerHour ?? 100, answerTimeoutMs: opts.answerTimeoutMs, cancelPollMs: opts.cancelPollMs });
   let n = 0;
   const event = (payload: InboundPayload, extra: Partial<InboundEvent> = {}): InboundEvent => ({
     id: `ev-${++n}`,
@@ -59,7 +64,9 @@ function setup(opts: { engine?: Engine; store?: ChannelStore; limits?: ProviderL
     return res.status;
   }
   const texts = () => adapter.sent.map((s) => (s.message.kind === "text" ? s.message.text : `[picker: ${s.message.options.map((o) => o.title).join(", ")}]`));
-  return { clock, adapter, store, channel, event, say, post, texts };
+  /** Everything sent except the automated-service notice that opens a conversation started with a named advisor. */
+  const answers = () => texts().filter((x) => !NOTICES.includes(x));
+  return { clock, adapter, store, channel, event, say, post, texts, answers };
 }
 
 describe("choosing an advisor", () => {
@@ -81,7 +88,9 @@ describe("choosing an advisor", () => {
     const t = setup({ engine });
     await t.post(t.say("Amar: one night in Bangkok"));
     expect(calls[0]).toMatchObject({ advisor: "tony", turns: [{ text: "one night in Bangkok" }] });
-    expect(t.texts()).toEqual(["Amar · Travel\n\nAnswer from tony."]);
+    // The automated service says so at once (Apple's five seconds); then the answer.
+    expect(t.texts()).toEqual([copy.firstAnswerNotice("tony"), "Amar · Travel\n\nAnswer from tony."]);
+    expect(copy.firstAnswerNotice("tony")).toMatch(/automated service.*AI advisors.*Type agent anytime to reach a person/);
   });
 
   it("keeps each advisor's conversation to that advisor", async () => {
@@ -120,7 +129,8 @@ describe("delivery guarantees", () => {
     await t.post(e);
     await Promise.all([t.post(e), t.post(e)]);
     expect(calls).toHaveLength(1);
-    expect(t.adapter.sent).toHaveLength(1);
+    expect(t.answers()).toHaveLength(1);
+    expect(t.adapter.sent).toHaveLength(2);
   });
 
   it("handles a conversation's events in the order they were sent", async () => {
@@ -134,37 +144,40 @@ describe("delivery guarantees", () => {
 
   it("retries a failed send on schedule, in order, without duplicates", async () => {
     const t = setup({ limits: { maxTextChars: 60, preferredTextChars: 60 }, engine: scripted(() => ({ text: "First paragraph is here.\n\nSecond paragraph is here.\n\nThird." })).engine });
+    await t.post(t.say("menu"));
     t.adapter.sendResults.push({ ok: false, retryable: true, code: "timeout" });
     await t.post(t.say("Gio: a sofa?"));
-    expect(t.adapter.sent).toHaveLength(0);
+    expect(t.answers()).toHaveLength(1);
     t.clock.t += RETRY_BACKOFF_MS[0] - 1;
     await t.channel.runDue();
-    expect(t.adapter.sent).toHaveLength(0);
+    expect(t.answers()).toHaveLength(1);
     t.clock.t += 1;
     await t.channel.runDue();
     await t.channel.runDue();
-    expect(t.texts()).toEqual(["Gio · Design\n\nFirst paragraph is here.", "Second paragraph is here.\n\nThird."]);
-    expect(new Set(t.adapter.sent.map((s) => s.key)).size).toBe(2);
+    expect(t.answers().slice(1)).toEqual(["Gio · Design\n\nFirst paragraph is here.", "Second paragraph is here.\n\nThird."]);
+    expect(new Set(t.adapter.sent.map((s) => s.key)).size).toBe(t.adapter.sent.length);
   });
 
   it("abandons a reply after the last retry, or at once when it can never succeed", async () => {
     const t = setup();
+    await t.post(t.say("Gio"));
+    const before = t.adapter.sent.length;
     for (let i = 0; i < MAX_SEND_ATTEMPTS; i++) t.adapter.sendResults.push({ ok: false, retryable: true, code: "unavailable" });
-    await t.post(t.say("Gio: a sofa?"));
+    await t.post(t.say("A sofa?"));
     for (const wait of RETRY_BACKOFF_MS) {
       t.clock.t += wait;
       await t.channel.runDue();
     }
     t.clock.t += 60 * 60_000;
     await t.channel.runDue();
-    expect(t.adapter.sent).toHaveLength(0);
+    expect(t.adapter.sent).toHaveLength(before);
     expect(logged.some((l) => l.includes("send abandoned"))).toBe(true);
 
     t.adapter.sendResults.push({ ok: false, retryable: false, code: "rejected" });
     await t.post(t.say("And a rug?"));
-    expect(t.adapter.sent).toHaveLength(0);
+    expect(t.adapter.sent).toHaveLength(before);
     await t.post(t.say("And a lamp?"));
-    expect(t.adapter.sent).toHaveLength(1);
+    expect(t.adapter.sent).toHaveLength(before + 1);
   });
 
   it("after a restart, tells the person an interrupted answer stopped instead of asking the model again", async () => {
@@ -172,8 +185,9 @@ describe("delivery guarantees", () => {
     const r = retention("24");
     const store = new PostgresStore(db, r);
     await store.migrate();
-    const hanging = scripted(() => new Promise<EngineResult>(() => {}));
-    const a = setup({ store, engine: hanging.engine, answerTimeoutMs: 1000 });
+    let finishLate!: (r: EngineResult) => void;
+    const hanging = scripted(() => new Promise<EngineResult>((resolve) => (finishLate = resolve)));
+    const a = setup({ store, engine: hanging.engine, answerTimeoutMs: 60_000 });
     const e = a.say("Amar: one night in Bangkok");
     const rawBody = JSON.stringify({ events: [e] });
     // The first worker takes the event and dies mid-answer (its work is never awaited).
@@ -181,14 +195,18 @@ describe("delivery guarantees", () => {
     await vi.waitFor(() => expect(hanging.calls).toHaveLength(1));
 
     const fresh = scripted();
-    const b = setup({ store: new PostgresStore(db, r), engine: fresh.engine, answerTimeoutMs: 1000 });
-    b.clock.t = a.clock.t + 120_000;
+    const b = setup({ store: new PostgresStore(db, r), engine: fresh.engine, answerTimeoutMs: 60_000 });
+    b.clock.t = a.clock.t + 10 * 60_000;
     await b.channel.runDue();
     expect(fresh.calls).toHaveLength(0);
     expect(b.texts()).toEqual([copy.INTERRUPTED]);
     // A redelivery of the same webhook is still recognised.
     await b.post(e);
     expect(fresh.calls).toHaveLength(0);
+    // The first worker wasn't dead after all, just stuck: its late answer is dropped, not sent as a second reply.
+    finishLate({ text: "A late answer." });
+    await vi.waitFor(() => expect(logged.some((l) => l.includes("answer dropped"))).toBe(true));
+    expect([...a.answers(), ...b.answers()]).toEqual([copy.INTERRUPTED]);
   });
 });
 
@@ -198,14 +216,28 @@ describe("photos", () => {
     const t = setup({ engine });
     t.adapter.attachments.set("att-1", PNG);
     await t.post(t.say("Gio: what's wrong with this room? https://example.com/room.jpg", { attachments: [{ ref: "att-1", mediaType: "image/jpeg" }] }));
-    expect(calls[0].turns[0].images).toEqual([{ mediaType: "image/png", data: Buffer.from(PNG).toString("base64") }]);
+    expect(calls[0].turns[0].images).toHaveLength(1);
+    expect(calls[0].turns[0].images![0].mediaType).toBe("image/jpeg");
+    expect(await sharp(Buffer.from(calls[0].turns[0].images![0].data, "base64")).metadata()).toMatchObject({ format: "jpeg", width: 40, height: 30 });
+  });
+
+  it("reads an iPhone HEIC photo, and keeps a smaller copy for follow-ups as the website does", async () => {
+    const { engine, calls } = scripted();
+    const t = setup({ engine });
+    t.adapter.attachments.set("heic", HEIC_PHOTO);
+    await t.post(t.say("Gio: what would you change here?", { attachments: [{ ref: "heic", mediaType: "image/heic" }] }));
+    const sent = calls[0].turns[0].images![0];
+    expect(await sharp(Buffer.from(sent.data, "base64")).metadata()).toMatchObject({ format: "jpeg", width: 1280, height: 960 });
+    await t.post(t.say("And the lighting?"));
+    const kept = calls[1].turns[0].images![0];
+    expect(await sharp(Buffer.from(kept.data, "base64")).metadata()).toMatchObject({ format: "jpeg", width: 512, height: 384 });
   });
 
   it("refuses photos the website would refuse, without calling the advisor", async () => {
     const { engine, calls } = scripted();
     const t = setup({ engine });
-    t.adapter.attachments.set("heic", HEIC);
-    await t.post(t.say("Gio: this?", { attachments: [{ ref: "heic", mediaType: "image/jpeg" }] }));
+    t.adapter.attachments.set("pdf", new TextEncoder().encode("%PDF-1.7 a document"));
+    await t.post(t.say("Gio: this?", { attachments: [{ ref: "pdf", mediaType: "image/jpeg" }] }));
     expect(t.texts().at(-1)).toBe(copy.photoProblem("unsupported"));
     await t.post(t.say("this?", { attachments: [{ ref: "missing" }] }));
     expect(t.texts().at(-1)).toBe(copy.photoProblem("unreadable"));
@@ -222,7 +254,7 @@ describe("when an answer fails", () => {
     const { engine, calls } = scripted((a) => (fail ? { text: "Partial thought.", error: "Amar is busy right now. Try again in a minute." } : { text: `Answer from ${a}.` }));
     const t = setup({ engine });
     await t.post(t.say("Amar: Tokyo?"));
-    expect(t.texts()).toEqual(["Amar · Travel\n\nPartial thought.", `Amar is busy right now. Try again in a minute. ${copy.RETRY_HINT}`]);
+    expect(t.answers()).toEqual(["Amar · Travel\n\nPartial thought.", `Amar is busy right now. Try again in a minute. ${copy.RETRY_HINT}`]);
     fail = false;
     await t.post(t.say("Tokyo?"));
     expect(calls[1].turns).toEqual([{ role: "user", text: "Tokyo?" }]);
@@ -231,13 +263,13 @@ describe("when an answer fails", () => {
   it("stops an answer at the time limit with a plain message", async () => {
     const t = setup({ engine: { answer: (_a, _t, signal) => new Promise((resolve) => signal.addEventListener("abort", () => resolve({ text: "", error: "Stopped." }))) }, answerTimeoutMs: 20 });
     await t.post(t.say("Amar: Tokyo?"));
-    expect(t.texts()).toEqual([`Amar ran out of time before finishing this answer. Try again. ${copy.RETRY_HINT}`]);
+    expect(t.answers()).toEqual([`Amar ran out of time before finishing this answer. Try again. ${copy.RETRY_HINT}`]);
   });
 
   it("answers a thrown engine error plainly", async () => {
     const t = setup({ engine: { answer: async () => { throw new Error("Something went wrong. Try again."); } } });
     await t.post(t.say("Amar: Tokyo?"));
-    expect(t.texts()).toEqual([`Something went wrong. Try again. ${copy.RETRY_HINT}`]);
+    expect(t.answers()).toEqual([`Something went wrong. Try again. ${copy.RETRY_HINT}`]);
   });
 
   it("caps questions per conversation", async () => {
@@ -317,7 +349,7 @@ describe("human support", () => {
     expect(t.texts()).toEqual(["Human support isn't connected to this chat yet, so no one has been notified."]);
     const closed = setup({ support: { status: "closed", hours: "weekdays 9am to 6pm ET" } });
     await closed.post(closed.say("help"));
-    expect(closed.texts()[0]).toBe("Cinq's team isn't available right now, so no one has been notified. They're available weekdays 9am to 6pm ET. Type help again then.");
+    expect(closed.texts()[0]).toBe("Cinq's team isn't available right now, so no one has been notified. They're available weekdays 9am to 6pm ET. Type agent again then.");
   });
 });
 
@@ -340,5 +372,97 @@ describe("webhooks and logs", () => {
     const all = logged.join("\n");
     expect(all).toMatch(/Messages: answer/);
     for (const secret of ["Priya", "anniversary", "Sorn", "crab", "conv-secret-77", Buffer.from(PNG).toString("base64")]) expect(all).not.toContain(secret);
+  });
+});
+
+describe("reset cancels what hasn't gone out", () => {
+  it("cancels the rest of a long answer still waiting to send, and confirms the reset", async () => {
+    const t = setup({ limits: { maxTextChars: 30, preferredTextChars: 30 }, engine: scripted(() => ({ text: "Part one is here.\n\nPart two is here.\n\nPart three is here." })).engine });
+    await t.post(t.say("Amar"));
+    // The second part fails to send and waits for a retry.
+    t.adapter.sendResults.push({ ok: true }, { ok: false, retryable: true, code: "timeout" });
+    await t.post(t.say("Plan it"));
+    expect(t.answers().filter((x) => x.includes("Part"))).toEqual(["Part one is here."]);
+    await t.post(t.say("reset"));
+    t.clock.t += 60 * 60_000;
+    await t.channel.runDue();
+    expect(t.answers().filter((x) => x.includes("Part"))).toEqual(["Part one is here."]);
+    expect(t.texts().at(-1)).toBe(copy.RESET);
+  });
+
+  it("stops an answer still being written when a reset arrives, and sends none of it", async () => {
+    let aborted = false;
+    const engine: Engine = {
+      answer: (_a, _t, signal) =>
+        new Promise((resolve) =>
+          signal.addEventListener("abort", () => {
+            aborted = true;
+            resolve({ text: "Half an answer", error: "Stopped." });
+          }),
+        ),
+    };
+    const t = setup({ engine, cancelPollMs: 10 });
+    await t.post(t.say("Amar"));
+    const asking = t.post(t.say("One night in Bangkok"));
+    // The reset arrives while the answer is being written; another worker records it.
+    await new Promise((r) => setTimeout(r, 20));
+    await t.post(t.say("reset"));
+    await asking;
+    expect(aborted).toBe(true);
+    expect(t.texts().join("\n")).not.toContain("Half an answer");
+    expect(t.texts().at(-1)).toBe(copy.RESET);
+  });
+
+  it("answers nothing that a waiting reset cancels, and clears a question kept for an advisor", async () => {
+    const { engine, calls } = scripted();
+    const t = setup({ engine });
+    await t.post(t.say("Amar: first"), t.say("second"), t.say("reset"));
+    expect(calls).toEqual([]);
+    expect(t.texts()).toEqual([copy.RESET]);
+    await t.post(t.say("A question before choosing"));
+    await t.post(t.say("reset"));
+    await t.post(t.say("Amar"));
+    expect(calls).toEqual([]);
+  });
+});
+
+describe("Apple's standard trigger words", () => {
+  it("agent reaches a person, menu opens the picker, stop explains there's nothing to unsubscribe from", async () => {
+    const t = setup({ support: { status: "queued" } });
+    await t.post(t.say("menu"));
+    expect(t.texts()).toEqual(["[picker: Amar, Martine, Gio, Alden, Goldie]"]);
+    await t.post(t.say("stop"));
+    expect(t.texts().at(-1)).toBe(copy.PREFERENCES);
+    await t.post(t.say("agent"));
+    expect(t.adapter.supportRequests).toHaveLength(1);
+  });
+});
+
+describe("the 24-hour deletion policy, checked in the database itself", () => {
+  it("leaves no message text, answer or photo in any table once the window passes, and no ids after a week", async () => {
+    const db = new PGlite();
+    const store = new PostgresStore(db, retention("24"));
+    await store.migrate();
+    const t = setup({ store, engine: scripted(() => ({ text: "Book the corner table at Sorn." })).engine });
+    t.adapter.attachments.set("heic", HEIC_PHOTO);
+    t.adapter.sendResults.push({ ok: true }, { ok: false, retryable: true, code: "timeout" });
+    await t.post(t.say("Amar: anniversary dinner with Priya", { attachments: [{ ref: "heic" }] }, { conversationId: "opaque-123" }));
+    await t.post(t.say("and dessert?", {}, { conversationId: "opaque-123" }));
+    const dump = async () =>
+      JSON.stringify(
+        await Promise.all(["channel_inbound", "channel_sessions", "channel_outbox", "channel_locks"].map(async (table) => (await db.query(`select * from ${table}`)).rows)),
+      );
+    // While the conversation is live, its context is held (that is what lets it continue).
+    expect(await dump()).toContain("Priya");
+
+    t.clock.t += 24 * 60 * 60_000;
+    await t.channel.runDue();
+    const after = await dump();
+    for (const content of ["Priya", "anniversary", "dessert", "Sorn", "corner table", "/9j/"]) expect(after).not.toContain(content);
+    expect((await db.query("select * from channel_sessions")).rows).toEqual([]);
+
+    t.clock.t += 7 * 24 * 60 * 60_000;
+    await t.channel.runDue();
+    expect(await dump()).not.toContain("opaque-123");
   });
 });

@@ -20,8 +20,16 @@ function list(items: string[]): string {
 export function welcome(hasQuestion: boolean): string {
   const who = list(lineup().map((id) => `${COMPANIONS[id].name} (${COMPANIONS[id].category.toLowerCase()})`));
   const kept = hasQuestion ? " I'll pass your message to whoever you choose." : "";
-  return `Hi, this is Cinq: five AI advisors, each with their own judgment. ${who}. Who would you like?${kept}`;
+  return `Hi, this is Cinq's automated service: five AI advisors, each with their own judgment. ${who}. Who would you like?${kept} Type agent anytime to reach a person.`;
 }
+
+/**
+ * Sent at once when someone's first message names an advisor, so the
+ * automated service identifies itself within Apple's five seconds while the
+ * answer is written.
+ */
+export const firstAnswerNotice = (id: CompanionId) =>
+  `Hi, this is Cinq's automated service. ${label(id)}, one of Cinq's AI advisors, is writing your answer now. Type agent anytime to reach a person.`;
 
 export const PICKER_PROMPT = "Choose an advisor";
 export const CHOOSE_FIRST = "Choose an advisor and they'll pick up from here, or start a message with their name.";
@@ -37,7 +45,10 @@ export function switched(id: CompanionId, returning: boolean): string {
 export const introduction = (id: CompanionId) => label(id);
 
 export const RESET =
-  "Done. Cinq has cleared this conversation's context on its side, so the advisors start fresh. Your Messages history on your devices isn't changed. Type advisors to choose someone.";
+  "Done. Cinq has cleared this conversation's context on its side, so the advisors start fresh. Your Messages history on your devices isn't changed. Type menu to choose an advisor.";
+
+export const PREFERENCES =
+  "Cinq only replies to messages you send and doesn't send notifications, so there's nothing to unsubscribe from. To clear this conversation from Cinq, type reset.";
 
 export const TOO_MANY_QUESTIONS = "That's a lot of questions in a short time. Try again in a little while.";
 export const INTERRUPTED = "That answer was interrupted before it finished. Send your question again to try once more.";
@@ -47,7 +58,7 @@ export const UNAVAILABLE = "Cinq isn't available right now. Try again in a littl
 export function photoProblem(reason: "unsupported" | "too_large" | "empty" | "too_many" | "unreadable" | "budget"): string {
   switch (reason) {
     case "unsupported":
-      return "I couldn't read one of those photos. Send it as a JPEG, PNG, WebP or GIF.";
+      return "One of those files isn't a photo I can read. Send photos from your camera roll or screenshots.";
     case "too_large":
       return "One of those photos is too large to read. Try sending a smaller copy.";
     case "too_many":
@@ -69,7 +80,7 @@ export function support(result: SupportResult): string {
   }
   if (result.status === "closed") {
     const hours = result.hours ? ` They're available ${result.hours}.` : "";
-    return `Cinq's team isn't available right now, so no one has been notified.${hours} Type help again then.`;
+    return `Cinq's team isn't available right now, so no one has been notified.${hours} Type agent again then.`;
   }
   return "Human support isn't connected to this chat yet, so no one has been notified.";
 }

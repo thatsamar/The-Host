@@ -124,7 +124,7 @@ describe.each(stores)("%s store", (_name, make) => {
     await s.commit("c1", "e1", { session: newSession(), replies: [{ kind: "text", text: "a" }, { kind: "text", text: "b" }] }, 0);
     await s.recordInbound({ id: "end", conversationId: "c1", sentAt: 2, payload: { kind: "conversation_end" } }, 1);
     await s.claimNext("c1", 1);
-    await s.commit("c1", "end", { session: null, replies: [], close: true }, 1);
+    await s.commit("c1", "end", { session: null, replies: [], cancelQueued: true }, 1);
     expect(await s.claimOutbox("c1", 2, 60_000)).toBeUndefined();
     expect(await s.getSession("c1", 2)).toBeUndefined();
   });
@@ -158,5 +158,25 @@ describe.each(stores)("%s store", (_name, make) => {
     await s.commit("c1", "e9", { session: newSession(), replies: [{ kind: "text", text: "x" }] }, t);
     await s.sweep(t + DAY);
     expect(await s.claimOutbox("c1", t + DAY, 60_000)).toBeUndefined();
+  });
+});
+
+describe("the database's own retention job", () => {
+  it("deletes expired context on its own schedule, with the database's clock", async () => {
+    const { sweepSchedule } = await import("@/lib/channel/postgres-store");
+    const pg = new PGlite();
+    const store = new PostgresStore(pg, R);
+    await store.migrate();
+    const t = Date.now() - 25 * HOUR;
+    await store.recordInbound(ev("e1", t, "private question"), t);
+    await store.claimNext("c1", t);
+    await store.commit("c1", "e1", { session: { ...newSession(), active: "tony" }, replies: [{ kind: "text", text: "private answer" }] }, t);
+    const schedule = sweepSchedule(R);
+    expect(schedule).toMatch(/^select cron\.schedule\('cinq-messages-sweep', '\*\/15 \* \* \* \*', /);
+    // Run the job's statement as pg_cron would.
+    await pg.query(schedule.match(/\$job\$(.*)\$job\$/)![1]);
+    const left = JSON.stringify([(await pg.query("select * from channel_sessions")).rows, (await pg.query("select * from channel_outbox")).rows]);
+    expect(left).not.toContain("private");
+    expect((await pg.query("select * from channel_sessions")).rows).toEqual([]);
   });
 });
