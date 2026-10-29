@@ -150,11 +150,11 @@ export function Hub() {
                 By signing up, you agree to receive SMS/MMS messages from Cinq at the number you text from, including answers from our five AI advisors. Message frequency varies with your usage. Message and data rates may apply.
               </p>
               <p style={{ marginBottom: '0.5rem' }}>
-                To join the pilot, text START to our toll-free number \u2014 coming soon; the number will be added here once Twilio setup is complete. Reply STOP to opt out at any time, HELP for help.
+                To join the pilot, text START to our toll-free number — coming soon; the number will be added here once Twilio setup is complete. Reply STOP to opt out at any time, HELP for help.
               </p>
               <p>
                 <Link href="/privacy" className="underline underline-offset-4 hover:underline">Privacy Policy</Link>
-                {" \u00b7 "}
+                {" · "}
                 <Link href="/terms" className="underline underline-offset-4 hover:underline">Terms of Service</Link>
               </p>
             </div>
@@ -167,7 +167,7 @@ export function Hub() {
         <p>Speak freely. Every conversation starts anew.</p>
         <p style={{ marginTop: '0.25rem' }}>
           <Link href="/privacy" className="underline underline-offset-4 hover:underline">Privacy</Link>
-          {" \u00b7 "}
+          {" · "}
           <Link href="/terms" className="underline underline-offset-4 hover:underline">Terms</Link>
         </p>
       </div>
