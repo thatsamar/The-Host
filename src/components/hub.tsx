@@ -142,7 +142,7 @@ export function Hub() {
             className="font-serif text-sm rounded-full px-4 py-2 transition-all hover:shadow-sm active:shadow-xs"
             style={{ border: `1px solid ${borderColor}`, color: textDark, backgroundColor: "transparent" }}
           >
-            {showSms ? "Hide signup details" : "Sign up for SMS updates"}
+            {showSms ? "Hide signup details" : "Ask Cinq by text"}
           </button>
           {showSms && (
             <div className="font-serif text-sm leading-relaxed" style={{ color: textMuted, marginTop: '0.75rem' }}>
@@ -150,7 +150,7 @@ export function Hub() {
                 By signing up, you agree to receive SMS/MMS messages from Cinq at the number you text from, including answers from our five AI advisors. Message frequency varies with your usage. Message and data rates may apply.
               </p>
               <p style={{ marginBottom: '0.5rem' }}>
-                To join the pilot, text START to our toll-free number — coming soon; the number will be added here once Twilio setup is complete. Reply STOP to opt out at any time, HELP for help.
+                Joining starts by texting START to the assigned number — coming soon; the number will appear here once setup is complete. Reply STOP to opt out at any time, HELP for help.
               </p>
               <p>
                 <Link href="/privacy" className="underline underline-offset-4 hover:underline">Privacy Policy</Link>
