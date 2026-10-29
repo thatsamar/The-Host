@@ -129,7 +129,7 @@ export function Hub() {
         </div>
 
         {/* SMS signup */}
-        <div className="rounded-2xl p-4 sm:p-4" style={{ border: `1px solid ${borderColor}`, marginTop: '1.5rem' }}>
+        <div className="rounded-2xl p-4 sm:p-4" style={{ border: `1px solid ${borderColor}`, marginTop: '1.5rem', marginBottom: '1.5rem' }}>
           <h2 className="text-lg font-serif font-normal leading-tight" style={{ color: textDark, marginBottom: '0.25rem' }}>
             Cinq by text
           </h2>
@@ -164,7 +164,7 @@ export function Hub() {
 
       {/* Footer */}
       <div className="text-center text-xs sm:text-sm font-light" style={{ color: textMuted }}>
-        <p>Speak freely. Every conversation starts anew.</p>
+        <p>Speak freely.</p>
         <p style={{ marginTop: '0.25rem' }}>
           <Link href="/privacy" className="underline underline-offset-4 hover:underline">Privacy</Link>
           {" · "}
