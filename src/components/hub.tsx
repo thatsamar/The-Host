@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 
-// Alden's address comes from NEXT_PUBLIC_ALDEN_URL on the hub project, set
-// once his deployment exists; until then his card says he's coming soon.
+// Alden’s address comes from NEXT_PUBLIC_ALDEN_URL on the hub project, set
+// once his deployment exists; until then his card says he’s coming soon.
 const ADVISOR_URLS: Record<string, string | undefined> = {
   tony: "https://tony-ten-bay.vercel.app",
   martini: "https://the-host-8xye.vercel.app",
@@ -57,6 +58,7 @@ export function Hub() {
   const textDark = "#191816";
   const textMuted = "#55514D";
   const borderColor = "#C9C4BC";
+  const [showSms, setShowSms] = useState(false);
 
   return (
     <div className="w-screen min-h-screen flex flex-col items-center justify-between p-4 sm:p-6" style={{ backgroundColor: bgColor }}>
@@ -94,7 +96,7 @@ export function Hub() {
                 <h2 className="text-lg sm:text-lg font-serif font-normal leading-tight" style={{ color: textDark }}>
                   {card.category}
                 </h2>
-                {/* Right: Advisor Name with Chevron, or a note while there's no address yet */}
+                {/* Right: Advisor Name with Chevron, or a note while there’s no address yet */}
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <p className="text-sm sm:text-sm font-serif" style={{ color: textMuted }}>
                     {card.url ? card.advisorName : `${card.advisorName} · Coming soon`}
@@ -125,11 +127,49 @@ export function Hub() {
             About Cinq
           </Link>
         </div>
+
+        {/* SMS signup */}
+        <div className="rounded-2xl p-4 sm:p-4" style={{ border: `1px solid ${borderColor}`, marginTop: '1.5rem' }}>
+          <h2 className="text-lg font-serif font-normal leading-tight" style={{ color: textDark, marginBottom: '0.25rem' }}>
+            Cinq by text
+          </h2>
+          <p className="font-serif text-sm leading-relaxed" style={{ color: textMuted, marginBottom: '0.75rem' }}>
+            Get answers from the five advisors by SMS/MMS during the pilot.
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowSms(!showSms)}
+            className="font-serif text-sm rounded-full px-4 py-2 transition-all hover:shadow-sm active:shadow-xs"
+            style={{ border: `1px solid ${borderColor}`, color: textDark, backgroundColor: "transparent" }}
+          >
+            {showSms ? "Hide signup details" : "Sign up for SMS updates"}
+          </button>
+          {showSms && (
+            <div className="font-serif text-sm leading-relaxed" style={{ color: textMuted, marginTop: '0.75rem' }}>
+              <p style={{ marginBottom: '0.5rem' }}>
+                By signing up, you agree to receive SMS/MMS messages from Cinq at the number you text from, including answers from our five AI advisors. Message frequency varies with your usage. Message and data rates may apply.
+              </p>
+              <p style={{ marginBottom: '0.5rem' }}>
+                To join the pilot, text START to our toll-free number \u2014 coming soon; the number will be added here once Twilio setup is complete. Reply STOP to opt out at any time, HELP for help.
+              </p>
+              <p>
+                <Link href="/privacy" className="underline underline-offset-4 hover:underline">Privacy Policy</Link>
+                {" \u00b7 "}
+                <Link href="/terms" className="underline underline-offset-4 hover:underline">Terms of Service</Link>
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Footer */}
       <div className="text-center text-xs sm:text-sm font-light" style={{ color: textMuted }}>
         <p>Speak freely. Every conversation starts anew.</p>
+        <p style={{ marginTop: '0.25rem' }}>
+          <Link href="/privacy" className="underline underline-offset-4 hover:underline">Privacy</Link>
+          {" \u00b7 "}
+          <Link href="/terms" className="underline underline-offset-4 hover:underline">Terms</Link>
+        </p>
       </div>
     </div>
   );
