@@ -142,10 +142,16 @@ export function Hub() {
             className="font-serif text-sm rounded-full px-4 py-2 transition-all hover:shadow-sm active:shadow-xs"
             style={{ border: `1px solid ${borderColor}`, color: textDark, backgroundColor: "transparent" }}
           >
-            {showSms ? "Hide text details" : "Ask Cinq by text"}
+            {showSms ? "Hide text details" : "How Cinq by text works"}
           </button>
           {showSms && (
             <div className="font-serif text-sm leading-relaxed" style={{ color: textMuted, marginTop: '0.75rem' }}>
+              <p className="font-serif text-sm" style={{ color: textDark, marginBottom: '0.25rem' }}>
+                How it works
+              </p>
+              <p style={{ marginBottom: '0.5rem' }}>
+                Text START to the assigned number. Cinq will introduce the five advisors. Choose one, then send a question or photo. Ask follow-up questions in the same thread, or switch advisors.
+              </p>
               <p style={{ marginBottom: '0.5rem' }}>
                 By texting START to Cinq, you agree to receive SMS/MMS replies from our five AI advisors at the number you text from. Message frequency varies with your usage. Message and data rates may apply. Reply STOP to opt out or HELP for help.
               </p>
