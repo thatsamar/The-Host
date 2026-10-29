@@ -44,12 +44,12 @@ function advisorList(): string {
 export const WELCOME_TEXT =
   "Welcome to Cinq by text. Pick an advisor by replying with the number or name:\n\n" +
   advisorList() +
-  "\n\nThen send your question. You can switch advisors anytime by replying with another number or name. Reply STOP to opt out, HELP for help.";
+  "\n\nThen send your question. You can switch advisors anytime by replying with another number or name. Reply STOP to opt out, HELP for help. Message frequency varies with your usage. Message and data rates may apply.";
 
 export const HELP_TEXT =
   "Cinq by text: reply 1-5 or an advisor name to pick or switch advisors, then send your question or a photo. Reply START to join, STOP to opt out. Message and data rates may apply. Contact: amar@cinqcollective.com";
 
-export const OPT_OUT_TEXT = "You've opted out of Cinq texts. Reply START to opt back in.";
+export const OPT_OUT_TEXT = "You’ve opted out of Cinq texts. No further messages will be sent. Reply START to opt back in.";
 export const FALLBACK_TEXT = "Something went wrong on our side. Try again.";
 export const NO_QUESTION_TEXT = "Add a photo or a question.";
 

@@ -17,7 +17,7 @@ export default function Privacy() {
           Effective date: October 28, 2026
         </p>
         <p className="text-base leading-relaxed" style={{ marginBottom: "1rem" }}>
-          Cinq (“we,” “us”) is a consumer service with five AI advisors covering travel, style, interiors, drinks, and personal decisions. During the pilot, you can ask questions and send photos to Cinq by text message (SMS/MMS), and our backend generates answers sent back to your phone.
+          Cinq (“we,” “us”) is a consumer service with five AI advisors covering travel, style, design, wine, cocktails &amp; spirits, and sounding-board conversations. During the pilot, you can ask questions and send photos to Cinq by text message (SMS/MMS), and our backend generates answers sent back to your phone.
         </p>
         <h2 className="text-xl font-normal" style={{ marginTop: "1.5rem", marginBottom: "0.5rem" }}>What we collect</h2>
         <ul className="list-disc pl-5 text-base leading-relaxed" style={{ marginBottom: "1rem" }}>
@@ -38,7 +38,7 @@ export default function Privacy() {
         <h2 className="text-xl font-normal" style={{ marginTop: "1.5rem", marginBottom: "0.5rem" }}>What we don’t do</h2>
         <ul className="list-disc pl-5 text-base leading-relaxed" style={{ marginBottom: "1rem" }}>
           <li>We <strong>do not sell</strong> your personal information.</li>
-          <li>We <strong>do not share your opt-in data or consent</strong> with third parties for their marketing purposes.</li>
+          <li>We <strong>do not share your SMS opt-in data or consent</strong> with third parties.</li>
           <li>Our messaging provider processes messages on our behalf only to deliver the service.</li>
         </ul>
         <h2 className="text-xl font-normal" style={{ marginTop: "1.5rem", marginBottom: "0.5rem" }}>Retention and deletion</h2>

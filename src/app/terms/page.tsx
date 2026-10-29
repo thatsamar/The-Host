@@ -18,7 +18,7 @@ export default function Terms() {
         </p>
         <h2 className="text-xl font-normal" style={{ marginTop: "1.5rem", marginBottom: "0.5rem" }}>1. The service</h2>
         <p className="text-base leading-relaxed" style={{ marginBottom: "1rem" }}>
-          Cinq is a consumer service with five AI advisors covering travel, style, interiors, drinks, and personal decisions. During the pilot, you can text questions and send photos to Cinq, and our AI backend sends answers back by SMS/MMS. Human support is available during published hours.
+          Cinq is a consumer service with five AI advisors covering travel, style, design, wine, cocktails &amp; spirits, and sounding-board conversations. During the pilot, you can text questions and send photos to Cinq, and our AI backend sends answers back by SMS/MMS. Human support is available during published hours.
         </p>
         <p className="text-base leading-relaxed" style={{ marginBottom: "1rem" }}>
           This is a <strong>limited pilot</strong> — features, availability, and these terms may change or the pilot may end at any time.

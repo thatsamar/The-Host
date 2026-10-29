@@ -58,6 +58,8 @@ describe("START, STOP, HELP", () => {
     expect(WELCOME_TEXT).toContain("Gio");
     expect(WELCOME_TEXT).toContain("Alden");
     expect(WELCOME_TEXT).toContain("Goldie");
+    expect(WELCOME_TEXT).toContain("Message frequency varies with your usage");
+    expect(WELCOME_TEXT).toContain("Message and data rates may apply");
     const session = await store.getSession(FROM);
     expect(session?.optedIn).toBe(true);
     expect(session?.advisorId).toBeNull();
@@ -69,6 +71,8 @@ describe("START, STOP, HELP", () => {
     const ask = makeAsk();
     await processSms(inbound("START"), { store, ask: ask.ask });
     expect(await processSms(inbound("STOP"), { store, ask: ask.ask })).toEqual([OPT_OUT_TEXT]);
+    expect(OPT_OUT_TEXT).toContain("Cinq");
+    expect(OPT_OUT_TEXT).toContain("No further messages will be sent");
     expect(await processSms(inbound("Are you there?"), { store, ask: ask.ask })).toEqual([]);
     expect(await processSms(inbound("HELP"), { store, ask: ask.ask })).toEqual([HELP_TEXT]);
     expect(await processSms(inbound("START"), { store, ask: ask.ask })).toEqual([WELCOME_TEXT]);
