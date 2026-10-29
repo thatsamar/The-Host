@@ -150,7 +150,7 @@ export function Hub() {
                 By texting START to Cinq, you agree to receive SMS/MMS replies from our five AI advisors at the number you text from. Message frequency varies with your usage. Message and data rates may apply. Reply STOP to opt out or HELP for help.
               </p>
               <p style={{ marginBottom: '0.5rem' }}>
-                Joining starts by texting START to the assigned number — coming soon; the number will appear here once setup is complete. Reply STOP to opt out at any time, HELP for help.
+                Joining starts by texting START to the assigned number. The number will appear here once setup is complete.
               </p>
               <p>
                 <Link href="/privacy" className="underline underline-offset-4 hover:underline">Privacy Policy</Link>
