@@ -244,9 +244,8 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
     return [FALLBACK_TEXT];
   }
 
-  session.turnsByAdvisor[advisorId] = [...turns, { role: "assistant", text: answer }].slice(
-    -MAX_STORED_TURNS,
-  );
+  const assistantTurn: SmsTurn = { role: "assistant", text: answer };
+  session.turnsByAdvisor[advisorId] = [...turns, assistantTurn].slice(-MAX_STORED_TURNS);
   await store.saveSession(session);
   return splitReply(answer);
 }
