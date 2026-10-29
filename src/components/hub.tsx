@@ -150,13 +150,13 @@ export function Hub() {
                 How it works
               </p>
               <p style={{ marginBottom: '0.5rem' }}>
-                Text START to the assigned number. Cinq will introduce the five advisors. Choose one, then send a question or photo. Ask follow-up questions in the same thread, or switch advisors.
+                Text START to +1 855-360-4983. Cinq will introduce the five advisors. Choose one, then send a question or photo. Ask follow-up questions in the same thread, or switch advisors.
               </p>
               <p style={{ marginBottom: '0.5rem' }}>
                 By texting START to Cinq, you agree to receive SMS/MMS replies from our five AI advisors at the number you text from. Message frequency varies with your usage. Message and data rates may apply. Reply STOP to opt out or HELP for help.
               </p>
               <p style={{ marginBottom: '0.5rem' }}>
-                Joining starts by texting START to the assigned number. The number will appear here once setup is complete.
+                Joining starts by texting START to +1 855-360-4983. Texting is not yet available until verification is approved.
               </p>
               <p>
                 <Link href="/privacy" className="underline underline-offset-4 hover:underline">Privacy Policy</Link>
