@@ -43,7 +43,7 @@ export default function Privacy() {
         </ul>
         <h2 className="text-xl font-normal" style={{ marginTop: "1.5rem", marginBottom: "0.5rem" }}>Retention and deletion</h2>
         <p className="text-base leading-relaxed" style={{ marginBottom: "1rem" }}>
-          We keep messages for the duration of the pilot to operate the service. You can request deletion of your messages and number at any time by emailing amar@cinqcollective.com or texting STOP — we will confirm when complete.
+          We keep messages for the duration of the pilot to operate the service. To request deletion of your messages and number, email amar@cinqcollective.com — we will confirm when complete. Texting STOP opts you out of further texts; it does not delete your history.
         </p>
         <h2 className="text-xl font-normal" style={{ marginTop: "1.5rem", marginBottom: "0.5rem" }}>Your choices</h2>
         <ul className="list-disc pl-5 text-base leading-relaxed" style={{ marginBottom: "1rem" }}>
