@@ -142,7 +142,7 @@ export function Hub() {
             className="font-serif text-sm rounded-full px-4 py-2 transition-all hover:shadow-sm active:shadow-xs"
             style={{ border: `1px solid ${borderColor}`, color: textDark, backgroundColor: "transparent" }}
           >
-            {showSms ? "Hide signup details" : "Ask Cinq by text"}
+            {showSms ? "Hide text details" : "Ask Cinq by text"}
           </button>
           {showSms && (
             <div className="font-serif text-sm leading-relaxed" style={{ color: textMuted, marginTop: '0.75rem' }}>
