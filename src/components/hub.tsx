@@ -147,7 +147,7 @@ export function Hub() {
           {showSms && (
             <div className="font-serif text-sm leading-relaxed" style={{ color: textMuted, marginTop: '0.75rem' }}>
               <p style={{ marginBottom: '0.5rem' }}>
-                By signing up, you agree to receive SMS/MMS messages from Cinq at the number you text from, including answers from our five AI advisors. Message frequency varies with your usage. Message and data rates may apply.
+                By texting START to Cinq, you agree to receive SMS/MMS replies from our five AI advisors at the number you text from. Message frequency varies with your usage. Message and data rates may apply. Reply STOP to opt out or HELP for help.
               </p>
               <p style={{ marginBottom: '0.5rem' }}>
                 Joining starts by texting START to the assigned number — coming soon; the number will appear here once setup is complete. Reply STOP to opt out at any time, HELP for help.
