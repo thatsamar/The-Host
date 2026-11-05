@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
+import { SITE_URL } from "@/lib/site";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 const isHub = process.env.COMPANION === "hub";
 
-export const metadata: Metadata = isHub ? { title: "About Cinq" } : {};
+export const metadata: Metadata = isHub ? { title: "About Cinq", alternates: { canonical: `${SITE_URL}/about` } } : {};
 
 export default function About() {
   // Only the Cinq hub has an About page; advisor deployments keep their 404.

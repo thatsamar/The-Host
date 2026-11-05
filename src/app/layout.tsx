@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Newsreader, Schibsted_Grotesk } from "next/font/google";
 import { currentCompanion, isCompanionId } from "@/lib/companions";
+import { SITE_URL } from "@/lib/site";
 import "./globals.css";
 
 // next/font downloads these at build time and serves them from this app, so
@@ -22,13 +23,18 @@ const companion = isHub ? null : currentCompanion();
 
 export const metadata: Metadata = isHub
   ? {
+      // Cinq's own address; the hub's canonical and share links point here.
+      metadataBase: new URL(SITE_URL),
+      alternates: { canonical: "/" },
       title: "Cinq",
-      description: "Five trusted advisors.",
+      description: "Five AI advisors for travel, style, design, drinks and personal advice.",
       appleWebApp: { capable: true, title: "Cinq", statusBarStyle: "default" },
       manifest: "/manifest.json",
       openGraph: {
         title: "Cinq",
-        description: "Five trusted advisors.",
+        description: "Five AI advisors for travel, style, design, drinks and personal advice.",
+        url: "/",
+        siteName: "Cinq",
         type: "website",
       },
       robots: { index: false, follow: false },

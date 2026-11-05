@@ -42,6 +42,25 @@ describe("the hub", () => {
   });
 });
 
+describe("what the hub tells a visitor and a carrier reviewer", () => {
+  it("shows the text-message terms without a click, and who runs Cinq", () => {
+    render(createElement(Hub));
+    const text = document.body.textContent ?? "";
+    expect(screen.queryByRole("button")).toBeNull();
+    for (const term of [
+      "text START to +1 (855) 360-4983",
+      "never marketing or promotions",
+      "Message frequency varies with your usage",
+      "Message and data rates may apply",
+      "Reply STOP to opt out or HELP for help",
+      "operated by Amar Lalvani, sole proprietor · Austin, Texas",
+    ]) expect(text).toContain(term);
+    expect(screen.getByText("amar@cinqcollective.com").getAttribute("href")).toBe("mailto:amar@cinqcollective.com");
+    expect(screen.getByText("Privacy Policy").getAttribute("href")).toBe("/privacy");
+    expect(screen.getByText("Terms of Service").getAttribute("href")).toBe("/terms");
+  });
+});
+
 describe("getting back to Cinq", () => {
   it("sends Back on every advisor's page to the hub", () => {
     for (const id of ["tony", "martini", "gio", "alden", "goldie"] as const) {

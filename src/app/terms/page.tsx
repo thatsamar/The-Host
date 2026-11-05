@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import { SITE_URL } from "@/lib/site";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Terms of Service — Cinq SMS pilot",
-  description: "Terms of service for the Cinq SMS/MMS pilot.",
+  alternates: { canonical: `${SITE_URL}/terms` },
+  title: "Terms of Service — Cinq",
+  description: "Terms of service for Cinq on cinqcollective.com and the Cinq by text pilot.",
 };
 
 export default function Terms() {
@@ -14,18 +16,18 @@ export default function Terms() {
           Terms of Service
         </h1>
         <p className="text-sm" style={{ color: "#55514D", marginBottom: "1.5rem" }}>
-          Effective date: October 28, 2026
+          Effective date: November 5, 2026
         </p>
         <h2 className="text-xl font-normal" style={{ marginTop: "1.5rem", marginBottom: "0.5rem" }}>1. The service</h2>
         <p className="text-base leading-relaxed" style={{ marginBottom: "1rem" }}>
-          Cinq is a consumer service with five AI advisors covering travel, style, design, wine, cocktails &amp; spirits, and sounding-board conversations. During the pilot, you can text questions and send photos to Cinq, and our AI backend sends answers back by SMS/MMS. Human support is available during published hours.
+          Cinq is a consumer service with five AI advisors covering travel, style, design, wine, cocktails &amp; spirits, and sounding-board conversations. Cinq is operated by Amar Lalvani, a sole proprietor based in Austin, Texas. You can ask the advisors on our website, cinqcollective.com, and, during the pilot, text questions and photos to +1 (855) 360-4983 and receive the advisors’ answers by SMS/MMS. For help, write to the email address below.
         </p>
         <p className="text-base leading-relaxed" style={{ marginBottom: "1rem" }}>
           This is a <strong>limited pilot</strong> — features, availability, and these terms may change or the pilot may end at any time.
         </p>
         <h2 className="text-xl font-normal" style={{ marginTop: "1.5rem", marginBottom: "0.5rem" }}>2. Consent to receive texts</h2>
         <p className="text-base leading-relaxed" style={{ marginBottom: "1rem" }}>
-          By texting Cinq first, you opt in to receive reply texts at the number you text from. Message frequency varies with your usage. <strong>Message and data rates may apply.</strong> Supported carriers may vary; not all carriers/handsets support MMS.
+          You start every conversation: by texting START (or any message) to +1 (855) 360-4983, you opt in to receive reply texts from Cinq’s AI advisors at the number you text from. Cinq’s first reply lists the advisors and how to opt out. Texts are replies to your own messages only; Cinq does not send marketing or promotional texts. Message frequency varies with your usage. <strong>Message and data rates may apply.</strong> Supported carriers may vary; not all carriers/handsets support MMS. Our <Link href="/privacy" className="underline underline-offset-4">Privacy Policy</Link> explains how we handle your messages.
         </p>
         <h2 className="text-xl font-normal" style={{ marginTop: "1.5rem", marginBottom: "0.5rem" }}>3. How to stop, and how to get help</h2>
         <ul className="list-disc pl-5 text-base leading-relaxed" style={{ marginBottom: "1rem" }}>
@@ -50,7 +52,7 @@ export default function Terms() {
           We may update these terms as the pilot evolves; the current version is always at this URL. Continued use after changes means you accept them.
         </p>
         <p className="text-base leading-relaxed" style={{ marginTop: "1.5rem" }}>
-          <strong>Contact:</strong> amar@cinqcollective.com
+          <strong>Contact:</strong> Cinq, operated by Amar Lalvani, sole proprietor, Austin, Texas · <a href="mailto:amar@cinqcollective.com" className="underline underline-offset-4">amar@cinqcollective.com</a>
         </p>
         <p className="text-sm" style={{ color: "#55514D", marginTop: "2rem" }}>
           <Link href="/" className="underline underline-offset-4 hover:underline">Back to Cinq</Link>

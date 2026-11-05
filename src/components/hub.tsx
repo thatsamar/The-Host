@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 
 // Alden’s address comes from NEXT_PUBLIC_ALDEN_URL on the hub project, set
 // once his deployment exists; until then his card says he’s coming soon.
@@ -58,7 +57,6 @@ export function Hub() {
   const textDark = "#191816";
   const textMuted = "#55514D";
   const borderColor = "#C9C4BC";
-  const [showSms, setShowSms] = useState(false);
 
   return (
     <div className="w-screen min-h-screen flex flex-col items-center justify-between p-4 sm:p-6" style={{ backgroundColor: bgColor }}>
@@ -76,6 +74,9 @@ export function Hub() {
               /sɪŋk/ <span style={{ fontStyle: 'italic' }}>v.</span> to make life better.
             </p>
           </div>
+          <p className="font-serif text-sm sm:text-base leading-relaxed" style={{ color: textDark, marginTop: '1rem' }}>
+            Five AI advisors for travel, style, design, drinks and personal advice. Ask a question or share a photo, and get a considered answer.
+          </p>
         </div>
 
         {/* Cards - pure navigation */}
@@ -133,38 +134,22 @@ export function Hub() {
           <h2 className="text-lg font-serif font-normal leading-tight" style={{ color: textDark, marginBottom: '0.25rem' }}>
             Cinq by text
           </h2>
-          <p className="font-serif text-sm leading-relaxed" style={{ color: textMuted, marginBottom: '0.75rem' }}>
-            Get answers from the five advisors by SMS/MMS during the pilot.
-          </p>
-          <button
-            type="button"
-            onClick={() => setShowSms(!showSms)}
-            className="font-serif text-sm rounded-full px-4 py-2 transition-all hover:shadow-sm active:shadow-xs"
-            style={{ border: `1px solid ${borderColor}`, color: textDark, backgroundColor: "transparent" }}
-          >
-            {showSms ? "Hide text details" : "How Cinq by text works"}
-          </button>
-          {showSms && (
-            <div className="font-serif text-sm leading-relaxed" style={{ color: textMuted, marginTop: '0.75rem' }}>
-              <p className="font-serif text-sm" style={{ color: textDark, marginBottom: '0.25rem' }}>
-                How it works
-              </p>
-              <p style={{ marginBottom: '0.5rem' }}>
-                Text START to +1 855-360-4983. Cinq will introduce the five advisors. Choose one, then send a question or photo. Ask follow-up questions in the same thread, or switch advisors.
-              </p>
-              <p style={{ marginBottom: '0.5rem' }}>
-                By texting START to Cinq, you agree to receive SMS/MMS replies from our five AI advisors at the number you text from. Message frequency varies with your usage. Message and data rates may apply. Reply STOP to opt out or HELP for help.
-              </p>
-              <p style={{ marginBottom: '0.5rem' }}>
-                Joining starts by texting START to +1 855-360-4983. Texting is not yet available until verification is approved.
-              </p>
-              <p>
-                <Link href="/privacy" className="underline underline-offset-4 hover:underline">Privacy Policy</Link>
-                {" · "}
-                <Link href="/terms" className="underline underline-offset-4 hover:underline">Terms of Service</Link>
-              </p>
-            </div>
-          )}
+          <div className="font-serif text-sm leading-relaxed" style={{ color: textMuted }}>
+            <p style={{ marginBottom: '0.5rem' }}>
+              Ask the five advisors by text message (SMS/MMS) during the pilot. You start the conversation: text START to <a href="sms:+18553604983" className="underline underline-offset-4" style={{ color: textDark }}>+1 (855) 360-4983</a>. Cinq replies with the five advisors; choose one, then send a question or photo. Ask follow-ups in the same thread, or switch advisors.
+            </p>
+            <p style={{ marginBottom: '0.5rem' }}>
+              By texting START to +1 (855) 360-4983, you agree to receive SMS/MMS replies from Cinq’s AI advisors at the number you text from. Texts are replies to your own messages only, never marketing or promotions. Message frequency varies with your usage. Message and data rates may apply. Reply STOP to opt out or HELP for help.
+            </p>
+            <p style={{ marginBottom: '0.5rem' }}>
+              Texting opens once carrier verification is approved.
+            </p>
+            <p>
+              <Link href="/privacy" className="underline underline-offset-4 hover:underline">Privacy Policy</Link>
+              {" · "}
+              <Link href="/terms" className="underline underline-offset-4 hover:underline">Terms of Service</Link>
+            </p>
+          </div>
         </div>
       </div>
 
@@ -176,6 +161,15 @@ export function Hub() {
           {" · "}
           <Link href="/terms" className="underline underline-offset-4 hover:underline">Terms</Link>
         </p>
+        {/* Who runs Cinq: only what's true — no entity, street address or business phone. */}
+        <address className="not-italic leading-relaxed" style={{ marginTop: '0.75rem' }}>
+          <p>Cinq · operated by Amar Lalvani, sole proprietor · Austin, Texas</p>
+          <p>
+            <a href="mailto:amar@cinqcollective.com" className="underline underline-offset-4 hover:underline">amar@cinqcollective.com</a>
+            {" · "}
+            <a href="https://cinqcollective.com" className="underline underline-offset-4 hover:underline">cinqcollective.com</a>
+          </p>
+        </address>
       </div>
     </div>
   );

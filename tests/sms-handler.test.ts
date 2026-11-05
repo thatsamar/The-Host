@@ -66,6 +66,24 @@ describe("START, STOP, HELP", () => {
     expect(ask.calls).toHaveLength(0);
   });
 
+  it("sends the welcome, with its opt-out and rates terms, first to every new number", async () => {
+    for (const first of ["3", "Gio", "What sofa fits a small room?"]) {
+      const store = new MemorySmsStore();
+      const ask = makeAsk();
+      const replies = await processSms(inbound(first), { store, ask: ask.ask });
+      expect(replies[0]).toBe(WELCOME_TEXT);
+      expect(WELCOME_TEXT).toContain("Reply STOP to opt out, HELP for help");
+      expect(ask.calls).toHaveLength(0);
+      expect((await store.getSession(FROM))?.optedIn).toBe(true);
+    }
+    const store = new MemorySmsStore();
+    expect(await processSms(inbound("3"), { store, ask: makeAsk().ask })).toEqual([
+      WELCOME_TEXT,
+      "You're with Gio (design). Send your question as a text or a photo.",
+    ]);
+    expect((await store.getSession(FROM))?.advisorId).toBe("gio");
+  });
+
   it("opts out on STOP, stays silent after, answers HELP, and re-welcomes on START", async () => {
     const store = new MemorySmsStore();
     const ask = makeAsk();
