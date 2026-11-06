@@ -15,6 +15,8 @@ export const jack: Companion = {
   placeholder: "What’s getting in your way?",
   placeholderWithPhotos: "Add a question, or just send",
   status: { thinking: "Thinking… Don't leave this page.", looking: "Thinking… Don't leave this page.", searching: "Thinking… Don't leave this page." },
+  // Jack (retired) answers nothing; kept so his copy stays complete.
+  voice: { preferred: ["Daniel", "Google UK English Male"], lang: "en-GB", gender: "male", rate: 1, pitch: 0.9 },
   systemPrompt: JACK_SYSTEM_PROMPT,
   // Jack works from what you tell him, not from the web.
   webSearchMaxUses: 0,

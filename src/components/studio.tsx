@@ -5,7 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ArrowUpIcon, CameraIcon, SquareIcon, XIcon } from "lucide-react";
 import { signOut } from "@/app/login/actions";
-import type { CompanionCopy } from "@/lib/companions/types";
+import type { CompanionCopy, VoiceProfile } from "@/lib/companions/types";
 import type { AnswerPhase, WebSourceRef } from "@/lib/ai/types";
 import type { StreamEvent } from "@/lib/ask/ask";
 import type { AnswerSnapshot } from "@/lib/ask/relay";
@@ -14,7 +14,7 @@ import { readNdjson } from "@/lib/ask/ndjson";
 import { PHOTO_ACCEPT, preparePhoto, type PreparedPhoto } from "@/lib/ask/photos";
 import { MAX_PHOTOS_PER_TURN, type AskTurn } from "@/lib/ask/prompt";
 import { connectionAbandoned, recoverAnswer, type SavedRead } from "@/lib/ask/recovery";
-import { speakableText, spokenChunks } from "@/lib/speech";
+import { chooseVoice, speakableText, spokenChunks } from "@/lib/speech";
 import { cn } from "@/lib/utils";
 
 interface StagedPhoto {
@@ -646,6 +646,7 @@ export function Studio({
               <Question key={t.key} turn={t} />
             ) : (
               <Answer
+                voice={companion.voice}
                 key={t.key}
                 turn={t}
                 onRetry={!busy && t.error && i === thread.length - 1 ? () => retry(t.key) : undefined}
@@ -688,7 +689,7 @@ function Question({ turn }: { turn: Turn }) {
 // After this long with nothing written yet, say that's expected for a big question.
 const SLOW_START_MS = 40_000;
 
-function Answer({ turn, onRetry }: { turn: Turn; onRetry?: () => void }) {
+function Answer({ turn, onRetry, voice }: { turn: Turn; onRetry?: () => void; voice: VoiceProfile }) {
   const waiting = !!turn.pending && !turn.text && turn.sentAt !== undefined;
   const [slow, setSlow] = useState(false);
   useEffect(() => {
@@ -736,7 +737,7 @@ function Answer({ turn, onRetry }: { turn: Turn; onRetry?: () => void }) {
       {!turn.pending && turn.text.trim() ? (
         <div className="mt-5 flex flex-wrap items-start gap-x-5 gap-y-2 text-sm text-ink-muted">
           <CopyButton text={turn.text} />
-          <ListenButton text={turn.text} />
+          <ListenButton text={turn.text} voice={voice} />
           {turn.sources?.length ? <Sources sources={turn.sources} /> : null}
         </div>
       ) : null}
@@ -796,11 +797,12 @@ const noSubscription = () => () => {};
 const canSpeak = () => "speechSynthesis" in window && !!window.speechSynthesis && "SpeechSynthesisUtterance" in window;
 
 /**
- * Reads an answer aloud with the device's own voice. Shown only where the
+ * Reads an answer aloud in the advisor's own voice, chosen from the voices on
+ * the device (nothing is sent anywhere). Shown only where the
  * browser can speak; one answer reads at a time, and Stop, a new reading or
  * leaving the conversation ends it.
  */
-function ListenButton({ text }: { text: string }) {
+function ListenButton({ text, voice }: { text: string; voice: VoiceProfile }) {
   // False on the server and during hydration, so the first render matches.
   const supported = useSyncExternalStore(noSubscription, canSpeak, () => false);
   const [speaking, setSpeaking] = useState(false);
@@ -808,6 +810,8 @@ function ListenButton({ text }: { text: string }) {
   const reading = useRef(0);
 
   useEffect(() => {
+    // Some browsers load their voice list on first ask; ask early so the advisor's voice is ready.
+    if (canSpeak()) window.speechSynthesis.getVoices();
     return () => {
       if (!reading.current) return;
       reading.current = 0;
@@ -825,6 +829,7 @@ function ListenButton({ text }: { text: string }) {
 
   const listen = () => {
     const synth = window.speechSynthesis;
+    const deviceVoice = chooseVoice(synth.getVoices(), voice);
     synth.cancel(); // whatever else was reading
     const chunks = spokenChunks(speakableText(text));
     if (!chunks.length) return;
@@ -837,7 +842,10 @@ function ListenButton({ text }: { text: string }) {
     };
     chunks.forEach((chunk, i) => {
       const utterance = new SpeechSynthesisUtterance(chunk);
-      utterance.lang = document.documentElement.lang || "en";
+      if (deviceVoice) utterance.voice = deviceVoice;
+      utterance.lang = deviceVoice?.lang ?? voice.lang;
+      utterance.rate = voice.rate;
+      utterance.pitch = voice.pitch;
       utterance.onerror = finished;
       if (i === chunks.length - 1) utterance.onend = finished;
       synth.speak(utterance);

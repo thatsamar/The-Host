@@ -73,3 +73,64 @@ export function spokenChunks(text: string, max = MAX_SPOKEN_CHUNK): string[] {
   push(current);
   return chunks;
 }
+
+/** What the page needs to know about a device voice (a subset of SpeechSynthesisVoice). */
+export interface DeviceVoice {
+  name: string;
+  lang: string;
+  localService?: boolean;
+}
+
+/** The parts of an advisor's voice profile used to choose a device voice. */
+export interface VoiceChoice {
+  preferred: string[];
+  lang: string;
+  gender: "female" | "male";
+}
+
+// Novelty voices that would make an advisor sound like a joke.
+const NOVELTY = /^(albert|bad news|bahh|bells|boing|bubbles|cellos|deranged|good news|hysterical|jester|junior|organ|pipe organ|superstar|trinoids|whisper|wobble|zarvox|fred|ralph|kathy|princess|grandma|grandpa|eddy|flo|reed|rocko|sandy|shelley)\b/i;
+// Common device voices whose gender the name alone doesn't say.
+const FEMALE = /\b(female|samantha|ava|allison|susan|zoe|victoria|karen|moira|tessa|veena|fiona|serena|kate|martha|stephanie|catherine|nicky|joelle|aria|jenny|sonia|libby|natasha|clara|emma|michelle|sara|google us english)\b/i;
+const MALE = /\b(male|daniel|arthur|oliver|jamie|alex|aaron|tom|evan|nathan|gordon|lee|rishi|ryan|thomas|guy|andrew|davis|william|liam|christopher|eric|brian)\b/i;
+// Higher-quality variants are worth preferring when the device has them.
+const QUALITY = /\b(premium|enhanced|natural|neural|online)\b/i;
+
+function voiceGender(name: string): "female" | "male" | null {
+  if (/\bfemale\b/i.test(name)) return "female";
+  if (/\bmale\b/i.test(name)) return "male";
+  if (FEMALE.test(name)) return "female";
+  if (MALE.test(name)) return "male";
+  return null;
+}
+
+/** "Daniel" matches "Daniel", "Daniel (Enhanced)" and "Daniel (English (United Kingdom))", not "Danielle". */
+function nameMatches(voiceName: string, wanted: string): boolean {
+  const name = voiceName.toLowerCase();
+  const want = wanted.toLowerCase();
+  return name === want || (name.startsWith(want) && !/[a-z]/.test(name[want.length]));
+}
+
+/**
+ * The device voice that best fits an advisor: a preferred voice by name first,
+ * then an English voice with the right accent and gender, preferring better
+ * quality. Null when the device has no English voice, so the browser's
+ * default reads instead.
+ */
+export function chooseVoice<V extends DeviceVoice>(voices: readonly V[], choice: VoiceChoice): V | null {
+  const english = voices.filter((v) => /^en([-_]|$)/i.test(v.lang) && !NOVELTY.test(v.name));
+  if (!english.length) return null;
+  const sameLang = (v: V) => v.lang.replace("_", "-").toLowerCase() === choice.lang.toLowerCase();
+  const score = (v: V) => {
+    let s = 0;
+    const rank = choice.preferred.findIndex((p) => nameMatches(v.name, p));
+    if (rank >= 0) s += 1000 - rank * 10;
+    const gender = voiceGender(v.name);
+    if (gender === choice.gender) s += 100;
+    else if (gender) s -= 100;
+    if (sameLang(v)) s += 50;
+    if (QUALITY.test(v.name)) s += 5;
+    return s;
+  };
+  return english.reduce((best, v) => (score(v) > score(best) ? v : best));
+}

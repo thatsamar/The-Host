@@ -13,6 +13,8 @@ export const alden: Companion = {
   placeholder: "What are we drinking?",
   placeholderWithPhotos: "Add what you're eating, or just send",
   status: { thinking: "Thinking… Don't leave this page.", looking: "Thinking… Don't leave this page.", searching: "Thinking… Don't leave this page." },
+  // Alden: relaxed and convivial, the friend beside you at a great bar.
+  voice: { preferred: ["Lee", "Gordon", "Microsoft William", "Microsoft Liam", "Google Australian English Male"], lang: "en-AU", gender: "male", rate: 0.97, pitch: 0.9 },
   systemPrompt: ALDEN_SYSTEM_PROMPT,
   webSearchMaxUses: 5,
   // Claret. A placeholder until an approved Alden icon exists.

@@ -198,12 +198,17 @@ describe("coming back after the connection went", () => {
 
 describe("reading an answer aloud", () => {
   let spoken: string[];
+  let voices: string[];
   let speaking: boolean;
   beforeEach(() => {
     spoken = [];
+    voices = [];
     speaking = false;
     class Utterance {
       lang = "";
+      voice: { name: string } | null = null;
+      rate = 1;
+      pitch = 1;
       onend: (() => void) | null = null;
       onerror: (() => void) | null = null;
       constructor(public text: string) {}
@@ -214,9 +219,14 @@ describe("reading an answer aloud", () => {
         return speaking;
       },
       pending: false,
+      getVoices: () => [
+        { name: "Samantha", lang: "en-US" },
+        { name: "Arthur", lang: "en-GB" },
+      ],
       speak: (u: Utterance) => {
         speaking = true;
         spoken.push(u.text);
+        voices.push(u.voice?.name ?? "");
       },
       cancel: vi.fn(() => {
         speaking = false;
@@ -224,13 +234,14 @@ describe("reading an answer aloud", () => {
     });
   });
 
-  it("reads a finished answer's words with the device's voice, and stops on request", async () => {
+  it("reads a finished answer's words in the advisor's voice, and stops on request", async () => {
     respond = () => ndjson({ type: "text", text: "## The call\n\n**Paint it white.** See [this](https://example.com)." }, { type: "done" });
     renderPage();
     fireEvent.change(textBox(), { target: { value: QUESTION } });
     fireEvent.submit(textBox().closest("form")!);
     fireEvent.click(await screen.findByText("Listen"));
     expect(spoken.join(" ")).toBe("The call. Paint it white. See this.");
+    expect(new Set(voices)).toEqual(new Set(["Arthur"])); // Gio's own voice, from the device's list
     expect(asks()).toHaveLength(1); // reading aloud never asks the server for anything
     fireEvent.click(screen.getByText("Stop reading"));
     expect(screen.getByText("Listen")).toBeTruthy();
