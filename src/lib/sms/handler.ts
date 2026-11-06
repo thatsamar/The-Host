@@ -176,19 +176,15 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
 
   if (HELP_WORDS.has(text)) return [HELP_TEXT];
 
-  // First message: choosing an advisor opts in directly; anything else
-  // gets the welcome with the advisor list.
+  // First message: the number opts in by texting us, and its first reply is
+  // always the welcome, so the opt-out, frequency and rates terms arrive
+  // before anything else. Choosing an advisor straight away also confirms it.
   if (isNew) {
     const firstPick = pickAdvisor(text);
     session.optedIn = true;
-    if (firstPick) {
-      session.advisorId = firstPick;
-      await store.saveSession(session);
-      return [advisorConfirmText(firstPick)];
-    }
-    session.advisorId = null;
+    session.advisorId = firstPick;
     await store.saveSession(session);
-    return [WELCOME_TEXT];
+    return firstPick ? [WELCOME_TEXT, advisorConfirmText(firstPick)] : [WELCOME_TEXT];
   }
 
   // Re-START while opted in restarts the welcome.
