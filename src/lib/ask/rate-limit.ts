@@ -33,3 +33,35 @@ export function questionsPerHour(value = process.env.QUESTIONS_PER_HOUR): number
   const n = Number(value);
   return value?.trim() && Number.isFinite(n) && n >= 0 ? Math.floor(n) : DEFAULT_QUESTIONS_PER_HOUR;
 }
+
+/**
+ * A per-visitor cap on an amount (characters read aloud) rather than a count,
+ * in the same in-memory way as createRateLimiter. The provider's own spend
+ * limit is the real backstop.
+ */
+export function createUsageLimiter(options: { limit: number; windowMs?: number; now?: () => number }) {
+  const { limit, windowMs = HOUR, now = Date.now } = options;
+  const usage = new Map<string, [at: number, amount: number][]>();
+  return function use(key: string, amount: number): { ok: true } | { ok: false; retryAfterSeconds: number } {
+    if (limit <= 0) return { ok: true };
+    const t = now();
+    const recent = (usage.get(key) ?? []).filter(([at]) => t - at < windowMs);
+    const used = recent.reduce((sum, [, n]) => sum + n, 0);
+    if (used + amount > limit) {
+      usage.set(key, recent);
+      return { ok: false, retryAfterSeconds: Math.max(1, Math.ceil(((recent[0]?.[0] ?? t) + windowMs - t) / 1000)) };
+    }
+    recent.push([t, amount]);
+    usage.set(key, recent);
+    if (usage.size > 10_000) for (const [k, list] of usage) if (t - list[list.length - 1][0] >= windowMs) usage.delete(k);
+    return { ok: true };
+  };
+}
+
+/** Characters each visitor may have read aloud in a natural voice per hour. */
+export const DEFAULT_SPOKEN_CHARS_PER_HOUR = 30_000;
+
+export function spokenCharsPerHour(value = process.env.SPOKEN_CHARS_PER_HOUR): number {
+  const n = Number(value);
+  return value?.trim() && Number.isFinite(n) && n >= 0 ? Math.floor(n) : DEFAULT_SPOKEN_CHARS_PER_HOUR;
+}

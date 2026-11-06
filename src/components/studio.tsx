@@ -14,7 +14,8 @@ import { readNdjson } from "@/lib/ask/ndjson";
 import { PHOTO_ACCEPT, preparePhoto, type PreparedPhoto } from "@/lib/ask/photos";
 import { MAX_PHOTOS_PER_TURN, type AskTurn } from "@/lib/ask/prompt";
 import { connectionAbandoned, recoverAnswer, type SavedRead } from "@/lib/ask/recovery";
-import { chooseVoice, speakableText, spokenChunks } from "@/lib/speech";
+import { naturalPieces, speakableText } from "@/lib/speech";
+import { SpeakError, canPlayAudio, canSpeakOnDevice, playPieces, readingEnded, setReading, speakWithDevice, stopReading } from "@/lib/listen";
 import { cn } from "@/lib/utils";
 
 interface StagedPhoto {
@@ -794,71 +795,89 @@ function CopyButton({ text }: { text: string }) {
 }
 
 const noSubscription = () => () => {};
-const canSpeak = () => "speechSynthesis" in window && !!window.speechSynthesis && "SpeechSynthesisUtterance" in window;
+const canListen = () => canPlayAudio() || canSpeakOnDevice();
+// Set once the server says this deployment has no natural voice, so later taps go straight to the device voice.
+let naturalVoiceMissing = false;
 
 /**
- * Reads an answer aloud in the advisor's own voice, chosen from the voices on
- * the device (nothing is sent anywhere). Shown only where the
- * browser can speak; one answer reads at a time, and Stop, a new reading or
- * leaving the conversation ends it.
+ * Reads an answer aloud in the advisor's own voice: the natural voice from
+ * /api/speak where the deployment has one, otherwise the closest voice on the
+ * device. Shown only where the browser can play sound or speak; one answer
+ * reads at a time, and Stop, a new reading or leaving the conversation ends it.
+ * Pieces already heard are kept, so listening again isn't fetched (or paid for) twice.
  */
 function ListenButton({ text, voice }: { text: string; voice: VoiceProfile }) {
   // False on the server and during hydration, so the first render matches.
-  const supported = useSyncExternalStore(noSubscription, canSpeak, () => false);
+  const supported = useSyncExternalStore(noSubscription, canListen, () => false);
   const [speaking, setSpeaking] = useState(false);
   // Which reading is ours, so a later one (or Stop) ending ours updates this button only.
   const reading = useRef(0);
+  const audio = useRef(new Map<number, Promise<ArrayBuffer>>());
 
   useEffect(() => {
-    // Some browsers load their voice list on first ask; ask early so the advisor's voice is ready.
-    if (canSpeak()) window.speechSynthesis.getVoices();
+    // Some browsers load their voice list on first ask; ask early so a device voice is ready.
+    if (canSpeakOnDevice()) window.speechSynthesis.getVoices();
     return () => {
-      if (!reading.current) return;
-      reading.current = 0;
-      window.speechSynthesis?.cancel();
+      if (reading.current) stopReading();
     };
   }, []);
 
   if (!supported) return null;
 
-  const stop = () => {
-    reading.current = 0;
-    setSpeaking(false);
-    window.speechSynthesis.cancel();
-  };
-
   const listen = () => {
-    const synth = window.speechSynthesis;
-    const deviceVoice = chooseVoice(synth.getVoices(), voice);
-    synth.cancel(); // whatever else was reading
-    const chunks = spokenChunks(speakableText(text));
-    if (!chunks.length) return;
+    const words = speakableText(text);
+    const pieces = naturalPieces(words);
+    if (!pieces.length) return;
     const id = Date.now() + Math.random();
-    reading.current = id;
     const finished = () => {
       if (reading.current !== id) return;
       reading.current = 0;
       setSpeaking(false);
     };
-    chunks.forEach((chunk, i) => {
-      const utterance = new SpeechSynthesisUtterance(chunk);
-      if (deviceVoice) utterance.voice = deviceVoice;
-      utterance.lang = deviceVoice?.lang ?? voice.lang;
-      utterance.rate = voice.rate;
-      utterance.pitch = voice.pitch;
-      utterance.onerror = finished;
-      if (i === chunks.length - 1) utterance.onend = finished;
-      synth.speak(utterance);
-    });
-    setSpeaking(true);
-    // Another answer's Listen cancels this one without always firing an event here.
-    const watch = setInterval(() => {
-      if (reading.current !== id) return clearInterval(watch);
-      if (!synth.speaking && !synth.pending) {
-        clearInterval(watch);
-        finished();
+    const ended = () => {
+      if (reading.current === id) readingEnded();
+      finished();
+    };
+    const onDevice = (from: number) => {
+      if (!canSpeakOnDevice()) return ended();
+      setReading(speakWithDevice(pieces.slice(from).join(" "), voice, ended), finished);
+    };
+    const load = (i: number) => {
+      let piece = audio.current.get(i);
+      if (!piece) {
+        piece = fetch("/api/speak", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: pieces[i],
+            previous: pieces[i - 1]?.slice(-MAX_CONTEXT),
+            next: pieces[i + 1]?.slice(0, MAX_CONTEXT),
+          }),
+        }).then((res) => (res.ok ? res.arrayBuffer() : Promise.reject(new SpeakError(res.status))));
+        piece.catch(() => audio.current.delete(i));
+        audio.current.set(i, piece);
       }
-    }, 500);
+      return piece;
+    };
+
+    stopReading();
+    reading.current = id;
+    setSpeaking(true);
+    if (naturalVoiceMissing || !canPlayAudio()) return onDevice(0);
+    setReading(
+      playPieces({
+        count: pieces.length,
+        load,
+        onEnd: ended,
+        fallback: (from, err) => {
+          if (err instanceof SpeakError && err.status === 503) naturalVoiceMissing = true;
+          // The natural reading has ended itself; carry on from the same place on the device.
+          readingEnded();
+          onDevice(from);
+        },
+      }),
+      finished,
+    );
   };
 
   return (
@@ -866,12 +885,15 @@ function ListenButton({ text, voice }: { text: string; voice: VoiceProfile }) {
       type="button"
       className="self-start transition-colors hover:text-ink"
       aria-pressed={speaking}
-      onClick={speaking ? stop : listen}
+      onClick={speaking ? stopReading : listen}
     >
       {speaking ? "Stop reading" : "Listen"}
     </button>
   );
 }
+
+// The text either side of a piece that goes with it, so the voice keeps its flow across pieces.
+const MAX_CONTEXT = 600;
 
 function Sources({ sources }: { sources: WebSourceRef[] }) {
   const unique = [...new Map(sources.map((s) => [s.url, s])).values()].slice(0, 12);

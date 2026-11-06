@@ -14,7 +14,9 @@ export const martini: Companion = {
   placeholderWithPhotos: "Add the occasion, or just send",
   status: { thinking: "Assessing… Don't leave this page.", looking: "Assessing… Don't leave this page.", searching: "Assessing… Don't leave this page." },
   // Martine: crisp and quick, a stylist who says what suits you.
-  voice: { preferred: ["Serena", "Kate", "Martha", "Stephanie", "Google UK English Female", "Microsoft Sonia", "Microsoft Libby"], lang: "en-GB", gender: "female", rate: 1.05, pitch: 1.05 },
+  voice: { preferred: ["Serena", "Kate", "Martha", "Stephanie", "Google UK English Female", "Microsoft Sonia", "Microsoft Libby"], lang: "en-GB", gender: "female", rate: 1.05, pitch: 1.05,
+    natural: { voiceId: "BFd5oBc2DDna33pSi4Gf", name: "Alicia - Polished Global Anchor", stability: 0.55, style: 0.2 },
+  },
   systemPrompt: MARTINI_SYSTEM_PROMPT,
   webSearchMaxUses: 5,
   // Coral pink

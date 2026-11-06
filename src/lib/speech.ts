@@ -134,3 +134,15 @@ export function chooseVoice<V extends DeviceVoice>(voices: readonly V[], choice:
   };
   return english.reduce((best, v) => (score(v) > score(best) ? v : best));
 }
+
+/** The first piece is short so a natural voice starts quickly; the rest are longer for a steady delivery. */
+export const FIRST_NATURAL_PIECE = 250;
+export const NATURAL_PIECE = 1_200;
+
+/** Split spoken text into pieces for a natural voice: a short opening piece, then longer ones. */
+export function naturalPieces(text: string): string[] {
+  const [first] = spokenChunks(text, FIRST_NATURAL_PIECE);
+  if (!first) return [];
+  const rest = text.slice(text.indexOf(first) + first.length).trim();
+  return [first, ...spokenChunks(rest, NATURAL_PIECE)];
+}

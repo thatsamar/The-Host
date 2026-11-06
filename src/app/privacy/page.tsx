@@ -16,14 +16,14 @@ export default function Privacy() {
           Privacy Policy
         </h1>
         <p className="text-sm" style={{ color: "#55514D", marginBottom: "1.5rem" }}>
-          Effective date: November 5, 2026
+          Effective date: November 6, 2026
         </p>
         <p className="text-base leading-relaxed" style={{ marginBottom: "1rem" }}>
           Cinq (“we,” “us”) is a consumer service with five AI advisors covering travel, style, design, wine, cocktails &amp; spirits, and sounding-board conversations. Cinq is operated by Amar Lalvani, a sole proprietor based in Austin, Texas. You can ask the advisors questions and share photos on our website, cinqcollective.com, and, during the pilot, by text message (SMS/MMS) to +1 (855) 360-4983.
         </p>
         <h2 className="text-xl font-normal" style={{ marginTop: "1.5rem", marginBottom: "0.5rem" }}>On the website</h2>
         <p className="text-base leading-relaxed" style={{ marginBottom: "1rem" }}>
-          The website needs no account. Your questions and photos are sent to our AI provider to write the answer and are not saved as a conversation history. While an answer is being written, the answer text alone is held for 15 minutes after its last update, so it can reach you if your connection drops. Our server logs record timings, counts and error codes, not what you asked.
+          The website needs no account. Your questions and photos are sent to our AI provider to write the answer and are not saved as a conversation history. While an answer is being written, the answer text alone is held for 15 minutes after its last update, so it can reach you if your connection drops. Our server logs record timings, counts and error codes, not what you asked. If you tap Listen on an answer, the words of that answer, and nothing else, are sent to our voice provider to be read aloud; nothing you asked or showed us is sent.
         </p>
         <h2 className="text-xl font-normal" style={{ marginTop: "1.5rem", marginBottom: "0.5rem" }}>By text message</h2>
         <h2 className="text-xl font-normal" style={{ marginTop: "1.5rem", marginBottom: "0.5rem" }}>What we collect</h2>
@@ -50,7 +50,7 @@ export default function Privacy() {
         </ul>
         <h2 className="text-xl font-normal" style={{ marginTop: "1.5rem", marginBottom: "0.5rem" }}>Service providers</h2>
         <p className="text-base leading-relaxed" style={{ marginBottom: "1rem" }}>
-          These companies process information on our behalf, only to run Cinq: Twilio (sending and receiving text messages), Anthropic (generating answers), Supabase (storing text conversations and opt-in status) and Vercel (hosting the website and service).
+          These companies process information on our behalf, only to run Cinq: Twilio (sending and receiving text messages), Anthropic (generating answers), ElevenLabs (reading answers aloud when you tap Listen), Supabase (storing text conversations and opt-in status) and Vercel (hosting the website and service).
         </p>
         <h2 className="text-xl font-normal" style={{ marginTop: "1.5rem", marginBottom: "0.5rem" }}>Retention and deletion</h2>
         <p className="text-base leading-relaxed" style={{ marginBottom: "1rem" }}>

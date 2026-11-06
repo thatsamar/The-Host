@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_SPOKEN_CHUNK, chooseVoice, speakableText, spokenChunks } from "../src/lib/speech";
+import { FIRST_NATURAL_PIECE, MAX_SPOKEN_CHUNK, NATURAL_PIECE, chooseVoice, naturalPieces, speakableText, spokenChunks } from "../src/lib/speech";
 import { ACTIVE_LINEUP, COMPANIONS } from "../src/lib/companions";
 
 describe("reading an answer aloud", () => {
@@ -112,5 +112,17 @@ describe("each advisor's own voice", () => {
       expect(pitch).toBeGreaterThanOrEqual(0.85);
       expect(pitch).toBeLessThanOrEqual(1.1);
     }
+  });
+});
+
+describe("pieces for a natural voice", () => {
+  it("starts with a short piece so the voice begins quickly, then longer ones, losing nothing", () => {
+    const text = "This sentence is a reasonable length for one breath. ".repeat(60).trim();
+    const pieces = naturalPieces(text);
+    expect(pieces[0].length).toBeLessThanOrEqual(FIRST_NATURAL_PIECE);
+    for (const p of pieces.slice(1)) expect(p.length).toBeLessThanOrEqual(NATURAL_PIECE);
+    expect(pieces[1].length).toBeGreaterThan(FIRST_NATURAL_PIECE);
+    expect(pieces.join(" ")).toBe(text);
+    expect(naturalPieces("")).toEqual([]);
   });
 });

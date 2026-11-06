@@ -14,7 +14,9 @@ export const alden: Companion = {
   placeholderWithPhotos: "Add what you're eating, or just send",
   status: { thinking: "Thinking… Don't leave this page.", looking: "Thinking… Don't leave this page.", searching: "Thinking… Don't leave this page." },
   // Alden: relaxed and convivial, the friend beside you at a great bar.
-  voice: { preferred: ["Lee", "Gordon", "Microsoft William", "Microsoft Liam", "Google Australian English Male"], lang: "en-AU", gender: "male", rate: 0.97, pitch: 0.9 },
+  voice: { preferred: ["Lee", "Gordon", "Microsoft William", "Microsoft Liam", "Google Australian English Male"], lang: "en-AU", gender: "male", rate: 0.97, pitch: 0.9,
+    natural: { voiceId: "jSuBIjxMKhqIfb0wCK1F", name: "Baxter - Dry Calm Aussie", stability: 0.45, style: 0.3 },
+  },
   systemPrompt: ALDEN_SYSTEM_PROMPT,
   webSearchMaxUses: 5,
   // Claret. A placeholder until an approved Alden icon exists.

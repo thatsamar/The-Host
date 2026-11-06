@@ -14,7 +14,9 @@ export const goldie: Companion = {
   placeholderWithPhotos: "Add context, or just send",
   status: { thinking: "Untangling… Don't leave this page.", looking: "Untangling… Don't leave this page.", searching: "Untangling… Don't leave this page." },
   // Goldie: warm and steady, a close friend who listens first.
-  voice: { preferred: ["Ava", "Allison", "Samantha", "Susan", "Zoe", "Microsoft Aria", "Microsoft Jenny", "Google US English"], lang: "en-US", gender: "female", rate: 0.95, pitch: 1 },
+  voice: { preferred: ["Ava", "Allison", "Samantha", "Susan", "Zoe", "Microsoft Aria", "Microsoft Jenny", "Google US English"], lang: "en-US", gender: "female", rate: 0.95, pitch: 1,
+    natural: { voiceId: "OZ0L6eISlOejga3XjDFt", name: "Talia - Warm Soft Guide", stability: 0.55, style: 0.2 },
+  },
   systemPrompt: UNTANGLED_SYSTEM_PROMPT,
   // Goldie does not need the web to understand human situations.
   webSearchMaxUses: 0,

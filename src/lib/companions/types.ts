@@ -32,6 +32,21 @@ export interface VoiceProfile {
   rate: number;
   /** 1 is the voice's own pitch. */
   pitch: number;
+  /**
+   * The natural voice this advisor reads with when ElevenLabs is set up
+   * (ELEVENLABS_API_KEY on the deployment); otherwise the device voice above.
+   * The voice must be in the ElevenLabs account's My Voices.
+   */
+  natural: {
+    /** ElevenLabs voice id. */
+    voiceId: string;
+    /** Its name in the ElevenLabs Voice Library, to find it there. */
+    name: string;
+    /** 0–1: lower is more expressive, higher is steadier. */
+    stability: number;
+    /** 0–1: how much of the voice's own style to bring out. */
+    style: number;
+  };
 }
 
 // "jack" stays known so his old deployment shows that he has retired, rather
