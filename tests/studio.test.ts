@@ -195,3 +195,57 @@ describe("coming back after the connection went", () => {
     expect(screen.getByText("Retry")).toBeTruthy();
   });
 });
+
+describe("reading an answer aloud", () => {
+  let spoken: string[];
+  let speaking: boolean;
+  beforeEach(() => {
+    spoken = [];
+    speaking = false;
+    class Utterance {
+      lang = "";
+      onend: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      constructor(public text: string) {}
+    }
+    vi.stubGlobal("SpeechSynthesisUtterance", Utterance);
+    vi.stubGlobal("speechSynthesis", {
+      get speaking() {
+        return speaking;
+      },
+      pending: false,
+      speak: (u: Utterance) => {
+        speaking = true;
+        spoken.push(u.text);
+      },
+      cancel: vi.fn(() => {
+        speaking = false;
+      }),
+    });
+  });
+
+  it("reads a finished answer's words with the device's voice, and stops on request", async () => {
+    respond = () => ndjson({ type: "text", text: "## The call\n\n**Paint it white.** See [this](https://example.com)." }, { type: "done" });
+    renderPage();
+    fireEvent.change(textBox(), { target: { value: QUESTION } });
+    fireEvent.submit(textBox().closest("form")!);
+    fireEvent.click(await screen.findByText("Listen"));
+    expect(spoken.join(" ")).toBe("The call. Paint it white. See this.");
+    expect(asks()).toHaveLength(1); // reading aloud never asks the server for anything
+    fireEvent.click(screen.getByText("Stop reading"));
+    expect(screen.getByText("Listen")).toBeTruthy();
+    expect(window.speechSynthesis.cancel).toHaveBeenCalled();
+  });
+
+  it("offers no Listen button where the browser cannot speak", async () => {
+    vi.stubGlobal("speechSynthesis", undefined);
+    // @ts-expect-error -- removed so the page sees no speech support
+    delete window.speechSynthesis;
+    respond = () => ndjson({ type: "text", text: "Answer." }, { type: "done" });
+    renderPage();
+    fireEvent.change(textBox(), { target: { value: QUESTION } });
+    fireEvent.submit(textBox().closest("form")!);
+    await screen.findByText("Copy");
+    expect(screen.queryByText("Listen")).toBeNull();
+  });
+});

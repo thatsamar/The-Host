@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ArrowUpIcon, CameraIcon, SquareIcon, XIcon } from "lucide-react";
@@ -14,6 +14,7 @@ import { readNdjson } from "@/lib/ask/ndjson";
 import { PHOTO_ACCEPT, preparePhoto, type PreparedPhoto } from "@/lib/ask/photos";
 import { MAX_PHOTOS_PER_TURN, type AskTurn } from "@/lib/ask/prompt";
 import { connectionAbandoned, recoverAnswer, type SavedRead } from "@/lib/ask/recovery";
+import { speakableText, spokenChunks } from "@/lib/speech";
 import { cn } from "@/lib/utils";
 
 interface StagedPhoto {
@@ -735,6 +736,7 @@ function Answer({ turn, onRetry }: { turn: Turn; onRetry?: () => void }) {
       {!turn.pending && turn.text.trim() ? (
         <div className="mt-5 flex flex-wrap items-start gap-x-5 gap-y-2 text-sm text-ink-muted">
           <CopyButton text={turn.text} />
+          <ListenButton text={turn.text} />
           {turn.sources?.length ? <Sources sources={turn.sources} /> : null}
         </div>
       ) : null}
@@ -786,6 +788,79 @@ function CopyButton({ text }: { text: string }) {
       }}
     >
       {copied ? "Copied" : "Copy"}
+    </button>
+  );
+}
+
+const noSubscription = () => () => {};
+const canSpeak = () => "speechSynthesis" in window && !!window.speechSynthesis && "SpeechSynthesisUtterance" in window;
+
+/**
+ * Reads an answer aloud with the device's own voice. Shown only where the
+ * browser can speak; one answer reads at a time, and Stop, a new reading or
+ * leaving the conversation ends it.
+ */
+function ListenButton({ text }: { text: string }) {
+  // False on the server and during hydration, so the first render matches.
+  const supported = useSyncExternalStore(noSubscription, canSpeak, () => false);
+  const [speaking, setSpeaking] = useState(false);
+  // Which reading is ours, so a later one (or Stop) ending ours updates this button only.
+  const reading = useRef(0);
+
+  useEffect(() => {
+    return () => {
+      if (!reading.current) return;
+      reading.current = 0;
+      window.speechSynthesis?.cancel();
+    };
+  }, []);
+
+  if (!supported) return null;
+
+  const stop = () => {
+    reading.current = 0;
+    setSpeaking(false);
+    window.speechSynthesis.cancel();
+  };
+
+  const listen = () => {
+    const synth = window.speechSynthesis;
+    synth.cancel(); // whatever else was reading
+    const chunks = spokenChunks(speakableText(text));
+    if (!chunks.length) return;
+    const id = Date.now() + Math.random();
+    reading.current = id;
+    const finished = () => {
+      if (reading.current !== id) return;
+      reading.current = 0;
+      setSpeaking(false);
+    };
+    chunks.forEach((chunk, i) => {
+      const utterance = new SpeechSynthesisUtterance(chunk);
+      utterance.lang = document.documentElement.lang || "en";
+      utterance.onerror = finished;
+      if (i === chunks.length - 1) utterance.onend = finished;
+      synth.speak(utterance);
+    });
+    setSpeaking(true);
+    // Another answer's Listen cancels this one without always firing an event here.
+    const watch = setInterval(() => {
+      if (reading.current !== id) return clearInterval(watch);
+      if (!synth.speaking && !synth.pending) {
+        clearInterval(watch);
+        finished();
+      }
+    }, 500);
+  };
+
+  return (
+    <button
+      type="button"
+      className="self-start transition-colors hover:text-ink"
+      aria-pressed={speaking}
+      onClick={speaking ? stop : listen}
+    >
+      {speaking ? "Stop reading" : "Listen"}
     </button>
   );
 }
