@@ -21,6 +21,8 @@ export type CompanionId = "gio" | "tony" | "martini" | "alden" | "goldie" | "jac
 
 /** One character on the shared engine: what it's told, and how it looks. */
 export interface Companion extends CompanionCopy {
+  /** One word for the advisor's area where a channel lists the lineup ("Amar / Travel"). Display only. */
+  category: string;
   systemPrompt: string;
   /** Lines of the app capabilities block, with and without web search. */
   capabilities: (webSearch: boolean) => string[];

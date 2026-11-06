@@ -11,6 +11,7 @@ export const jack: Companion = {
   subtitle: "Ask a question, and add screenshots.",
   description: "The Truth You Need.",
   role: "Your reality check",
+  category: "Retired",
   intro: "Jack tells you what you need to hear, not what you want to hear. Then he helps you do something about it.",
   placeholder: "What’s getting in your way?",
   placeholderWithPhotos: "Add a question, or just send",

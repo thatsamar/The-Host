@@ -9,6 +9,7 @@ export const goldie: Companion = {
   subtitle: "Describe the situation, or add screenshots.",
   description: "Untangle what's complicated.",
   role: "Your strategic advisor",
+  category: "Advice",
   intro: "When a decision feels too big, Goldie helps you untangle it and figure out what to do next.",
   placeholder: "What’s keeping you up at night?",
   placeholderWithPhotos: "Add context, or just send",

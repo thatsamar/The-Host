@@ -9,6 +9,7 @@ import { ask, timeLimitMessage, type AnswerInfo, type AskEvent, type StreamEvent
 import { AnswerRelay, isAnswerId } from "@/lib/ask/relay";
 import { currentCompanion } from "@/lib/companions";
 import { MAX_PHOTOS_PER_TURN } from "@/lib/ask/prompt";
+import { imageSchema } from "@/lib/ask/images";
 import { createClient, getUserId } from "@/lib/supabase/server";
 import { errorClass, safeToken } from "@/lib/diagnostics";
 import type { FailureInfo } from "@/lib/ai/types";
@@ -24,11 +25,6 @@ const ANSWER_TIME_LIMIT_MS = (maxDuration - 20) * 1000;
 const MAX_LOGGED_PHASES = 60;
 // Something goes down the line at least this often, so a dead connection shows.
 const HEARTBEAT_MS = 10_000;
-
-const imageSchema = z.object({
-  mediaType: z.enum(["image/jpeg", "image/png", "image/webp", "image/gif"]),
-  data: z.string().min(1).max(6_000_000).regex(/^[A-Za-z0-9+/=]+$/),
-});
 
 const bodySchema = z.object({
   /** The page's random id for this answer, so it can be collected after a disconnect. */

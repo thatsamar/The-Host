@@ -62,6 +62,10 @@ To change how a companion thinks, edit its `src/lib/companions/<name>-prompt.ts`
 
 ---
 
+## Apple Messages (in development)
+
+A messaging channel that reaches all five advisors from one Messages conversation is built and tested in `src/lib/channel/`, but not connected to a provider or launched. See `docs/messages-channel.md`; try it locally with `npm run messages:harness` (fixture replies only, no model calls).
+
 ## Setup
 
 Needs Node 20+.

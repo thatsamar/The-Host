@@ -9,6 +9,7 @@ export const martini: Companion = {
   subtitle: "How do you want to feel?",
   description: "Dress like you.",
   role: "Your style advisor",
+  category: "Style",
   intro: "Martine sharpens your eye and tells you honestly what looks best on you.",
   placeholder: "What are you thinking of wearing?",
   placeholderWithPhotos: "Add the occasion, or just send",

@@ -9,6 +9,7 @@ export const gio: Companion = {
   subtitle: "What do you want to make better?",
   description: "See with a designer’s eye.",
   role: "Your design advisor",
+  category: "Design",
   intro: "Gio helps you make a home with character and soul. Expensive is easy. Discerning is hard.",
   placeholder: "Show Gio a picture.",
   placeholderWithPhotos: "Add a question, or just send",
