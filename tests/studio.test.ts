@@ -25,6 +25,7 @@ interface Sent {
   method: string;
   url: string;
   turns?: { role: string; text: string; images?: { data: string }[] }[];
+  body?: { text?: string; previous?: string; next?: string };
 }
 let sent: Sent[] = [];
 let respond: (request: Sent) => Promise<Response> | Response;
@@ -49,7 +50,10 @@ beforeEach(() => {
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
       const request: Sent = { method: init?.method ?? "GET", url };
-      if (typeof init?.body === "string") request.turns = JSON.parse(init.body).turns;
+      if (typeof init?.body === "string") {
+        request.body = JSON.parse(init.body);
+        request.turns = request.body!.text === undefined ? JSON.parse(init.body).turns : undefined;
+      }
       sent.push(request);
       return respond(request);
     }),
@@ -194,4 +198,160 @@ describe("coming back after the connection went", () => {
     expect(stops()).toHaveLength(1);
     expect(screen.getByText("Retry")).toBeTruthy();
   });
+});
+
+describe("reading an answer aloud", () => {
+  let spoken: string[];
+  let voices: string[];
+  let speaking: boolean;
+  beforeEach(() => {
+    spoken = [];
+    voices = [];
+    speaking = false;
+    class Utterance {
+      lang = "";
+      voice: { name: string } | null = null;
+      rate = 1;
+      pitch = 1;
+      onend: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      constructor(public text: string) {}
+    }
+    vi.stubGlobal("SpeechSynthesisUtterance", Utterance);
+    vi.stubGlobal("speechSynthesis", {
+      get speaking() {
+        return speaking;
+      },
+      pending: false,
+      getVoices: () => [
+        { name: "Samantha", lang: "en-US" },
+        { name: "Arthur", lang: "en-GB" },
+      ],
+      speak: (u: Utterance) => {
+        speaking = true;
+        spoken.push(u.text);
+        voices.push(u.voice?.name ?? "");
+      },
+      cancel: vi.fn(() => {
+        speaking = false;
+      }),
+    });
+  });
+
+  it("reads a finished answer's words in the advisor's voice, and stops on request", async () => {
+    respond = () => ndjson({ type: "text", text: "## The call\n\n**Paint it white.** See [this](https://example.com)." }, { type: "done" });
+    renderPage();
+    fireEvent.change(textBox(), { target: { value: QUESTION } });
+    fireEvent.submit(textBox().closest("form")!);
+    fireEvent.click(await screen.findByText("Listen"));
+    expect(spoken.join(" ")).toBe("The call. Paint it white. See this.");
+    expect(new Set(voices)).toEqual(new Set(["Arthur"])); // Gio's own voice, from the device's list
+    expect(asks()).toHaveLength(1); // reading aloud never asks the server for anything
+    fireEvent.click(screen.getByText("Stop reading"));
+    expect(screen.getByText("Listen")).toBeTruthy();
+    expect(window.speechSynthesis.cancel).toHaveBeenCalled();
+  });
+
+  it("offers no Listen button where the browser cannot speak", async () => {
+    vi.stubGlobal("speechSynthesis", undefined);
+    // @ts-expect-error -- removed so the page sees no speech support
+    delete window.speechSynthesis;
+    respond = () => ndjson({ type: "text", text: "Answer." }, { type: "done" });
+    renderPage();
+    fireEvent.change(textBox(), { target: { value: QUESTION } });
+    fireEvent.submit(textBox().closest("form")!);
+    await screen.findByText("Copy");
+    expect(screen.queryByText("Listen")).toBeNull();
+  });
+});
+
+describe("reading an answer aloud in the advisor's natural voice", () => {
+  let played: string[];
+  let deviceSpoken: string[];
+  const LONG = Array.from({ length: 12 }, (_, i) => `Sentence number ${i + 1} is about the hallway paint and how it reads at dusk.`).join(" ");
+  const speaks = () => sent.filter((r) => r.url === "/api/speak");
+
+  beforeEach(() => {
+    played = [];
+    deviceSpoken = [];
+    class FakeContext {
+      destination = {};
+      resume = async () => {};
+      close = async () => {};
+      decodeAudioData = async (bytes: ArrayBuffer) => ({ text: new TextDecoder().decode(bytes) });
+      createBufferSource() {
+        const node = {
+          buffer: null as { text: string } | null,
+          onended: null as (() => void) | null,
+          connect() {},
+          start() {
+            played.push(node.buffer!.text);
+            setTimeout(() => node.onended?.(), 0);
+          },
+          stop() {},
+        };
+        return node;
+      }
+    }
+    vi.stubGlobal("AudioContext", FakeContext);
+    vi.stubGlobal("SpeechSynthesisUtterance", class {
+      constructor(public text: string) {}
+    });
+    vi.stubGlobal("speechSynthesis", {
+      speaking: false,
+      pending: false,
+      getVoices: () => [],
+      speak: (u: { text: string }) => deviceSpoken.push(u.text),
+      cancel: () => {},
+    });
+  });
+
+  async function askAndListen() {
+    renderPage();
+    fireEvent.change(textBox(), { target: { value: QUESTION } });
+    fireEvent.submit(textBox().closest("form")!);
+    fireEvent.click(await screen.findByText("Listen"));
+  }
+
+  it("plays the answer piece by piece from the server, with the text either side for flow", async () => {
+    respond = (r) =>
+      r.url === "/api/speak"
+        ? new Response(new TextEncoder().encode(r.body!.text!))
+        : ndjson({ type: "text", text: LONG }, { type: "done" });
+    await askAndListen();
+    await waitFor(() => expect(screen.getByText("Listen")).toBeTruthy());
+    expect(played.join(" ")).toBe(LONG);
+    expect(speaks().length).toBeGreaterThan(1);
+    expect(speaks()[0].body!.text!.length).toBeLessThanOrEqual(250);
+    expect(speaks()[1].body!.previous).toBe(speaks()[0].body!.text);
+    expect(deviceSpoken).toEqual([]);
+    expect(asks()).toHaveLength(1);
+
+    // Listening again replays what was already fetched: nothing is paid for twice.
+    const fetched = speaks().length;
+    played = [];
+    fireEvent.click(screen.getByText("Listen"));
+    await waitFor(() => expect(played.join(" ")).toBe(LONG));
+    expect(speaks()).toHaveLength(fetched);
+  });
+
+  it("carries on with the device voice from where the natural voice failed", async () => {
+    respond = (r) =>
+      r.url === "/api/speak"
+        ? speaks().length === 1
+          ? new Response(new TextEncoder().encode(r.body!.text!))
+          : Response.json({ error: "x" }, { status: 502 })
+        : ndjson({ type: "text", text: LONG }, { type: "done" });
+    await askAndListen();
+    await waitFor(() => expect(deviceSpoken.length).toBeGreaterThan(0));
+    expect(`${played.join(" ")} ${deviceSpoken.join(" ")}`).toBe(LONG);
+  });
+  // Last: once told there is no natural voice, the page stops asking for the rest of the visit.
+  it("uses the device voice when the deployment has no natural voice", async () => {
+    respond = (r) => (r.url === "/api/speak" ? Response.json({ error: "x" }, { status: 503 }) : ndjson({ type: "text", text: "Paint it white." }, { type: "done" }));
+    await askAndListen();
+    await waitFor(() => expect(deviceSpoken.join(" ")).toBe("Paint it white."));
+    expect(played).toEqual([]);
+  });
+
 });

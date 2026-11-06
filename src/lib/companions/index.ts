@@ -4,7 +4,7 @@ import { jack } from "./jack";
 import { martini } from "./martini";
 import { tony } from "./tony";
 import { goldie } from "./goldie";
-import type { Companion, CompanionCopy, CompanionId } from "./types";
+import type { Companion, CompanionCopy, CompanionId, VoiceProfile } from "./types";
 
 /** Every advisor Cinq has had, retired ones included, so an old deployment still knows who it was. */
 export const COMPANIONS: Record<CompanionId, Companion> = { gio, tony, martini, alden, goldie, jack };
@@ -30,8 +30,8 @@ export function isCompanionId(value: string | undefined): value is CompanionId {
 }
 
 export function copyOf(companion: Companion): CompanionCopy {
-  const { id, name, tagline, subtitle, role, intro, placeholder, placeholderWithPhotos, status } = companion;
-  return { id, name, tagline, subtitle, role, intro, placeholder, placeholderWithPhotos, status };
+  const { id, name, tagline, subtitle, role, intro, placeholder, placeholderWithPhotos, status, voice } = companion;
+  return { id, name, tagline, subtitle, role, intro, placeholder, placeholderWithPhotos, status, voice };
 }
 
-export type { Companion, CompanionCopy, CompanionId };
+export type { Companion, CompanionCopy, CompanionId, VoiceProfile };

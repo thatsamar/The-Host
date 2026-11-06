@@ -13,6 +13,10 @@ export const gio: Companion = {
   placeholder: "Show Gio a picture.",
   placeholderWithPhotos: "Add a question, or just send",
   status: { thinking: "Assessing… Don't leave this page.", looking: "Assessing… Don't leave this page.", searching: "Assessing… Don't leave this page." },
+  // Gio: measured and considered, a designer weighing each word.
+  voice: { preferred: ["Oliver", "Arthur", "Daniel", "Jamie", "Google UK English Male", "Microsoft Ryan", "Microsoft Thomas"], lang: "en-GB", gender: "male", rate: 0.92, pitch: 1,
+    natural: { voiceId: "6WwXjDDEMyNmFG95zycZ", name: "Eldrin - Crisp British Baritone", stability: 0.6, style: 0.15 },
+  },
   systemPrompt: GIO_SYSTEM_PROMPT,
   webSearchMaxUses: 5,
   iconTile: "#E0A04A",

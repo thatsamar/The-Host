@@ -13,6 +13,10 @@ export const tony: Companion = {
   placeholder: "Where are you headed?",
   placeholderWithPhotos: "Add a question, or just send",
   status: { thinking: "Considering… Don't leave this page.", looking: "Considering… Don't leave this page.", searching: "Considering… Don't leave this page." },
+  // Amar: unhurried and warm, an American storyteller who has been everywhere.
+  voice: { preferred: ["Evan", "Nathan", "Aaron", "Tom", "Alex", "Microsoft Andrew", "Microsoft Guy", "Microsoft Davis"], lang: "en-US", gender: "male", rate: 0.95, pitch: 0.95,
+    natural: { voiceId: "gOupLcAkjEnguROwi4oS", name: "Darian - Warm Grounded Storyteller", stability: 0.5, style: 0.25 },
+  },
   systemPrompt: TONY_SYSTEM_PROMPT,
   // Hours, closures and who's cooking change; travel answers lean on search.
   webSearchMaxUses: 8,
