@@ -52,6 +52,8 @@ export const HELP_TEXT =
 export const OPT_OUT_TEXT = "You’ve opted out of Cinq texts. No further messages will be sent. Reply START to opt back in.";
 export const FALLBACK_TEXT = "Something went wrong on our side. Try again.";
 export const NO_QUESTION_TEXT = "Add a photo or a question.";
+/** Sent the moment a question goes to the advisor, so the wait for the answer isn't silent. Never stored as a turn. */
+export const ACK_TEXT = "Give me a second…";
 
 export function advisorPromptText(): string {
   return "Pick an advisor first — reply with the number or name:\n\n" + advisorList();
@@ -138,6 +140,13 @@ export interface SmsDeps {
   store: SmsStore;
   ask: (advisorId: SmsAdvisorId, turns: SmsTurn[]) => Promise<string>;
   downloadMedia?: (url: string) => Promise<{ data: string; mediaType: string } | null>;
+  /**
+   * Sends ACK_TEXT right away, while the answer is still being written. Only a
+   * question to the selected advisor gets one, at most once. The answer (or
+   * the fallback) is returned only after the ack has gone out, so it always
+   * arrives second; a failed ack never holds up the answer.
+   */
+  acknowledge?: (text: string) => Promise<void> | void;
 }
 
 /**
@@ -211,6 +220,16 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
   if (!session.advisorId) return [advisorPromptText()];
 
   const advisorId = session.advisorId as SmsAdvisorId;
+  const question = inbound.body.trim();
+  // The ack goes out without waiting: the answer is written while it travels.
+  let acked: Promise<void> | null = null;
+  const acknowledge = () => {
+    acked ??= Promise.resolve()
+      .then(() => deps.acknowledge?.(ACK_TEXT))
+      .catch(() => {});
+  };
+  // A worded question is certain to go to the advisor, so ack before downloading photos.
+  if (question) acknowledge();
   const images: SmsImage[] = [];
   if (deps.downloadMedia) {
     for (const item of inbound.media.slice(0, MAX_PHOTOS)) {
@@ -224,8 +243,8 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
       }
     }
   }
-  const question = inbound.body.trim();
   if (!question && images.length === 0) return [NO_QUESTION_TEXT];
+  acknowledge(); // photos alone: now known to be a question
 
   const userTurn: SmsTurn = { role: "user", text: question, images: images.length ? images : undefined };
   const history = session.turnsByAdvisor[advisorId] ?? [];
@@ -237,8 +256,10 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
     if (!answer.trim()) throw new Error("empty_answer");
   } catch {
     // Failed answers leave the session untouched, so a retry starts clean.
+    await acked;
     return [FALLBACK_TEXT];
   }
+  await acked;
 
   const assistantTurn: SmsTurn = { role: "assistant", text: answer };
   session.turnsByAdvisor[advisorId] = [...turns, assistantTurn].slice(-MAX_STORED_TURNS);
