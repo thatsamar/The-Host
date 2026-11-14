@@ -25,6 +25,8 @@ export interface SmsSession {
   lastAck?: number;
   /** Advisors this number has met (introduced or confirmed), so each introduces themselves once. */
   introduced?: string[];
+  /** An advisor's offer to bring in another, waiting on this number's next text (see handoff.ts). */
+  pendingHandoff?: { from: string; to: string };
 }
 
 export interface SmsStore {

@@ -5,6 +5,7 @@ import type { CompanionId } from "@/lib/companions/types";
 import { COMPANIONS } from "@/lib/companions";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { processSms, type SmsInbound } from "@/lib/sms/handler";
+import { textChannelNotes } from "@/lib/sms/handoff";
 import { ROUTE_TIMEOUT_MS, ROUTER_PROMPT } from "@/lib/sms/router";
 import { smsEncoding, smsSegments } from "@/lib/sms/segments";
 import { SupabaseSmsStore } from "@/lib/sms/supabase-store";
@@ -80,12 +81,14 @@ export async function POST(request: Request): Promise<Response> {
         });
         const replies = await processSms(inbound, {
           store,
-          ask: async (advisorId, turns) => {
+          // On text, each advisor also gets the text-only notes: how to suggest
+          // another advisor, and the previous advisor's answer on a handoff.
+          ask: async (advisorId, turns, context) => {
             const companion = COMPANIONS[advisorId as CompanionId];
             const provider = getChatProvider(companion);
             let text = "";
             for await (const event of ask(
-              { provider, companion },
+              { provider, companion, channel: textChannelNotes(advisorId, context?.handoff) },
               turns.map(
                 (turn: SmsTurn) => ({
                   role: turn.role,

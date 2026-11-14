@@ -12,6 +12,7 @@
  */
 
 import { advisorList, isAdvisorId, readNavigation, SMS_ADVISORS, type SmsAdvisorId } from "./navigation";
+import { agreesToHandoff, offerText, readSuggestion, type HandoffContext } from "./handoff";
 import { INTRODUCTIONS, isGreeting, routeQuestion } from "./router";
 import { fitsInOneText, plainPunctuation } from "./segments";
 import { newSmsSession, type SmsImage, type SmsSession, type SmsStore, type SmsTurn } from "./store";
@@ -215,7 +216,8 @@ export interface SmsInbound {
 
 export interface SmsDeps {
   store: SmsStore;
-  ask: (advisorId: SmsAdvisorId, turns: SmsTurn[]) => Promise<string>;
+  /** Ask an advisor. `context.handoff` carries the previous advisor's answer when a question was handed over. */
+  ask: (advisorId: SmsAdvisorId, turns: SmsTurn[], context?: { handoff?: HandoffContext }) => Promise<string>;
   downloadMedia?: (url: string) => Promise<{ data: string; mediaType: string } | null>;
   /**
    * Sends an ack line (ACK_TEXTS, rotating per number) right away, while the answer is still being written. Only a
@@ -266,12 +268,99 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
     return [];
   }
 
+  const current = session;
+  // Set for a brand-new number's first question: the welcome goes out first.
+  let firstContact = false;
+  // The ack goes out without waiting: the answer is written while it travels.
+  // On first contact the welcome goes out in its place.
+  let acked: Promise<void> | null = null;
+  let welcomeSent = false;
+  const acknowledge = () => {
+    if (acked) return;
+    let line: string;
+    if (firstContact) {
+      line = WELCOME_TEXT;
+      welcomeSent = !!deps.acknowledge;
+    } else {
+      const next = nextAck(current.lastAck);
+      // Remembered with the session, even when the answer fails, so the next question's line differs.
+      current.lastAck = next;
+      line = ACK_TEXTS[next];
+    }
+    acked = Promise.resolve()
+      .then(() => deps.acknowledge?.(line))
+      .catch(() => {});
+  };
+
+  /**
+   * Ask an advisor and keep the exchange: the reply's texts, or null when the
+   * answer failed (the turns are then left as they were). An advisor this
+   * number hasn't met opens with a one-line introduction, unless `introduced`
+   * (a handoff opens in the advisor's own words). A suggestion marker is
+   * removed here and becomes the pending offer.
+   */
+  const answerWith = async (advisorId: SmsAdvisorId, userTurn: SmsTurn, context?: { handoff?: HandoffContext }) => {
+    const intro = context?.handoff || hasMet(current, advisorId) ? null : INTRODUCTIONS[advisorId];
+    const history = current.turnsByAdvisor[advisorId] ?? [];
+    const turns = [...history, userTurn].slice(-MAX_STORED_TURNS);
+    let answer: string;
+    let suggest: SmsAdvisorId | null;
+    try {
+      ({ text: answer, suggest } = readSuggestion(await deps.ask(advisorId, turns, context), advisorId));
+      if (!answer.trim()) throw new Error("empty_answer");
+    } catch {
+      await acked;
+      return null;
+    }
+    await acked;
+    current.turnsByAdvisor[advisorId] = [...turns, { role: "assistant" as const, text: answer }].slice(-MAX_STORED_TURNS);
+    introduce(current, advisorId);
+    // One offer at a time: a new one replaces any other.
+    if (suggest) current.pendingHandoff = { from: advisorId, to: suggest };
+    await store.saveSession(current);
+    // Texts are plain: the reply loses its Markdown here; history above keeps it.
+    // The introduction and the offer line are part of the texts only, never of the stored answer.
+    const body = [intro, answer, suggest ? offerText(suggest) : null].filter(Boolean).join("\n\n");
+    return answerTexts(body);
+  };
+
+  // An offer to bring in another advisor lasts for one text: a yes hands the
+  // question over; anything else carries on as normal and the offer lapses.
+  const pending = session.pendingHandoff;
+  if (pending && !isNew) {
+    delete session.pendingHandoff;
+    const from = pending.from;
+    const to = pending.to;
+    const fromTurns = session.turnsByAdvisor[from] ?? [];
+    const offered = fromTurns.at(-1);
+    const asked = fromTurns.at(-2);
+    if (
+      isAdvisorId(from) &&
+      isAdvisorId(to) &&
+      session.advisorId === from &&
+      offered?.role === "assistant" &&
+      asked?.role === "user" &&
+      agreesToHandoff(inbound.body, to)
+    ) {
+      // The handoff: no pick confirmation, the ack as usual, then the new advisor answers the original question.
+      acknowledge();
+      session.advisorId = to;
+      const replies = await answerWith(to, { role: "user", text: asked.text, images: asked.images }, { handoff: { from, answer: offered.text } });
+      if (replies) return replies;
+      // Failed: stay with the first advisor, and keep the offer so YES can try again.
+      session.advisorId = from;
+      session.pendingHandoff = pending;
+      await store.saveSession(session).catch(() => {});
+      return [FALLBACK_TEXT];
+    }
+    await store.saveSession(session).catch(() => {});
+  }
+
   if (HELP_WORDS.has(text)) return [HELP_TEXT];
 
   // First message: the number opts in by texting us, and its first reply is
   // always the welcome, so the opt-out, frequency and rates terms arrive
   // before anything else. A pick is confirmed; a question is answered after it.
-  let firstContact = false;
   if (isNew) {
     session.optedIn = true;
     const nav = readNavigation(inbound.body);
@@ -316,28 +405,7 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
     }
   }
 
-  const current = session;
   const question = inbound.body.trim();
-  // The ack goes out without waiting: the answer is written while it travels.
-  // On first contact the welcome goes out in its place.
-  let acked: Promise<void> | null = null;
-  let welcomeSent = false;
-  const acknowledge = () => {
-    if (acked) return;
-    let line: string;
-    if (firstContact) {
-      line = WELCOME_TEXT;
-      welcomeSent = !!deps.acknowledge;
-    } else {
-      const next = nextAck(current.lastAck);
-      // Remembered with the session, even when the answer fails, so the next question's line differs.
-      current.lastAck = next;
-      line = ACK_TEXTS[next];
-    }
-    acked = Promise.resolve()
-      .then(() => deps.acknowledge?.(line))
-      .catch(() => {});
-  };
   // A worded question is certain to go to an advisor, so ack before downloading photos.
   if (question) acknowledge();
   const images: SmsImage[] = [];
@@ -365,34 +433,14 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
     advisorId = await routeQuestion(question, images.length, deps.route);
     session.advisorId = advisorId;
   }
-  // An advisor this number hasn't met opens with a one-line introduction.
-  const intro = hasMet(session, advisorId) ? null : INTRODUCTIONS[advisorId];
-
   const userTurn: SmsTurn = { role: "user", text: question, images: images.length ? images : undefined };
-  const history = session.turnsByAdvisor[advisorId] ?? [];
-  const turns = [...history, userTurn].slice(-MAX_STORED_TURNS);
-
   const lead = firstContact && !welcomeSent ? [WELCOME_TEXT] : [];
-  let answer: string;
-  try {
-    answer = await deps.ask(advisorId, turns);
-    if (!answer.trim()) throw new Error("empty_answer");
-  } catch {
-    // Failed answers leave the turns untouched, so a retry starts clean.
-    await acked;
-    // Only the ack line used, and the routed advisor, are kept. A failed save still sends the fallback.
-    await store.saveSession(session).catch(() => {});
-    return [...lead, FALLBACK_TEXT];
-  }
-  await acked;
-
-  const assistantTurn: SmsTurn = { role: "assistant", text: answer };
-  session.turnsByAdvisor[advisorId] = [...turns, assistantTurn].slice(-MAX_STORED_TURNS);
-  introduce(session, advisorId);
-  await store.saveSession(session);
-  // Texts are plain: the reply loses its Markdown here; history above keeps it.
-  // The introduction is part of the texts only, never of the stored answer.
-  return [...lead, ...answerTexts(intro ? `${intro}\n\n${answer}` : answer)];
+  const replies = await answerWith(advisorId, userTurn);
+  if (replies) return [...lead, ...replies];
+  // Failed answers leave the turns untouched, so a retry starts clean. Only
+  // the ack line used, and the routed advisor, are kept. A failed save still sends the fallback.
+  await store.saveSession(session).catch(() => {});
+  return [...lead, FALLBACK_TEXT];
 }
 
 /** Whether this number has met an advisor: introduced, confirmed, or already in conversation. */

@@ -6,6 +6,7 @@ const state = vi.hoisted(() => ({
   pending: [] as Promise<unknown>[],
   releaseAnswer: null as null | (() => void),
   sent: [] as string[],
+  channels: [] as ({ label: string; body: string } | undefined)[],
 }));
 
 vi.mock("next/server", () => ({ after: (fn: () => Promise<unknown>) => state.pending.push(fn()) }));
@@ -27,7 +28,8 @@ vi.mock("@/lib/sms/twilio", () => ({
 }));
 vi.mock("@/lib/ai", () => ({ getChatProvider: () => ({}), getRouterProvider: () => ({}) }));
 vi.mock("@/lib/ask/ask", () => ({
-  ask: async function* () {
+  ask: async function* (deps: { channel?: { label: string; body: string } }) {
+    state.channels.push(deps.channel);
     await new Promise<void>((resolve) => (state.releaseAnswer = resolve));
     yield { type: "text", text: "Start with a smaller sofa." };
     yield { type: "done" };
@@ -95,5 +97,15 @@ describe("Twilio webhook: Give me a second…", () => {
     }
     expect(answerTexts("Start with a smaller sofa.")).toEqual(["Start with a smaller sofa."]);
     logs.mockRestore();
+  });
+
+  it("gives the advisor the text-only notes, so it can offer to bring in another advisor", async () => {
+    await text("Which white for the hall?");
+    await vi.waitFor(() => expect(state.releaseAnswer).not.toBeNull());
+    state.releaseAnswer!();
+    await settle();
+    const notes = state.channels.at(-1)!;
+    expect(notes.label).toBe("channel_notes");
+    expect(notes.body).toContain("[[suggest:ID]]");
   });
 });
