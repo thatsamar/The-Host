@@ -63,7 +63,7 @@ describe("START, STOP, HELP", () => {
     const replies = await processSms(inbound("START"), { store, ask: ask.ask });
     expect(replies).toEqual([WELCOME_TEXT]);
     // The welcome names the five roles; the advisors' names are in the SWITCH list.
-    expect(WELCOME_TEXT).toContain("5 advisors: travel, style, design, drinks and sounding board.");
+    expect(WELCOME_TEXT).toContain("5 advisors:\ntravel\nstyle\ndesign\ndrinks\nsounding board\n");
     expect(WELCOME_TEXT).toContain("SWITCH for their names.");
     expect(WELCOME_TEXT).toContain("Message frequency varies with usage.");
     expect(WELCOME_TEXT).toContain("Message & data rates may apply.");
