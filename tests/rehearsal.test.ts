@@ -13,6 +13,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { SMS_TEXT_CHARS } from "../src/lib/sms/segments";
 import { describe, expect, it } from "vitest";
 import {
   FALLBACK_TEXT,
@@ -199,11 +200,11 @@ describe("SMS rehearsal: full journey with a restart", () => {
       { role: "user", text: "And hotels near there?", images: undefined },
     ]);
 
-    // A long answer still goes out as one text of one segment.
+    // A long answer still goes out as one text within the cap.
     ask.setAnswer("z".repeat(1600));
     const one = await processSms(inbound("Tell me everything"), deps());
     expect(one).toHaveLength(1);
-    expect(one[0].length).toBeLessThanOrEqual(160);
+    expect(one[0].length).toBeLessThanOrEqual(SMS_TEXT_CHARS);
 
     // STOP blocks further advisor replies; HELP still answers.
     expect(await processSms(inbound("STOP"), deps())).toEqual([OPT_OUT_TEXT]);
