@@ -11,19 +11,11 @@
  * fabricated answer.
  */
 
+import { advisorList, readNavigation, SMS_ADVISORS, type SmsAdvisorId } from "./navigation";
 import { fitsInOneText, plainPunctuation } from "./segments";
 import { newSmsSession, type SmsImage, type SmsSession, type SmsStore, type SmsTurn } from "./store";
 
-/** The five advisors, in the order the hub lists them. */
-export const SMS_ADVISORS = [
-  { id: "tony", name: "Amar", category: "travel" },
-  { id: "martini", name: "Martine", category: "style" },
-  { id: "gio", name: "Gio", category: "design" },
-  { id: "alden", name: "Alden", category: "wine, cocktails & spirits" },
-  { id: "goldie", name: "Goldie", category: "sounding board" },
-] as const;
-
-export type SmsAdvisorId = (typeof SMS_ADVISORS)[number]["id"];
+export { SMS_ADVISORS, type SmsAdvisorId } from "./navigation";
 
 const STOP_WORDS = new Set(["stop", "stopall", "unsubscribe", "cancel", "end", "quit"]);
 const START_WORDS = new Set(["start", "unstop"]);
@@ -38,17 +30,18 @@ export const MAX_REPLY_CHARS = 1500;
 
 const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
-function advisorList(): string {
-  return SMS_ADVISORS.map((a, i) => `${i + 1} ${a.name} — ${a.category}`).join("\n");
-}
-
 export const WELCOME_TEXT =
   "Welcome to Cinq by text. Pick an advisor by replying with the number or name:\n\n" +
   advisorList() +
-  "\n\nThen send your question. You can switch advisors anytime by replying with another number or name. Reply STOP to opt out, HELP for help. Message frequency varies with your usage. Message and data rates may apply.";
+  "\n\nThen send your question. You can switch advisors anytime — reply SWITCH for the list, or just say 'talk to Martine'. Reply STOP to opt out, HELP for help. Message frequency varies with your usage. Message and data rates may apply.";
 
 export const HELP_TEXT =
-  "Cinq by text: reply 1-5 or an advisor name to pick or switch advisors, then send your question or a photo. Reply START to join, STOP to opt out. Message and data rates may apply. Contact: amar@cinqcollective.com";
+  "Cinq by text. The five advisors:\n\n" +
+  advisorList() +
+  "\n\nReply a number or name to pick or switch, or say 'talk to Martine', then send your question or a photo. Reply START to join, STOP to opt out. Message and data rates may apply. Contact: amar@cinqcollective.com";
+
+/** The reply to SWITCH, MENU or "switch" alone: the five advisors and how to pick one. */
+export const ADVISOR_LIST_TEXT = "The five advisors. Reply with a number or name, or say 'talk to Martine':\n\n" + advisorList();
 
 export const OPT_OUT_TEXT = "You’ve opted out of Cinq texts. No further messages will be sent. Reply START to opt back in.";
 export const FALLBACK_TEXT = "Something went wrong on our side. Try again.";
@@ -74,23 +67,10 @@ function normalize(body: string): string {
   return body.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-/** Match "3", "gio", "Martine", "switch to alden", and similar picks. */
+/** The advisor a text switches to, if it is a switch (see navigation.ts); otherwise null. */
 export function pickAdvisor(text: string): SmsAdvisorId | null {
-  const cleaned = text.replace(/^(switch to|talk to|ask)\s+/, "");
-  const byNumber: Record<string, SmsAdvisorId> = {
-    "1": "tony",
-    "2": "martini",
-    "3": "gio",
-    "4": "alden",
-    "5": "goldie",
-  };
-  if (byNumber[cleaned]) return byNumber[cleaned];
-  for (const advisor of SMS_ADVISORS) {
-    if (cleaned === advisor.name.toLowerCase() || cleaned === advisor.category.toLowerCase()) {
-      return advisor.id;
-    }
-  }
-  return null;
+  const nav = readNavigation(text);
+  return nav?.kind === "switch" ? nav.advisorId : null;
 }
 
 /**
@@ -291,7 +271,7 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
   // always the welcome, so the opt-out, frequency and rates terms arrive
   // before anything else. Choosing an advisor straight away also confirms it.
   if (isNew) {
-    const firstPick = pickAdvisor(text);
+    const firstPick = pickAdvisor(inbound.body);
     session.optedIn = true;
     session.advisorId = firstPick;
     await store.saveSession(session);
@@ -312,11 +292,14 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
     return [OPT_OUT_TEXT];
   }
 
-  const picked = pickAdvisor(text);
-  if (picked) {
-    session.advisorId = picked;
+  // Navigation: the advisor list, or a switch. Never stored as a turn, and
+  // anything bundled into a switch ("talk to Gio about my sofa") isn't answered.
+  const nav = readNavigation(inbound.body);
+  if (nav?.kind === "list") return [ADVISOR_LIST_TEXT];
+  if (nav?.kind === "switch") {
+    session.advisorId = nav.advisorId;
     await store.saveSession(session);
-    return [advisorConfirmText(picked)];
+    return [advisorConfirmText(nav.advisorId)];
   }
 
   if (!session.advisorId) return [advisorPromptText()];
