@@ -37,13 +37,16 @@ const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", 
 // The welcome, list and HELP texts are plain punctuation like every other text, so phones show hyphens.
 export const WELCOME_TEXT = plainPunctuation(
   [
-    "Welcome to Cinq by text.",
-    "Five advisors:",
-    advisorList(),
-    "What's on your mind? Ask anything and the right advisor will answer.",
-    "Switch anytime - reply SWITCH for the list, or say 'talk to Martine'.",
-    "Reply STOP to opt out, HELP for help.",
-    "Message frequency varies with your usage. Message and data rates may apply.",
+    // Roles only here; the advisors' names are in the SWITCH list.
+    "Welcome to Cinq.",
+    "5 advisors: travel, style, design, drinks and sounding board.",
+    "Ask anything and the right advisor will answer.",
+    "SWITCH for their names.",
+    "Say 'Martine' to talk style or 'Gio' to talk design, etc.",
+    "STOP to opt out",
+    "HELP for help.",
+    "Message frequency varies with usage.",
+    "Message & data rates may apply.",
   ].join("\n"),
 );
 

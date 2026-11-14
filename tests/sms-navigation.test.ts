@@ -116,7 +116,7 @@ describe("navigation in the conversation", () => {
   });
 
   it("keeps the welcome's switching line, and every system text within 10 segments", () => {
-    expect(WELCOME_TEXT).toContain("\nSwitch anytime - reply SWITCH for the list, or say 'talk to Martine'.\n");
+    expect(WELCOME_TEXT).toContain("\nSWITCH for their names.\nSay 'Martine' to talk style or 'Gio' to talk design, etc.\n");
     for (const t of [WELCOME_TEXT, HELP_TEXT, ADVISOR_LIST_TEXT]) expect(smsSegments(t)).toBeLessThanOrEqual(10);
   });
 });
