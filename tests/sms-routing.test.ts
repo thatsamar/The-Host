@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ROUTE_TIMEOUT_MS, ROUTER_PROMPT, INTRODUCTIONS, readRoute, routeQuestion, routeShortcut } from "../src/lib/sms/router";
-import { ACK_TEXTS, WELCOME_TEXT, processSms, speakerLabel, type SmsInbound } from "../src/lib/sms/handler";
+import { ACK_TEXTS, ADVISOR_LIST_TEXT, HELP_TEXT, WELCOME_TEXT, processSms, speakerLabel, type SmsInbound } from "../src/lib/sms/handler";
 import { MemorySmsStore, type SmsTurn } from "../src/lib/sms/store";
 import { plainPunctuation, smsEncoding } from "../src/lib/sms/segments";
 
@@ -183,9 +183,32 @@ describe("routing and introductions in the conversation", () => {
     expect(replies[1].startsWith("Amar: I'm Amar")).toBe(true);
   });
 
-  it("reads exactly as written: the new welcome", () => {
+  it("reads exactly as written: the welcome, one line each, with plain hyphens", () => {
     expect(WELCOME_TEXT).toBe(
-      "Welcome to Cinq by text. Five advisors: 1 Amar — travel, 2 Martine — style, 3 Gio — design, 4 Alden — wine, cocktails & spirits, 5 Goldie — sounding board. What's on your mind? Ask anything and the right advisor will answer. Switch anytime — reply SWITCH for the list, or say 'talk to Martine'. Reply STOP to opt out, HELP for help. Message frequency varies with your usage. Message and data rates may apply.",
+      [
+        "Welcome to Cinq by text.",
+        "Five advisors:",
+        "1 Amar - travel",
+        "2 Martine - style",
+        "3 Gio - design",
+        "4 Alden - wine, cocktails & spirits",
+        "5 Goldie - sounding board",
+        "What's on your mind? Ask anything and the right advisor will answer.",
+        "Switch anytime - reply SWITCH for the list, or say 'talk to Martine'.",
+        "Reply STOP to opt out, HELP for help.",
+        "Message frequency varies with your usage. Message and data rates may apply.",
+      ].join("\n"),
     );
+  });
+
+  it("lists the advisors one per line, with plain hyphens, for SWITCH, MENU and HELP", () => {
+    const list = "1 Amar - travel\n2 Martine - style\n3 Gio - design\n4 Alden - wine, cocktails & spirits\n5 Goldie - sounding board";
+    expect(ADVISOR_LIST_TEXT).toBe(`The five advisors. Reply with a number or name, or say 'talk to Martine':\n\n${list}`);
+    expect(HELP_TEXT.startsWith(`Cinq by text. The five advisors:\n\n${list}\n\nReply a number or name`)).toBe(true);
+    // Plain text throughout: nothing typographic left for the phone to show.
+    for (const t of [WELCOME_TEXT, ADVISOR_LIST_TEXT, HELP_TEXT]) {
+      expect(t).not.toMatch(/[—–’“”…]/);
+      expect(smsEncoding(t)).toBe("GSM-7");
+    }
   });
 });

@@ -74,6 +74,8 @@ export function handoffNote(handoff: HandoffContext): SmsTurn {
   return {
     role: "user",
     text: `${HANDOFF_NOTE_PREFIX} ${from}${area ? ` (${area})` : ""} brought you in for the question that follows, and the person agreed. ${from}'s answer to it was:\n\n${handoff.answer}`,
+    note: "handoff",
+    from: handoff.from,
   };
 }
 
@@ -109,14 +111,18 @@ function lineup(): string {
  * suggest another advisor, and, when this question was handed over, what
  * the previous advisor said.
  */
-export function textChannelNotes(self: SmsAdvisorId, handoff?: HandoffContext): ContextBlock {
+export function textChannelNotes(self: SmsAdvisorId, handoff?: HandoffContext, met?: string[]): ContextBlock {
   const lines = [
     "You are answering by text message on Cinq by text. Here Cinq works as one collective: when a question is clearly better suited to another advisor, Cinq can bring that advisor in, with the person's agreement, and hand them the person's question together with your answer. On text this replaces the earlier note that you cannot transfer the conversation or share anything with the other advisors.",
     "If the question is clearly better suited to another advisor, give whatever genuinely useful help is yours to give (briefly, if the question is mostly theirs), then offer in your own words, in one sentence, to bring that advisor in, naming them. Then end the reply with a last line containing only the marker [[suggest:ID]] with their id. Cinq removes the marker and asks the person; never mention or explain the marker, and never say you have already brought them in.",
     `Suggest only when another advisor is clearly the better fit; when in doubt, answer it yourself and add no marker. At most one suggestion, never yourself, and never as a routine closing line. The ids: ${lineup()}.`,
     `A message in the conversation that begins ${HANDOFF_NOTE_PREFIX} is from Cinq, not the person: it records that another advisor brought you in, and what they said. Treat it as part of this conversation's history: you know who brought you in and why.`,
-    "Cinq shows your name before each of your texts and, the first time you answer this person, a one-line introduction; never write your own name as a label, and don't introduce yourself again.",
+    "Cinq shows your name before each of your texts and, when you first answer this person or are brought in, a one-line introduction; never write your own name as a label, and don't introduce yourself again.",
+    "Only the last day of this conversation is shown to you. Don't assume details from earlier days; if the person refers to something you can't see, ask briefly or work from what they tell you now.",
   ];
+  if (met?.length) {
+    lines.push(`This person has met these Cinq advisors before: ${met.map((id) => (isAdvisorId(id) ? nameOf(id) : null)).filter(Boolean).join(", ")}.`);
+  }
   if (handoff) {
     const from = nameOf(handoff.from);
     lines.push(

@@ -302,7 +302,7 @@ describe("\"Give me a second…\" while an answer is written", () => {
     expect(replies).toEqual(["Gio: Gio's answer."]);
 
     const session = await store.getSession(FROM);
-    expect(session?.turnsByAdvisor.gio).toEqual([
+    expect(session?.turnsByAdvisor.gio).toMatchObject([
       { role: "user", text: "What sofa fits a small room?" },
       { role: "assistant", text: "Gio's answer." },
     ]);
@@ -445,7 +445,7 @@ describe("answers as plain text messages", () => {
     expect(await processSms(inbound("Hall colour?"), { store, ask: ask.ask })).toEqual([
       "Gio: The call\n\nPaint it white. See this (https://a.example).\n\n• One coat\n• Two coats",
     ]);
-    expect((await store.getSession(FROM))?.turnsByAdvisor.gio?.at(-1)).toEqual({ role: "assistant", text: markdown });
+    expect((await store.getSession(FROM))?.turnsByAdvisor.gio?.at(-1)).toMatchObject({ role: "assistant", text: markdown });
   });
 });
 

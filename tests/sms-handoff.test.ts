@@ -98,6 +98,8 @@ describe("handoffs in the conversation", () => {
   const SUGGESTING = "A dry Vermentino suits the dinner.\n\nFor the jacket itself, Martine is your person. Want me to bring her in?\n[[suggest:martini]]";
   const QUESTION = "Does this linen jacket work for a dinner by the sea?";
   const SUGGESTED = SUGGESTING.replace("\n[[suggest:martini]]", "");
+  // The note as the model receives it: its words, without Cinq's bookkeeping fields.
+  const sentNote = { role: "user", text: handoffNote({ from: "alden", answer: SUGGESTED }).text };
 
   beforeEach(async () => {
     store = new MemorySmsStore();
@@ -117,7 +119,7 @@ describe("handoffs in the conversation", () => {
     const session = await store.getSession(FROM);
     expect(session?.pendingHandoff).toEqual({ from: "alden", to: "martini" });
     // History keeps the answer without the marker or the offer line.
-    expect(session?.turnsByAdvisor.alden?.at(-1)).toEqual({ role: "assistant", text: SUGGESTING.replace("\n[[suggest:martini]]", "") });
+    expect(session?.turnsByAdvisor.alden?.at(-1)).toMatchObject({ role: "assistant", text: SUGGESTING.replace("\n[[suggest:martini]]", "") });
     events = [];
     return replies;
   }
@@ -133,14 +135,15 @@ describe("handoffs in the conversation", () => {
     const handoff = calls.at(-1)!;
     expect(handoff.advisorId).toBe("martini");
     // The handoff note, with Alden's answer, then the question verbatim.
-    expect(handoff.turns).toEqual([handoffNote({ from: "alden", answer: SUGGESTED }), { role: "user", text: QUESTION }]);
+    expect(handoff.turns).toEqual([sentNote, { role: "user", text: QUESTION }]);
     expect(handoff.turns[0].text).toContain(SUGGESTED);
-    expect(handoff.context).toEqual({ handoff: { from: "alden", answer: SUGGESTED } });
+    // The advisors the person has met (other than Martine) go along, for the text-only notes.
+    expect(handoff.context).toEqual({ handoff: { from: "alden", answer: SUGGESTED }, met: ["alden"] });
     const session = await store.getSession(FROM);
     expect(session?.advisorId).toBe("martini");
     expect(session?.pendingHandoff).toBeUndefined();
     // Martine's history keeps the handoff, the question and her answer; no label or introduction is stored.
-    expect(session?.turnsByAdvisor.martini).toEqual([
+    expect(session?.turnsByAdvisor.martini).toMatchObject([
       handoffNote({ from: "alden", answer: SUGGESTED }),
       { role: "user", text: QUESTION },
       { role: "assistant", text: "Yes, the linen jacket works; roll the sleeves once." },
@@ -159,7 +162,7 @@ describe("handoffs in the conversation", () => {
     expect(replies).toEqual(["Martine: Alden brought me in for the jacket; for shoes, loafers."]);
     const later = calls.at(-1)!;
     expect(later.advisorId).toBe("martini");
-    expect(later.context).toBeUndefined();
+    expect(later.context).toEqual({ met: ["alden"] });
     expect(later.turns.map((t) => t.role)).toEqual(["user", "user", "assistant", "user"]);
     expect(later.turns[0].text.startsWith(HANDOFF_NOTE_PREFIX)).toBe(true);
     expect(later.turns[0].text).toContain("Alden");
@@ -187,7 +190,7 @@ describe("handoffs in the conversation", () => {
     await send(QUESTION, { media: [{ url: "https://media/1", contentType: "image/jpeg" }] });
     await send("yes");
     expect(calls.at(-1)!.turns).toEqual([
-      handoffNote({ from: "alden", answer: SUGGESTED }),
+      sentNote,
       { role: "user", text: QUESTION, images: [{ data: "cGhvdG8=", mediaType: "image/jpeg" }] },
     ]);
   });
@@ -266,6 +269,19 @@ describe("handoffs in the conversation", () => {
     await send("talk to Alden");
     await send("talk to Martine");
     expect(await send("Which leather?")).toEqual(["Martine: Suede."]);
+  });
+
+  it("introduces the handed-over advisor on every handoff, even one already met", async () => {
+    // Martine was met earlier: picked, answered, then the person went back to Alden.
+    await send("talk to Martine");
+    await send("Navy or grey?");
+    await send("talk to Alden");
+    answers.alden = [SUGGESTING];
+    await offer();
+    answers.martini = ["The linen works."];
+    expect(await send("yes")).toEqual(["Martine: I'm Martine, style at Cinq.\n\nThe linen works."]);
+    // Her next answer, not a handoff: the label only.
+    expect(await send("And the shoes?")).toEqual(["Martine: martini answers."]);
   });
 
   it("works for a routed first question too, and the welcome no longer says to pick first", async () => {
