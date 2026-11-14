@@ -18,7 +18,12 @@ vi.mock("@/lib/sms/supabase-store", async () => {
 vi.mock("@/lib/sms/twilio", () => ({
   validTwilioSignature: () => true,
   downloadTwilioMedia: async () => null,
-  createTwilioSender: () => ({ send: async (_to: string, body: string) => void state.sent.push(body) }),
+  createTwilioSender: () => ({
+    send: async (_to: string, body: string) => {
+      state.sent.push(body);
+      return { sid: `SM${state.sent.length}`, segments: 1 };
+    },
+  }),
 }));
 vi.mock("@/lib/ai", () => ({ getChatProvider: () => ({}) }));
 vi.mock("@/lib/ask/ask", () => ({
@@ -30,7 +35,7 @@ vi.mock("@/lib/ask/ask", () => ({
 }));
 
 const { POST } = await import("@/app/api/sms/route");
-const { ACK_TEXTS } = await import("@/lib/sms/handler");
+const { ACK_TEXTS, answerTexts } = await import("@/lib/sms/handler");
 const ACK_TEXT = ACK_TEXTS[0];
 
 let sid = 0;
@@ -69,5 +74,26 @@ describe("Twilio webhook: Give me a second…", () => {
     await settle();
     expect(state.sent).toHaveLength(2);
     expect(state.sent).not.toContain(ACK_TEXT);
+  });
+
+  it("logs each text's length, encoding, segments and Twilio SID, never the words or the number", async () => {
+    const logs = vi.spyOn(console, "info").mockImplementation(() => {});
+    await text("Which white for the hall?");
+    await vi.waitFor(() => expect(state.releaseAnswer).not.toBeNull());
+    state.releaseAnswer!();
+    await settle();
+    const lines = logs.mock.calls.map((c) => c.join(" "));
+    const replies = lines.find((l) => l.startsWith("SMS replies sent"))!;
+    expect(replies).toBeTruthy();
+    const logged = JSON.parse(replies.slice("SMS replies sent ".length));
+    expect(logged).toMatchObject({ texts: 1, chars: 26, sent: 1 });
+    expect(logged.parts[0]).toMatchObject({ chars: 26, encoding: "GSM-7", segments: 1, twilioSegments: 1 });
+    expect(logged.parts[0].sid).toMatch(/^SM\d+$/);
+    expect(lines.some((l) => l.startsWith("SMS ack sent"))).toBe(true);
+    for (const l of lines) {
+      expect(l).not.toMatch(/sofa|smaller|hall|5551234567/);
+    }
+    expect(answerTexts("Start with a smaller sofa.")).toEqual(["Start with a smaller sofa."]);
+    logs.mockRestore();
   });
 });

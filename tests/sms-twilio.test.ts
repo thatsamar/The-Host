@@ -80,6 +80,12 @@ describe("twilio sender", () => {
     expect(body.get("Body")).toBe("Hi there");
   });
 
+  it("returns Twilio's SID and segment count for the log", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ sid: "SM0123", num_segments: "3", body: "Hi" }, { status: 201 })));
+    const sender = createTwilioSender({ accountSid: "AC123", authToken: "tok", from: "+15557654321" });
+    expect(await sender.send("+15551234567", "Hi")).toEqual({ sid: "SM0123", segments: 3 });
+  });
+
   it("throws on a failed send", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 400 })));
     const sender = createTwilioSender({ accountSid: "AC123", authToken: "tok", from: "+15557654321" });

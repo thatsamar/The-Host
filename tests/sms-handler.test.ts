@@ -10,9 +10,11 @@ import {
   processSms,
   splitReply,
   toSmsText,
+  answerTexts,
   type SmsInbound,
 } from "../src/lib/sms/handler";
 import { MemorySmsStore } from "../src/lib/sms/store";
+import { MAX_SEGMENTS, plainPunctuation, smsEncoding, smsSegments } from "../src/lib/sms/segments";
 
 const ACK_TEXT = ACK_TEXTS[0];
 import type { SmsTurn } from "../src/lib/sms/store";
@@ -553,5 +555,67 @@ describe("varied acks", () => {
     expect(nextAck(3)).toBe(0);
     expect(nextAck(-1)).toBe(0);
     expect(nextAck(2.5)).toBe(0);
+  });
+});
+
+describe("texts short enough to arrive whole (the missing-head fix)", () => {
+
+
+  // How the advisors write: curly apostrophes and quotes, em dashes, ellipses.
+  const typographic = Array.from(
+    { length: 40 },
+    (_, i) => `Paragraph ${i}: it’s the “Milanese” way — saffron and butter… and it’s crisp enough to balance the risotto.`,
+  ).join("\n\n");
+
+  it("counts segments the way Twilio sends them (toll-free)", () => {
+    expect(smsEncoding("Plain text, 'straight' quotes.")).toBe("GSM-7");
+    expect(smsEncoding("It’s curly")).toBe("UCS-2");
+    expect(smsEncoding("• bullet")).toBe("UCS-2");
+    expect(smsSegments("a".repeat(160))).toBe(1);
+    expect(smsSegments("a".repeat(161))).toBe(2);
+    expect(smsSegments("a".repeat(1520))).toBe(10);
+    expect(smsSegments("{}".repeat(80))).toBe(3); // extension characters take two units
+    expect(smsSegments("’".repeat(70))).toBe(1);
+    expect(smsSegments("’".repeat(71))).toBe(2);
+    expect(smsSegments("’".repeat(660))).toBe(10);
+    // The old 1,500-character limit sent typographic answers as ~23 Unicode segments.
+    expect(smsSegments(typographic.slice(0, 1500))).toBeGreaterThan(20);
+  });
+
+  it("turns typographic punctuation into plain punctuation and leaves words alone", () => {
+    expect(plainPunctuation("It’s “crisp” — really… café, Ça, 1–2")).toBe("It's \"crisp\" - really... café, Ça, 1-2");
+    expect(smsEncoding(plainPunctuation("It’s “crisp” — really…"))).toBe("GSM-7");
+  });
+
+  it("sends a typographic answer as plain GSM-7 texts of at most 10 segments, losing no words", () => {
+    const texts = answerTexts(typographic);
+    expect(texts.length).toBeGreaterThan(1);
+    for (const t of texts) {
+      expect(smsEncoding(t)).toBe("GSM-7");
+      expect(smsSegments(t)).toBeLessThanOrEqual(MAX_SEGMENTS);
+      expect(t).toMatch(/^Paragraph \d+:/);
+      expect(t).toMatch(/risotto\.$/);
+    }
+    expect(texts.join("\n\n")).toBe(plainPunctuation(typographic));
+  });
+
+  it("keeps an answer that must stay Unicode (bullets, emoji) within 10 segments per text, split between words", () => {
+    const list = Array.from({ length: 80 }, (_, i) => `- Item ${i} is a good choice for the hall 🌿`).join("\n");
+    const texts = answerTexts(list);
+    expect(texts.length).toBeGreaterThan(2);
+    for (const t of texts) {
+      expect(smsEncoding(t)).toBe("UCS-2");
+      expect(smsSegments(t)).toBeLessThanOrEqual(MAX_SEGMENTS);
+      expect(t.startsWith("• Item")).toBe(true);
+      expect(t.endsWith("🌿")).toBe(true);
+    }
+    expect(texts.join("\n").replace(/\s+/g, " ")).toBe(toSmsText(list).replace(/\s+/g, " "));
+  });
+
+  it("still uses the full 1,500 characters for a plain answer", () => {
+    const plain = Array.from({ length: 400 }, (_, i) => `word${i}`).join(" ");
+    const texts = answerTexts(plain);
+    expect(texts[0].length).toBeGreaterThan(1400);
+    for (const t of texts) expect(t.length).toBeLessThanOrEqual(1500);
   });
 });

@@ -33,8 +33,15 @@ export function validTwilioSignature(
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+/** What Twilio says about a message it accepted, for matching against its delivery log. Never the body. */
+export interface SentMessage {
+  sid?: string;
+  /** Segments Twilio will send it as. */
+  segments?: number;
+}
+
 export interface TwilioSender {
-  send(to: string, body: string): Promise<void>;
+  send(to: string, body: string): Promise<SentMessage>;
 }
 
 function basicAuth(accountSid: string, authToken: string): string {
@@ -47,7 +54,7 @@ export function createTwilioSender(opts: {
   from: string;
 }): TwilioSender {
   return {
-    async send(to: string, body: string): Promise<void> {
+    async send(to: string, body: string): Promise<SentMessage> {
       const url = `https://api.twilio.com/2010-04-01/Accounts/${opts.accountSid}/Messages.json`;
       const res = await fetch(url, {
         method: "POST",
@@ -58,6 +65,12 @@ export function createTwilioSender(opts: {
         body: new URLSearchParams({ From: opts.from, To: to, Body: body }),
       });
       if (!res.ok) throw new Error(`twilio_send_${res.status}`);
+      const message = (await res.json().catch(() => null)) as { sid?: unknown; num_segments?: unknown } | null;
+      const segments = Number(message?.num_segments);
+      return {
+        sid: typeof message?.sid === "string" ? message.sid : undefined,
+        segments: Number.isFinite(segments) && segments > 0 ? segments : undefined,
+      };
     },
   };
 }

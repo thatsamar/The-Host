@@ -5,6 +5,7 @@ import type { CompanionId } from "@/lib/companions/types";
 import { COMPANIONS } from "@/lib/companions";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { processSms, type SmsInbound } from "@/lib/sms/handler";
+import { smsEncoding, smsSegments } from "@/lib/sms/segments";
 import { SupabaseSmsStore } from "@/lib/sms/supabase-store";
 import {
   createTwilioSender,
@@ -101,10 +102,30 @@ export async function POST(request: Request): Promise<Response> {
           downloadMedia: async (url: string) =>
             downloadTwilioMedia({ accountSid, authToken, url }),
           // "Give me a second…" goes out while the answer is still being written.
-          acknowledge: (text) => sender.send(from, text),
+          acknowledge: async (text) => {
+            const sent = await sender.send(from, text);
+            console.info("SMS ack sent", JSON.stringify({ sid: sent.sid ?? null }));
+          },
         });
-        for (const reply of replies) {
-          await sender.send(from, reply);
+        // One line per reply batch, to match a garbled text against Twilio's log:
+        // lengths, encodings, segments and SIDs only, never the words or the number.
+        const parts: Record<string, unknown>[] = [];
+        try {
+          for (const reply of replies) {
+            const sent = await sender.send(from, reply);
+            parts.push({
+              chars: reply.length,
+              encoding: smsEncoding(reply),
+              segments: smsSegments(reply),
+              twilioSegments: sent.segments ?? null,
+              sid: sent.sid ?? null,
+            });
+          }
+        } finally {
+          if (replies.length) {
+            const chars = replies.reduce((n, r) => n + r.length, 0);
+            console.info("SMS replies sent", JSON.stringify({ texts: replies.length, chars, sent: parts.length, parts }));
+          }
         }
       } catch {
         console.error("sms processing failed");
