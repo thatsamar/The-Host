@@ -131,7 +131,7 @@ describe("SMS rehearsal: full journey with a restart", () => {
     // Question to Amar, then a follow-up that keeps context.
     ask.setAnswer("Marfa answer one.");
     expect(await processSms(inbound("Plan a weekend in Marfa"), deps())).toEqual([
-      "Marfa answer one.",
+      "Amar: Marfa answer one.",
     ]);
     expect(ask.calls[0]).toEqual({
       advisorId: "tony",
@@ -139,7 +139,7 @@ describe("SMS rehearsal: full journey with a restart", () => {
     });
     ask.setAnswer("Marfa answer two.");
     expect(await processSms(inbound("Add a second day"), deps())).toEqual([
-      "Marfa answer two.",
+      "Amar: Marfa answer two.",
     ]);
     expect(ask.calls[1].turns).toEqual([
       { role: "user", text: "Plan a weekend in Marfa", images: undefined },
@@ -155,7 +155,7 @@ describe("SMS rehearsal: full journey with a restart", () => {
       }),
       deps(),
     );
-    expect(photoReplies).toEqual(["Photo answer."]);
+    expect(photoReplies).toEqual(["Amar: Photo answer."]);
     const photoTurn = ask.calls[2].turns[ask.calls[2].turns.length - 1];
     expect(photoTurn.images).toEqual([
       { data: "aGVsbG8=", mediaType: "image/jpeg" },
@@ -170,7 +170,7 @@ describe("SMS rehearsal: full journey with a restart", () => {
     ]);
     ask.setAnswer("Style answer.");
     expect(await processSms(inbound("What should I wear to dinner?"), deps())).toEqual([
-      "Style answer.",
+      "Martine: Style answer.",
     ]);
     expect(ask.calls[3]).toEqual({
       advisorId: "martini",
@@ -183,7 +183,7 @@ describe("SMS rehearsal: full journey with a restart", () => {
     ]);
     ask.setAnswer("Marfa answer three.");
     expect(await processSms(inbound("And hotels near there?"), deps())).toEqual([
-      "Marfa answer three.",
+      "Amar: Marfa answer three.",
     ]);
     expect(ask.calls[4].turns).toEqual([
       { role: "user", text: "Plan a weekend in Marfa", images: undefined },
@@ -221,7 +221,7 @@ describe("SMS rehearsal: full journey with a restart", () => {
     ask.failOnce();
     expect(await processSms(inbound("Sofa question"), deps())).toEqual([FALLBACK_TEXT]);
     ask.setAnswer("Sofa answer.");
-    expect(await processSms(inbound("Try again"), deps())).toEqual(["Sofa answer."]);
+    expect(await processSms(inbound("Try again"), deps())).toEqual(["Gio: Sofa answer."]);
     const lastCall = ask.calls[ask.calls.length - 1];
     expect(lastCall.turns).toEqual([
       { role: "user", text: "Try again", images: undefined },

@@ -10,6 +10,7 @@ import {
   processSms,
   splitReply,
   toSmsText,
+  ADVISOR_LIST_TEXT,
   answerTexts,
   type SmsInbound,
 } from "../src/lib/sms/handler";
@@ -131,7 +132,7 @@ describe("advisor choice, questions, history, switching", () => {
     ]);
     ask.setAnswer("Gio's answer.");
     expect(await processSms(inbound("What sofa fits a small room?"), { store, ask: ask.ask })).toEqual([
-      "Gio's answer.",
+      "Gio: Gio's answer.",
     ]);
     expect(ask.calls).toHaveLength(1);
     expect(ask.calls[0].advisorId).toBe("gio");
@@ -203,7 +204,7 @@ describe("photos", () => {
       }),
       { store, ask: ask.ask, downloadMedia },
     );
-    expect(replies).toEqual(["Martine's take on the outfit."]);
+    expect(replies).toEqual(["Martine: Martine's take on the outfit."]);
     expect(ask.calls).toHaveLength(1);
     expect(ask.calls[0].advisorId).toBe("martini");
     expect(ask.calls[0].turns[0].images).toEqual([{ data: "aGVsbG8=", mediaType: "image/jpeg" }]);
@@ -235,7 +236,7 @@ describe("failures and duplicates", () => {
     ask.failOnce();
     expect(await processSms(inbound("Sofa question"), { store, ask: ask.ask })).toEqual([FALLBACK_TEXT]);
     ask.setAnswer("Gio recovered.");
-    expect(await processSms(inbound("Try again"), { store, ask: ask.ask })).toEqual(["Gio recovered."]);
+    expect(await processSms(inbound("Try again"), { store, ask: ask.ask })).toEqual(["Gio: Gio recovered."]);
     const lastCall = ask.calls[ask.calls.length - 1];
     expect(lastCall.turns).toEqual([{ role: "user", text: "Try again", images: undefined }]);
   });
@@ -248,7 +249,7 @@ describe("failures and duplicates", () => {
     ask.setAnswer("Gio's answer.");
     const first = inbound("Sofa question", { messageSid: "SMdup" });
     const second = inbound("Sofa question", { messageSid: "SMdup" });
-    expect(await processSms(first, { store, ask: ask.ask })).toEqual(["Gio's answer."]);
+    expect(await processSms(first, { store, ask: ask.ask })).toEqual(["Gio: Gio's answer."]);
     expect(await processSms(second, { store, ask: ask.ask })).toEqual([]);
     expect(ask.calls).toHaveLength(1);
   });
@@ -298,7 +299,7 @@ describe("\"Give me a second…\" while an answer is written", () => {
     expect(ackedBeforeAnswer).toBe(true);
     expect(acks).toEqual([ACK_TEXT]);
     expect(ACK_TEXT).toBe("Give me a second…");
-    expect(replies).toEqual(["Gio's answer."]);
+    expect(replies).toEqual(["Gio: Gio's answer."]);
 
     const session = await store.getSession(FROM);
     expect(session?.turnsByAdvisor.gio).toEqual([
@@ -341,10 +342,10 @@ describe("\"Give me a second…\" while an answer is written", () => {
     const replies = await processSms(inbound("What sofa?"), { store, ask: ask.ask, acknowledge: slowAck });
     order.push("answer");
     expect(order).toEqual(["ack", "answer"]);
-    expect(replies).toEqual(["Canned answer."]);
+    expect(replies).toEqual(["Gio: Canned answer."]);
 
     const failing = () => Promise.reject(new Error("twilio down"));
-    expect(await processSms(inbound("And a rug?"), { store, ask: ask.ask, acknowledge: failing })).toEqual(["Canned answer."]);
+    expect(await processSms(inbound("And a rug?"), { store, ask: ask.ask, acknowledge: failing })).toEqual(["Gio: Canned answer."]);
   });
 
   it("acks a photo sent alone once the photo is in, but not when no photo could be read", async () => {
@@ -442,7 +443,7 @@ describe("answers as plain text messages", () => {
     const markdown = "## The call\n\n**Paint it white.** See [this](https://a.example).\n\n- One coat\n- Two coats";
     ask.setAnswer(markdown);
     expect(await processSms(inbound("Hall colour?"), { store, ask: ask.ask })).toEqual([
-      "The call\n\nPaint it white. See this (https://a.example).\n\n• One coat\n• Two coats",
+      "Gio: The call\n\nPaint it white. See this (https://a.example).\n\n• One coat\n• Two coats",
     ]);
     expect((await store.getSession(FROM))?.turnsByAdvisor.gio?.at(-1)).toEqual({ role: "assistant", text: markdown });
   });
@@ -619,5 +620,56 @@ describe("texts short enough to arrive whole (the missing-head fix)", () => {
     const texts = answerTexts(plain);
     expect(texts[0].length).toBeGreaterThan(1400);
     for (const t of texts) expect(t.length).toBeLessThanOrEqual(1500);
+  });
+});
+
+describe("speaker labels", () => {
+  const labels = ["Amar: ", "Martine: ", "Gio: ", "Alden: ", "Goldie: "];
+
+  it("start every text of a long answer, each still within one text's limits, and are never stored", async () => {
+    const store = new MemorySmsStore();
+    const ask = makeAsk();
+    await processSms(inbound("START"), { store, ask: ask.ask });
+    await processSms(inbound("3"), { store, ask: ask.ask });
+    const long = Array.from({ length: 30 }, (_, i) => `Paragraph ${i} about the sofa, the rug and the light in the room.`).join("\n\n");
+    ask.setAnswer(long);
+    const texts = await processSms(inbound("Plan the room?"), { store, ask: ask.ask });
+    expect(texts.length).toBeGreaterThan(1);
+    for (const t of texts) {
+      expect(t.startsWith("Gio: Paragraph")).toBe(true);
+      expect(t.length).toBeLessThanOrEqual(1500);
+      expect(smsSegments(t)).toBeLessThanOrEqual(MAX_SEGMENTS);
+    }
+    // Without the labels, the texts are the whole answer.
+    expect(texts.map((t) => t.slice("Gio: ".length)).join("\n\n")).toBe(long);
+    const session = JSON.stringify(await store.getSession(FROM));
+    expect(session).not.toContain("Gio: ");
+  });
+
+  it("are removed when the model writes one itself, so it is never doubled or stored", async () => {
+    const store = new MemorySmsStore();
+    const ask = makeAsk();
+    await processSms(inbound("START"), { store, ask: ask.ask });
+    await processSms(inbound("3"), { store, ask: ask.ask });
+    ask.setAnswer("**Gio:** Lower the lamp.");
+    expect(await processSms(inbound("Lamp?"), { store, ask: ask.ask })).toEqual(["Gio: Lower the lamp."]);
+    expect((await store.getSession(FROM))?.turnsByAdvisor.gio?.at(-1)?.text).toBe("Lower the lamp.");
+  });
+
+  it("never appear on system texts: ack, welcome, list, confirmation, HELP, STOP", async () => {
+    const store = new MemorySmsStore();
+    const ask = makeAsk();
+    const acks: string[] = [];
+    const deps = { store, ask: ask.ask, acknowledge: (t: string) => void acks.push(t) };
+    const system = [
+      ...(await processSms(inbound("START"), deps)),
+      ...(await processSms(inbound("SWITCH"), deps)),
+      ...(await processSms(inbound("2"), deps)),
+      ...(await processSms(inbound("HELP"), deps)),
+    ];
+    await processSms(inbound("What shoes?"), deps);
+    system.push(...acks, ...(await processSms(inbound("STOP"), deps)));
+    expect(system).toEqual([WELCOME_TEXT, ADVISOR_LIST_TEXT, "You're with Martine (style). Send your question as a text or a photo.", HELP_TEXT, ACK_TEXTS[0], OPT_OUT_TEXT]);
+    for (const t of system) for (const l of labels) expect(t.startsWith(l)).toBe(false);
   });
 });

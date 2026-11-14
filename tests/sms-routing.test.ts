@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ROUTE_TIMEOUT_MS, ROUTER_PROMPT, INTRODUCTIONS, readRoute, routeQuestion, routeShortcut } from "../src/lib/sms/router";
-import { ACK_TEXTS, WELCOME_TEXT, processSms, type SmsInbound } from "../src/lib/sms/handler";
+import { ACK_TEXTS, WELCOME_TEXT, processSms, speakerLabel, type SmsInbound } from "../src/lib/sms/handler";
 import { MemorySmsStore, type SmsTurn } from "../src/lib/sms/store";
 import { plainPunctuation, smsEncoding } from "../src/lib/sms/segments";
 
@@ -111,7 +111,7 @@ describe("routing and introductions in the conversation", () => {
       store = new MemorySmsStore();
       await send("START");
       const replies = await send(question);
-      expect(replies, question).toEqual([`${INTRODUCTIONS[id as "gio"]}\n\n${id} answers.`]);
+      expect(replies, question).toEqual([`${speakerLabel(id as "gio")}${INTRODUCTIONS[id as "gio"]}\n\n${id} answers.`]);
       expect(replies.join(" ")).not.toContain("Pick an advisor");
       expect(calls.at(-1)!.advisorId).toBe(id);
       expect((await store.getSession(FROM))?.advisorId).toBe(id);
@@ -121,7 +121,7 @@ describe("routing and introductions in the conversation", () => {
   it("routes a question that names an advisor to them", async () => {
     const replies = await send("Martine, what shoes for Milan?");
     expect(calls[0].advisorId).toBe("martini");
-    expect(replies[0].startsWith("I'm Martine, style at Cinq.")).toBe(true);
+    expect(replies[0].startsWith("Martine: I'm Martine, style at Cinq.")).toBe(true);
     expect(routed).toEqual([]);
   });
 
@@ -132,7 +132,7 @@ describe("routing and introductions in the conversation", () => {
 
   it("introduces an advisor once: the second question gets no introduction, and the routing doesn't run again", async () => {
     await send("Is this sofa too big for the room?");
-    expect(await send("And the rug?")).toEqual(["gio answers."]);
+    expect(await send("And the rug?")).toEqual(["Gio: gio answers."]);
     expect(routed).toEqual(["Is this sofa too big for the room?"]);
     expect(calls.map((c) => c.advisorId)).toEqual(["gio", "gio"]);
     // The introduction is never stored as part of the answer.
@@ -142,14 +142,14 @@ describe("routing and introductions in the conversation", () => {
 
   it("gives an explicit pick the confirmation and no separate introduction", async () => {
     expect(await send("talk to Gio")).toEqual(["You're with Gio (design). Send your question as a text or a photo."]);
-    expect(await send("Is this sofa too big for the room?")).toEqual(["gio answers."]);
+    expect(await send("Is this sofa too big for the room?")).toEqual(["Gio: gio answers."]);
     expect(routed).toEqual([]);
   });
 
   it("sends a greeting to Goldie, who orients, without asking the router", async () => {
     const replies = await send("hi");
     expect(calls[0].advisorId).toBe("goldie");
-    expect(replies[0].startsWith("I'm Goldie, Cinq's sounding board.")).toBe(true);
+    expect(replies[0].startsWith("Goldie: I'm Goldie, Cinq's sounding board.")).toBe(true);
     expect(routed).toEqual([]);
   });
 
@@ -161,7 +161,7 @@ describe("routing and introductions in the conversation", () => {
   it("routes again after START, but an advisor already met doesn't introduce themselves twice", async () => {
     await send("Is this sofa too big for the room?");
     await send("START");
-    expect(await send("Is this sofa too big for the room?")).toEqual(["gio answers."]);
+    expect(await send("Is this sofa too big for the room?")).toEqual(["Gio: gio answers."]);
     expect(routed).toHaveLength(2);
   });
 
@@ -170,7 +170,7 @@ describe("routing and introductions in the conversation", () => {
     early = [];
     const replies = await send("Best area to stay in Lisbon?");
     expect(early).toEqual([WELCOME_TEXT]);
-    expect(replies).toEqual(["I'm Amar, travel at Cinq.\n\ntony answers."]);
+    expect(replies).toEqual(["Amar: I'm Amar, travel at Cinq.\n\ntony answers."]);
     const session = await store.getSession(FROM);
     expect(session?.optedIn).toBe(true);
     expect(session?.advisorId).toBe("tony");
@@ -180,7 +180,7 @@ describe("routing and introductions in the conversation", () => {
     store = new MemorySmsStore();
     const replies = await processSms(inbound("Best area to stay in Lisbon?"), { ...deps(), acknowledge: undefined });
     expect(replies[0]).toBe(WELCOME_TEXT);
-    expect(replies[1].startsWith("I'm Amar")).toBe(true);
+    expect(replies[1].startsWith("Amar: I'm Amar")).toBe(true);
   });
 
   it("reads exactly as written: the new welcome", () => {

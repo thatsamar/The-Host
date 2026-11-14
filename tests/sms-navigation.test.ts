@@ -110,7 +110,7 @@ describe("navigation in the conversation", () => {
 
   it("sends a sentence that only mentions an advisor to the current advisor as a question", async () => {
     await send("4");
-    expect(await send("I'm having dinner with Gio, what should we drink?")).toEqual(["alden answers."]);
+    expect(await send("I'm having dinner with Gio, what should we drink?")).toEqual(["Alden: alden answers."]);
     expect((await store.getSession(FROM))?.advisorId).toBe("alden");
     expect(asks[0].advisorId).toBe("alden");
   });
