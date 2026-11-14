@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  ACK_TEXT,
+  ACK_TEXTS,
+  nextAck,
   FALLBACK_TEXT,
   NO_QUESTION_TEXT,
   HELP_TEXT,
@@ -12,6 +13,8 @@ import {
   type SmsInbound,
 } from "../src/lib/sms/handler";
 import { MemorySmsStore } from "../src/lib/sms/store";
+
+const ACK_TEXT = ACK_TEXTS[0];
 import type { SmsTurn } from "../src/lib/sms/store";
 
 const FROM = "+15551234567";
@@ -301,7 +304,7 @@ describe("\"Give me a second…\" while an answer is written", () => {
     // The next question's history carries no ack either.
     await processSms(inbound("And a rug?"), deps());
     expect(ask.calls.at(-1)!.turns.map((t) => t.text)).toEqual(["What sofa fits a small room?", "Gio's answer.", "And a rug?"]);
-    expect(JSON.stringify(await store.getSession(FROM))).not.toContain(ACK_TEXT);
+    for (const line of ACK_TEXTS) expect(JSON.stringify(await store.getSession(FROM))).not.toContain(line);
   });
 
   it("sends no ack for picks, STOP, START, HELP, the welcome, the pick-first prompt or an empty message", async () => {
@@ -486,5 +489,69 @@ describe("splitting long answers cleanly", () => {
   it("keeps paragraphs together where they fit", () => {
     const text = ["a".repeat(700), "b".repeat(700), "c".repeat(700)].join("\n\n");
     expect(splitReply(text)).toEqual([`${"a".repeat(700)}\n\n${"b".repeat(700)}`, "c".repeat(700)]);
+  });
+});
+
+describe("varied acks", () => {
+  const send = (store: MemorySmsStore, ask: ReturnType<typeof makeAsk>, acks: string[], body: string, extra: Partial<SmsInbound> = {}) =>
+    processSms(inbound(body, extra), { store, ask: ask.ask, acknowledge: (t: string) => void acks.push(t) });
+
+  it("has exactly the four lines, one short line each, no emoji", () => {
+    expect(ACK_TEXTS).toEqual(["Give me a second…", "Working on it…", "Let me think about it…", "Hmm…"]);
+    for (const line of ACK_TEXTS) expect(line).not.toMatch(/\n|\p{Extended_Pictographic}/u);
+  });
+
+  it("gives consecutive questions different lines, rotating through all four", async () => {
+    const store = new MemorySmsStore();
+    const ask = makeAsk();
+    const acks: string[] = [];
+    await send(store, ask, acks, "START");
+    await send(store, ask, acks, "3");
+    for (let i = 0; i < 9; i++) await send(store, ask, acks, `Question ${i}?`);
+    expect(acks).toHaveLength(9);
+    for (const a of acks) expect(ACK_TEXTS).toContain(a);
+    for (let i = 1; i < acks.length; i++) expect(acks[i]).not.toBe(acks[i - 1]);
+    expect(new Set(acks.slice(0, 4)).size).toBe(4);
+  });
+
+  it("never repeats a line after a failed answer, an advisor switch, or other texts in between", async () => {
+    const store = new MemorySmsStore();
+    const ask = makeAsk();
+    const acks: string[] = [];
+    await send(store, ask, acks, "START");
+    await send(store, ask, acks, "3");
+    await send(store, ask, acks, "First?");
+    ask.failOnce();
+    expect(await send(store, ask, acks, "Second?")).toEqual([FALLBACK_TEXT]);
+    await send(store, ask, acks, "Third?");
+    await send(store, ask, acks, "HELP");
+    await send(store, ask, acks, "alden");
+    await send(store, ask, acks, "Fourth?");
+    expect(acks).toEqual([ACK_TEXTS[0], ACK_TEXTS[1], ACK_TEXTS[2], ACK_TEXTS[3]]);
+    // History holds only questions and real answers.
+    const session = await store.getSession(FROM);
+    const texts = Object.values(session!.turnsByAdvisor).flat().map((t) => t.text);
+    for (const line of ACK_TEXTS) expect(texts).not.toContain(line);
+  });
+
+  it("keeps each number's rotation separate", async () => {
+    const store = new MemorySmsStore();
+    const ask = makeAsk();
+    const acks: string[] = [];
+    for (const from of [FROM, "+15559998888"]) {
+      await send(store, ask, acks, "START", { from });
+      await send(store, ask, acks, "3", { from });
+    }
+    await send(store, ask, acks, "Mine?");
+    await send(store, ask, acks, "Theirs?", { from: "+15559998888" });
+    expect(acks).toEqual([ACK_TEXTS[0], ACK_TEXTS[0]]);
+  });
+
+  it("starts at the first line and wraps, whatever was stored", () => {
+    expect(nextAck(undefined)).toBe(0);
+    expect(nextAck(0)).toBe(1);
+    expect(nextAck(3)).toBe(0);
+    expect(nextAck(-1)).toBe(0);
+    expect(nextAck(2.5)).toBe(0);
   });
 });

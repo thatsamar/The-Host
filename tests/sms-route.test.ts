@@ -30,7 +30,8 @@ vi.mock("@/lib/ask/ask", () => ({
 }));
 
 const { POST } = await import("@/app/api/sms/route");
-const { ACK_TEXT } = await import("@/lib/sms/handler");
+const { ACK_TEXTS } = await import("@/lib/sms/handler");
+const ACK_TEXT = ACK_TEXTS[0];
 
 let sid = 0;
 async function text(body: string) {
