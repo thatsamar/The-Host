@@ -87,11 +87,15 @@ export async function routeQuestion(
   }
 }
 
-/** Each advisor's one-line self-introduction, before their first routed answer to a number. */
+/**
+ * Each advisor's one-line self-introduction, before their first routed answer
+ * to a number. Short and plain GSM-7 (commas, not dashes), so it costs the
+ * first text as little room as possible.
+ */
 export const INTRODUCTIONS: Record<SmsAdvisorId, string> = {
-  tony: "I'm Amar — I look after travel at Cinq.",
-  martini: "I'm Martine — I look after style at Cinq.",
-  gio: "I'm Gio — I look after design at Cinq.",
-  alden: "I'm Alden — I look after wine, cocktails and spirits at Cinq.",
-  goldie: "I'm Goldie — Cinq's sounding board.",
+  tony: "I'm Amar, travel at Cinq.",
+  martini: "I'm Martine, style at Cinq.",
+  gio: "I'm Gio, design at Cinq.",
+  alden: "I'm Alden, wine & spirits at Cinq.",
+  goldie: "I'm Goldie, Cinq's sounding board.",
 };

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ROUTE_TIMEOUT_MS, ROUTER_PROMPT, INTRODUCTIONS, readRoute, routeQuestion, routeShortcut } from "../src/lib/sms/router";
 import { ACK_TEXTS, WELCOME_TEXT, processSms, type SmsInbound } from "../src/lib/sms/handler";
 import { MemorySmsStore, type SmsTurn } from "../src/lib/sms/store";
+import { plainPunctuation, smsEncoding } from "../src/lib/sms/segments";
 
 describe("the router", () => {
   it("sends a question that opens by naming an advisor to them, without asking the model", async () => {
@@ -34,6 +35,21 @@ describe("the router", () => {
     await vi.advanceTimersByTimeAsync(ROUTE_TIMEOUT_MS + 1);
     expect(await slow).toBe("goldie");
     vi.useRealTimers();
+  });
+
+  it("introduces each advisor in one short plain line", () => {
+    expect(INTRODUCTIONS).toEqual({
+      tony: "I'm Amar, travel at Cinq.",
+      martini: "I'm Martine, style at Cinq.",
+      gio: "I'm Gio, design at Cinq.",
+      alden: "I'm Alden, wine & spirits at Cinq.",
+      goldie: "I'm Goldie, Cinq's sounding board.",
+    });
+    // Plain GSM-7 as written: nothing for plainPunctuation to convert.
+    for (const line of Object.values(INTRODUCTIONS)) {
+      expect(smsEncoding(line)).toBe("GSM-7");
+      expect(plainPunctuation(line)).toBe(line);
+    }
   });
 
   it("describes every advisor's area and makes Goldie the default", () => {
@@ -95,7 +111,7 @@ describe("routing and introductions in the conversation", () => {
       store = new MemorySmsStore();
       await send("START");
       const replies = await send(question);
-      expect(replies, question).toEqual([`${INTRODUCTIONS[id as "gio"]}\n\n${id} answers.`.replace(" — ", " - ")]);
+      expect(replies, question).toEqual([`${INTRODUCTIONS[id as "gio"]}\n\n${id} answers.`]);
       expect(replies.join(" ")).not.toContain("Pick an advisor");
       expect(calls.at(-1)!.advisorId).toBe(id);
       expect((await store.getSession(FROM))?.advisorId).toBe(id);
@@ -105,7 +121,7 @@ describe("routing and introductions in the conversation", () => {
   it("routes a question that names an advisor to them", async () => {
     const replies = await send("Martine, what shoes for Milan?");
     expect(calls[0].advisorId).toBe("martini");
-    expect(replies[0].startsWith("I'm Martine - I look after style at Cinq.")).toBe(true);
+    expect(replies[0].startsWith("I'm Martine, style at Cinq.")).toBe(true);
     expect(routed).toEqual([]);
   });
 
@@ -133,7 +149,7 @@ describe("routing and introductions in the conversation", () => {
   it("sends a greeting to Goldie, who orients, without asking the router", async () => {
     const replies = await send("hi");
     expect(calls[0].advisorId).toBe("goldie");
-    expect(replies[0].startsWith("I'm Goldie - Cinq's sounding board.")).toBe(true);
+    expect(replies[0].startsWith("I'm Goldie, Cinq's sounding board.")).toBe(true);
     expect(routed).toEqual([]);
   });
 
@@ -154,7 +170,7 @@ describe("routing and introductions in the conversation", () => {
     early = [];
     const replies = await send("Best area to stay in Lisbon?");
     expect(early).toEqual([WELCOME_TEXT]);
-    expect(replies).toEqual(["I'm Amar - I look after travel at Cinq.\n\ntony answers."]);
+    expect(replies).toEqual(["I'm Amar, travel at Cinq.\n\ntony answers."]);
     const session = await store.getSession(FROM);
     expect(session?.optedIn).toBe(true);
     expect(session?.advisorId).toBe("tony");
