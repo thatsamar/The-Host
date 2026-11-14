@@ -19,6 +19,22 @@ const GSM_EXTENDED = new Set("^{}\\[~]|€\f");
 /** Twilio's advice: carriers have trouble with Unicode texts longer than 10 segments. */
 export const MAX_SEGMENTS = 10;
 
+/**
+ * How many segments an advisor's answer may take on Cinq by text. One
+ * segment arrives whole or not at all, so it can't lose its head the way
+ * long texts did (even a 9-segment plain text did). Raise it (2 or 3) for
+ * a longer middle ground; everything else follows from this number.
+ */
+export const SMS_MAX_SEGMENTS = 1;
+
+/** Characters an answer text has in plain GSM-7 at SMS_MAX_SEGMENTS: 160 for one segment, 152 a segment beyond that. */
+export const SMS_TEXT_CHARS = SMS_MAX_SEGMENTS === 1 ? 160 : SMS_MAX_SEGMENTS * 152;
+
+/** Whether a text fits the answer cap, by its real encoding. */
+export function fitsAnswerCap(text: string): boolean {
+  return smsSegments(text) <= SMS_MAX_SEGMENTS;
+}
+
 export type SmsEncoding = "GSM-7" | "UCS-2";
 
 export function smsEncoding(text: string): SmsEncoding {

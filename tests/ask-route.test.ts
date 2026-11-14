@@ -31,6 +31,15 @@ describe("POST /api/ask", () => {
     expect(events.at(-1)).toEqual({ type: "done" });
   });
 
+  it("streams a long answer in full: the website has no length cap", async () => {
+    const long = "A long, detailed answer about the room. ".repeat(100);
+    state.provider = new ScriptedProvider(replyWith(long));
+    const res = await post({ turns: [{ role: "user", text: "Plan the whole room" }] });
+    const events = await collect(readNdjson<{ type: string; text?: string }>(res.body!));
+    expect(events.map((e) => e.text ?? "").join("")).toBe(long);
+    expect(long.length).toBeGreaterThan(3000);
+  });
+
   it("answers as the deployment's companion", async () => {
     process.env.COMPANION = "tony";
     try {

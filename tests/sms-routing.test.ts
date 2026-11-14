@@ -111,7 +111,7 @@ describe("routing and introductions in the conversation", () => {
       store = new MemorySmsStore();
       await send("START");
       const replies = await send(question);
-      expect(replies, question).toEqual([`${speakerLabel(id as "gio")}${INTRODUCTIONS[id as "gio"]}\n\n${id} answers.`]);
+      expect(replies, question).toEqual([`${speakerLabel(id as "gio")}${INTRODUCTIONS[id as "gio"]}\n${id} answers.`]);
       expect(replies.join(" ")).not.toContain("Pick an advisor");
       expect(calls.at(-1)!.advisorId).toBe(id);
       expect((await store.getSession(FROM))?.advisorId).toBe(id);
@@ -170,7 +170,7 @@ describe("routing and introductions in the conversation", () => {
     early = [];
     const replies = await send("Best area to stay in Lisbon?");
     expect(early).toEqual([WELCOME_TEXT]);
-    expect(replies).toEqual(["Amar: I'm Amar, travel at Cinq.\n\ntony answers."]);
+    expect(replies).toEqual(["Amar: I'm Amar, travel at Cinq.\ntony answers."]);
     const session = await store.getSession(FROM);
     expect(session?.optedIn).toBe(true);
     expect(session?.advisorId).toBe("tony");

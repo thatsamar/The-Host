@@ -111,13 +111,32 @@ function lineup(): string {
  * suggest another advisor, and, when this question was handed over, what
  * the previous advisor said.
  */
-export function textChannelNotes(self: SmsAdvisorId, handoff?: HandoffContext, met?: string[]): ContextBlock {
+/** The longest "Reply YES to bring in ..." line, which Cinq adds after an offer. */
+const OFFER_CHARS = Math.max(...SMS_ADVISORS.map((a) => offerText(a.id).length)) + 1;
+
+/**
+ * How a text answer sounds: one short text, written like a friend with good
+ * taste, in one voice. `budget` is the characters the advisor's own words
+ * have in this text.
+ */
+export function shortTextVoice(budget: number): string {
+  const offerBudget = Math.max(40, budget - OFFER_CHARS);
+  return [
+    `Here every answer is one short text: your words must fit in ${budget} characters, after the name and any introduction Cinq adds (${offerBudget} if you offer to bring in another advisor, since Cinq adds a line asking the person).`,
+    "Write like a well-informed friend with good taste texting a friend: natural, warm, and opinionated where you have a real view. Give the single most useful thing, specific (a name, a detail, a clear call) rather than a list or an overview, and keep the rest for their next text; if they ask for a list, give the top one or two that fit.",
+    "End with a hook only when one fits naturally: a specific recommendation, a real opinion, a detail worth knowing. Ask a question only when the answer honestly depends on something; never a forced question or a tacked-on offer to say more.",
+    "Never sound like an agent: no disclaimers, no hedging, no filler, no headings or bullet lists.",
+  ].join(" ");
+}
+
+export function textChannelNotes(self: SmsAdvisorId, handoff?: HandoffContext, met?: string[], budget?: number): ContextBlock {
   const lines = [
     "You are answering by text message on Cinq by text. Here Cinq works as one collective: when a question is clearly better suited to another advisor, Cinq can bring that advisor in, with the person's agreement, and hand them the person's question together with your answer. On text this replaces the earlier note that you cannot transfer the conversation or share anything with the other advisors.",
     "If the question is clearly better suited to another advisor, give whatever genuinely useful help is yours to give (briefly, if the question is mostly theirs), then offer in your own words, in one sentence, to bring that advisor in, naming them. Then end the reply with a last line containing only the marker [[suggest:ID]] with their id. Cinq removes the marker and asks the person; never mention or explain the marker, and never say you have already brought them in.",
     `Suggest only when another advisor is clearly the better fit; when in doubt, answer it yourself and add no marker. At most one suggestion, never yourself, and never as a routine closing line. The ids: ${lineup()}.`,
     `A message in the conversation that begins ${HANDOFF_NOTE_PREFIX} is from Cinq, not the person: it records that another advisor brought you in, and what they said. Treat it as part of this conversation's history: you know who brought you in and why.`,
     "Cinq shows your name before each of your texts and, when you first answer this person or are brought in, a one-line introduction; never write your own name as a label, and don't introduce yourself again.",
+    ...(budget ? [shortTextVoice(budget)] : []),
     "Only the last day of this conversation is shown to you. Don't assume details from earlier days; if the person refers to something you can't see, ask briefly or work from what they tell you now.",
   ];
   if (met?.length) {

@@ -88,7 +88,7 @@ export async function POST(request: Request): Promise<Response> {
             const provider = getChatProvider(companion);
             let text = "";
             for await (const event of ask(
-              { provider, companion, channel: textChannelNotes(advisorId, context?.handoff, context?.met) },
+              { provider, companion, channel: textChannelNotes(advisorId, context?.handoff, context?.met, context?.budget) },
               turns.map(
                 (turn: SmsTurn) => ({
                   role: turn.role,
