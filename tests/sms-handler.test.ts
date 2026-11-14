@@ -15,7 +15,7 @@ import {
   type SmsInbound,
 } from "../src/lib/sms/handler";
 import { MemorySmsStore } from "../src/lib/sms/store";
-import { MAX_SEGMENTS, plainPunctuation, smsEncoding, smsSegments } from "../src/lib/sms/segments";
+import { MAX_SEGMENTS, SMS_MAX_SEGMENTS, plainPunctuation, smsEncoding, smsSegments } from "../src/lib/sms/segments";
 
 const ACK_TEXT = ACK_TEXTS[0];
 import type { SmsTurn } from "../src/lib/sms/store";
@@ -633,7 +633,7 @@ describe("speaker labels", () => {
     ask.setAnswer("Lower the lamp to eye level when seated; it warms the whole corner.");
     const texts = await processSms(inbound("Lamp?"), { store, ask: ask.ask });
     expect(texts).toEqual(["Gio: Lower the lamp to eye level when seated; it warms the whole corner."]);
-    expect(smsSegments(texts[0])).toBe(1);
+    expect(smsSegments(texts[0])).toBeLessThanOrEqual(SMS_MAX_SEGMENTS);
     const session = JSON.stringify(await store.getSession(FROM));
     expect(session).not.toContain("Gio: ");
   });

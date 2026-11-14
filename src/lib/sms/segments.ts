@@ -20,12 +20,13 @@ const GSM_EXTENDED = new Set("^{}\\[~]|€\f");
 export const MAX_SEGMENTS = 10;
 
 /**
- * How many segments an advisor's answer may take on Cinq by text. One
- * segment arrives whole or not at all, so it can't lose its head the way
- * long texts did (even a 9-segment plain text did). Raise it (2 or 3) for
- * a longer middle ground; everything else follows from this number.
+ * How many segments an advisor's answer may take on Cinq by text: 3 (456
+ * plain characters). Long texts lost their heads on real phones (even a
+ * 9-segment plain one), while a 3-segment text arrived intact; one segment
+ * proved too short (one beat per text). If 3-segment answers lose their
+ * heads, lower it to 2 or 1; everything else follows from this number.
  */
-export const SMS_MAX_SEGMENTS = 1;
+export const SMS_MAX_SEGMENTS: number = 3;
 
 /** Characters an answer text has in plain GSM-7 at SMS_MAX_SEGMENTS: 160 for one segment, 152 a segment beyond that. */
 export const SMS_TEXT_CHARS = SMS_MAX_SEGMENTS === 1 ? 160 : SMS_MAX_SEGMENTS * 152;
