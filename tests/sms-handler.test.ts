@@ -8,6 +8,7 @@ import {
   WELCOME_TEXT,
   processSms,
   splitReply,
+  toSmsText,
   type SmsInbound,
 } from "../src/lib/sms/handler";
 import { MemorySmsStore } from "../src/lib/sms/store";
@@ -357,5 +358,133 @@ describe("\"Give me a second…\" while an answer is written", () => {
     await processSms(first, deps());
     await processSms(first, deps());
     expect(acks).toEqual([ACK_TEXT]);
+  });
+});
+
+describe("answers as plain text messages", () => {
+  it("drops Markdown markers and keeps the words", () => {
+    const answer = [
+      "## The call",
+      "",
+      "**Book the Rosewood.** It is *quiet*, __calm__ and _central_. ***Really.*** ~~No.~~",
+      "",
+      "### Where to eat ###",
+      "- Contramar for lunch",
+      "* Rosetta for dinner",
+      "+ Máximo if you can",
+      "  - the tasting menu",
+      "1. Arrive before six",
+      "2. Ask for the terrace",
+      "",
+      "---",
+      "* * *",
+      "> Go early; it fills up.",
+      "",
+      "",
+      "",
+      "Use `Uber` there.   ",
+      "```",
+      "no fences",
+      "```",
+    ].join("\n");
+    expect(toSmsText(answer)).toBe(
+      [
+        "The call",
+        "",
+        "Book the Rosewood. It is quiet, calm and central. Really. No.",
+        "",
+        "Where to eat",
+        "• Contramar for lunch",
+        "• Rosetta for dinner",
+        "• Máximo if you can",
+        "  • the tasting menu",
+        "1. Arrive before six",
+        "2. Ask for the terrace",
+        "",
+        "Go early; it fills up.",
+        "",
+        "Use Uber there.",
+        "no fences",
+      ].join("\n"),
+    );
+  });
+
+  it("turns links into words plus a tappable address, and never mangles an address", () => {
+    expect(toSmsText("Book [Rosewood](https://www.rosewoodhotels.com/en/mexico-city) today.")).toBe(
+      "Book Rosewood (https://www.rosewoodhotels.com/en/mexico-city) today.",
+    );
+    expect(toSmsText("[https://a.example](https://a.example)")).toBe("https://a.example");
+    expect(toSmsText("See <https://a.example/x_y_z>.")).toBe("See https://a.example/x_y_z.");
+    // Underscores, asterisks and brackets inside addresses survive; closing punctuation stays outside.
+    expect(toSmsText("Read https://en.wikipedia.org/wiki/Roma_(film) and https://a.example/__init__*x*.")).toBe(
+      "Read https://en.wikipedia.org/wiki/Roma_(film) and https://a.example/__init__*x*.",
+    );
+    expect(toSmsText("**[The guide](https://a.example/guide_one)**")).toBe("The guide (https://a.example/guide_one)");
+  });
+
+  it("leaves snake_case words, escaped symbols and plain sentences alone", () => {
+    expect(toSmsText("Use file_name_here and 5 \\* 3, not 5*3.")).toBe("Use file_name_here and 5 * 3, not 5*3.");
+    expect(toSmsText("Just a sentence.")).toBe("Just a sentence.");
+  });
+
+  it("is what gets texted, while history keeps the Markdown", async () => {
+    const store = new MemorySmsStore();
+    const ask = makeAsk();
+    await processSms(inbound("START"), { store, ask: ask.ask });
+    await processSms(inbound("3"), { store, ask: ask.ask });
+    const markdown = "## The call\n\n**Paint it white.** See [this](https://a.example).\n\n- One coat\n- Two coats";
+    ask.setAnswer(markdown);
+    expect(await processSms(inbound("Hall colour?"), { store, ask: ask.ask })).toEqual([
+      "The call\n\nPaint it white. See this (https://a.example).\n\n• One coat\n• Two coats",
+    ]);
+    expect((await store.getSession(FROM))?.turnsByAdvisor.gio?.at(-1)).toEqual({ role: "assistant", text: markdown });
+  });
+});
+
+describe("splitting long answers cleanly", () => {
+  const same = (parts: string[], text: string) =>
+    expect(parts.join(" ").replace(/\s+/g, " ").trim()).toBe(text.replace(/\s+/g, " ").trim());
+
+  it("breaks a long paragraph at a space, never mid-word, and loses nothing", () => {
+    const words = Array.from({ length: 700 }, (_, i) => `word${i}`).join(" ");
+    const parts = splitReply(words);
+    expect(parts.length).toBeGreaterThan(1);
+    for (const part of parts) {
+      expect(part.length).toBeLessThanOrEqual(1500);
+      expect(part).toMatch(/^word\d+/);
+      expect(part).toMatch(/word\d+$/);
+    }
+    same(parts, words);
+  });
+
+  it("never splits an address: the break comes before it", () => {
+    const url = "https://www.example.com/" + "a".repeat(200);
+    const text = `${"filler ".repeat(200)}${url} and more words after it.`;
+    const parts = splitReply(text);
+    expect(parts.some((p) => p.includes(url))).toBe(true);
+    for (const p of parts) expect(p.length).toBeLessThanOrEqual(1500);
+    same(parts, text);
+  });
+
+  it("prefers a line break inside a long list", () => {
+    const list = Array.from({ length: 60 }, (_, i) => `• Item ${i} with a few words of detail here`).join("\n");
+    const parts = splitReply(list);
+    for (const p of parts) {
+      expect(p.startsWith("• ")).toBe(true);
+      expect(p).toMatch(/detail here$/);
+    }
+    same(parts, list);
+  });
+
+  it("cuts only a single word longer than a whole message", () => {
+    const giant = "x".repeat(3200);
+    const parts = splitReply(`Before. ${giant} After.`);
+    expect(parts.every((p) => p.length <= 1500)).toBe(true);
+    expect(parts.join("").replace(/\s+/g, "")).toBe(`Before.${giant}After.`);
+  });
+
+  it("keeps paragraphs together where they fit", () => {
+    const text = ["a".repeat(700), "b".repeat(700), "c".repeat(700)].join("\n\n");
+    expect(splitReply(text)).toEqual([`${"a".repeat(700)}\n\n${"b".repeat(700)}`, "c".repeat(700)]);
   });
 });

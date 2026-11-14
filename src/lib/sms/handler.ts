@@ -87,7 +87,71 @@ export function pickAdvisor(text: string): SmsAdvisorId | null {
   return null;
 }
 
-/** Split a long answer into readable consecutive messages. */
+/**
+ * Render an advisor's Markdown answer as plain text for a text message. Only
+ * the replies are converted; history keeps the original Markdown.
+ *
+ * Bold, italic, strikethrough and code lose their markers; headings keep their
+ * title line; "-", "*" and "+" list items become "• item" (numbered lists stay);
+ * [text](url) becomes "text (url)" so the link is tappable; horizontal rules go;
+ * quotes lose their ">"; runs of blank lines collapse to one; trailing spaces go.
+ */
+// An address: no spaces or angle brackets, and parentheses only in balanced pairs (Wikipedia's "(film)").
+const URL_BODY = String.raw`(?:[^\s()<>\]]|\([^\s()<>]*\))+`;
+
+export function toSmsText(markdown: string): string {
+  // Addresses and escaped characters are set aside first, so no Markdown rule can touch them.
+  const kept: string[] = [];
+  const keep = (value: string) => `\u0000${kept.push(value) - 1}\u0000`;
+  let text = markdown.replace(/\r\n?/g, "\n").replace(/\u0000/g, "");
+
+  text = text
+    .replace(/\\([\\`*_{}[\]()#+\-.!>~|])/g, (_, ch: string) => keep(ch))
+    // Code fences: keep the code, drop the fence lines.
+    .replace(/^[ \t]*(```|~~~)[^\n]*\n?/gm, "")
+    .replace(/`([^`\n]+)`/g, (_, code: string) => keep(code))
+    // Images and links: the words, then the address in brackets.
+    .replace(new RegExp(String.raw`!\[([^\]]*)\]\(\s*<?(${URL_BODY})>?(?:\s+"[^"]*")?\s*\)`, "g"), (_, alt: string, url: string) =>
+      alt.trim() ? `${alt} (${keep(url)})` : keep(url),
+    )
+    .replace(new RegExp(String.raw`\[([^\]]+)\]\(\s*<?(${URL_BODY})>?(?:\s+"[^"]*")?\s*\)`, "g"), (_, label: string, url: string) =>
+      label.trim() === url ? keep(url) : `${label} (${keep(url)})`,
+    )
+    .replace(/<(https?:\/\/[^>\s]+)>/g, (_, url: string) => keep(url))
+    .replace(new RegExp(String.raw`https?://${URL_BODY}`, "g"), (url) => {
+      // A sentence's closing punctuation isn't part of the address.
+      const tail = url.match(/[.,;:!?'"]+$/)?.[0] ?? "";
+      return keep(url.slice(0, url.length - tail.length)) + tail;
+    })
+    // Horizontal rules, before lists, since "* * *" also looks like a list item.
+    .replace(/^[ \t]*([-*_])(?:[ \t]*\1){2,}[ \t]*$/gm, "")
+    // Headings: the title line alone.
+    .replace(/^[ \t]{0,3}#{1,6}[ \t]+(.*?)[ \t]*#*[ \t]*$/gm, "$1")
+    // Quotes.
+    .replace(/^[ \t]*>[ \t]?/gm, "")
+    // Bulleted list items; numbered ones stay as written.
+    .replace(/^([ \t]*)[-*+][ \t]+/gm, "$1• ")
+    // Emphasis, strongest first.
+    .replace(/\*\*\*(?=\S)([^\n]*?\S)\*\*\*/g, "$1")
+    .replace(/\*\*(?=\S)([^\n]*?\S)\*\*/g, "$1")
+    .replace(/(?<!\w)__(?=\S)([^\n]*?\S)__(?!\w)/g, "$1")
+    .replace(/(?<![*\w])\*(?=\S)([^*\n]*?\S)\*(?![*\w])/g, "$1")
+    .replace(/(?<!\w)_(?=\S)([^_\n]*?\S)_(?!\w)/g, "$1")
+    .replace(/~~(?=\S)([^\n]*?\S)~~/g, "$1")
+    // Tidy whitespace.
+    .replace(/[ \t]+$/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  return text.replace(/\u0000(\d+)\u0000/g, (_, i: string) => kept[Number(i)]);
+}
+
+/**
+ * Split a long answer into readable consecutive messages of at most `max`
+ * characters: between paragraphs where possible, then at a line break or the
+ * last space, so no word or address is cut in two. Only a single word longer
+ * than `max` is cut.
+ */
 export function splitReply(text: string, max = MAX_REPLY_CHARS): string[] {
   const out: string[] = [];
   let current = "";
@@ -108,17 +172,29 @@ export function splitReply(text: string, max = MAX_REPLY_CHARS): string[] {
     current = piece;
   };
   for (const para of text.split(/\n\n+/)) {
-    if (!para) continue;
+    if (!para.trim()) continue;
     if (para.length <= max) {
       append(para);
       continue;
     }
     flush();
-    for (let i = 0; i < para.length; i += max) {
-      const part = para.slice(i, i + max);
-      if (i + max >= para.length) current = part;
-      else out.push(part);
+    let rest = para;
+    while (rest.length > max) {
+      const window = rest.slice(0, max + 1);
+      // Prefer a line break (a list item, say) in the second half; otherwise the last space.
+      const newline = window.lastIndexOf("\n");
+      const space = Math.max(window.lastIndexOf(" "), window.lastIndexOf("\t"));
+      const at = newline > max / 2 ? newline : space > 0 ? space : newline > 0 ? newline : -1;
+      if (at > 0) {
+        out.push(rest.slice(0, at).trimEnd());
+        rest = rest.slice(at + 1).trimStart();
+      } else {
+        // One word longer than a whole message: the only place a cut is unavoidable.
+        out.push(rest.slice(0, max));
+        rest = rest.slice(max);
+      }
     }
+    current = rest;
   }
   flush();
   return out;
@@ -264,5 +340,6 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
   const assistantTurn: SmsTurn = { role: "assistant", text: answer };
   session.turnsByAdvisor[advisorId] = [...turns, assistantTurn].slice(-MAX_STORED_TURNS);
   await store.saveSession(session);
-  return splitReply(answer);
+  // Texts are plain: the reply loses its Markdown here; history above keeps it.
+  return splitReply(toSmsText(answer));
 }
