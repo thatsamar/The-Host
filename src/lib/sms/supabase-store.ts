@@ -5,6 +5,8 @@ import type { SmsSession, SmsStore, SmsTurn } from "./store";
 // The last ack line rides in the turns column under a key no advisor uses,
 // so remembering it needs no new column (and no migration on the live project).
 const LAST_ACK_KEY = "_lastAck";
+// So do the advisors this number has met.
+const INTRODUCED_KEY = "_introduced";
 
 /**
  * Supabase-backed SMS store, using the service-role client so no signed-in
@@ -28,13 +30,15 @@ export class SupabaseSmsStore implements SmsStore {
       advisor_id: string | null;
       turns_by_advisor: Record<string, unknown> | null;
     };
-    const { [LAST_ACK_KEY]: lastAck, ...turns } = row.turns_by_advisor ?? {};
+    const { [LAST_ACK_KEY]: lastAck, [INTRODUCED_KEY]: met, ...turns } = row.turns_by_advisor ?? {};
+    const introduced = Array.isArray(met) ? met.filter((id): id is string => typeof id === "string") : undefined;
     return {
       phone: row.phone_number,
       optedIn: row.opted_in,
       advisorId: row.advisor_id,
       turnsByAdvisor: turns as Record<string, SmsTurn[]>,
       ...(typeof lastAck === "number" ? { lastAck } : {}),
+      ...(introduced ? { introduced } : {}),
     };
   }
 
@@ -44,8 +48,11 @@ export class SupabaseSmsStore implements SmsStore {
         phone_number: session.phone,
         opted_in: session.optedIn,
         advisor_id: session.advisorId,
-        turns_by_advisor:
-          session.lastAck === undefined ? session.turnsByAdvisor : { ...session.turnsByAdvisor, [LAST_ACK_KEY]: session.lastAck },
+        turns_by_advisor: {
+          ...session.turnsByAdvisor,
+          ...(session.lastAck === undefined ? {} : { [LAST_ACK_KEY]: session.lastAck }),
+          ...(session.introduced?.length ? { [INTRODUCED_KEY]: session.introduced } : {}),
+        },
         updated_at: new Date().toISOString(),
       },
       { onConflict: "phone_number" },

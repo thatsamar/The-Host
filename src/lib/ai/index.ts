@@ -25,4 +25,13 @@ export function getChatProvider(companion: Companion): ChatProvider {
   });
 }
 
+/**
+ * A quick classifier for Cinq by text's router: low effort, no web search,
+ * ROUTER_MODEL if set, otherwise the chat model.
+ */
+export function getRouterProvider(): ChatProvider {
+  const env = serverEnv();
+  return new AnthropicChatProvider(anthropic(), env.ROUTER_MODEL ?? env.CHAT_MODEL, { effort: "low", webSearchMaxUses: 0, name: "Cinq" });
+}
+
 export type * from "./types";

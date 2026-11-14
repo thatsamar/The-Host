@@ -115,8 +115,8 @@ describe("navigation in the conversation", () => {
     expect(asks[0].advisorId).toBe("alden");
   });
 
-  it("keeps the welcome's new switching line, and every system text within 10 segments", () => {
-    expect(WELCOME_TEXT).toContain("You can switch advisors anytime — reply SWITCH for the list, or just say 'talk to Martine'.");
+  it("keeps the welcome's switching line, and every system text within 10 segments", () => {
+    expect(WELCOME_TEXT).toContain("Switch anytime — reply SWITCH for the list, or say 'talk to Martine'.");
     for (const t of [WELCOME_TEXT, HELP_TEXT, ADVISOR_LIST_TEXT]) expect(smsSegments(t)).toBeLessThanOrEqual(10);
   });
 });
