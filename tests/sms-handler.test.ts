@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  ACK_TEXT,
   FALLBACK_TEXT,
+  NO_QUESTION_TEXT,
   HELP_TEXT,
   OPT_OUT_TEXT,
   WELCOME_TEXT,
@@ -256,5 +258,104 @@ describe("splitReply", () => {
 
   it("keeps short answers whole", () => {
     expect(splitReply("Short answer.")).toEqual(["Short answer."]);
+  });
+});
+
+describe("\"Give me a second…\" while an answer is written", () => {
+  let store: MemorySmsStore;
+  let ask: ReturnType<typeof makeAsk>;
+  let acks: string[];
+  const acknowledge = (text: string) => {
+    acks.push(text);
+  };
+  const deps = () => ({ store, ask: ask.ask, acknowledge });
+
+  beforeEach(async () => {
+    store = new MemorySmsStore();
+    ask = makeAsk();
+    acks = [];
+    await processSms(inbound("START"), deps());
+  });
+
+  it("acks a question once, before the answer is ready, and keeps it out of history", async () => {
+    await processSms(inbound("3"), deps());
+    let ackedBeforeAnswer = false;
+    const slowAsk = async (advisorId: string, turns: SmsTurn[]) => {
+      await new Promise((r) => setTimeout(r, 5));
+      ackedBeforeAnswer = acks.length === 1;
+      return ask.ask(advisorId, turns);
+    };
+    ask.setAnswer("Gio's answer.");
+    const replies = await processSms(inbound("What sofa fits a small room?"), { store, ask: slowAsk, acknowledge });
+    expect(ackedBeforeAnswer).toBe(true);
+    expect(acks).toEqual([ACK_TEXT]);
+    expect(ACK_TEXT).toBe("Give me a second…");
+    expect(replies).toEqual(["Gio's answer."]);
+
+    const session = await store.getSession(FROM);
+    expect(session?.turnsByAdvisor.gio).toEqual([
+      { role: "user", text: "What sofa fits a small room?" },
+      { role: "assistant", text: "Gio's answer." },
+    ]);
+    // The next question's history carries no ack either.
+    await processSms(inbound("And a rug?"), deps());
+    expect(ask.calls.at(-1)!.turns.map((t) => t.text)).toEqual(["What sofa fits a small room?", "Gio's answer.", "And a rug?"]);
+    expect(JSON.stringify(await store.getSession(FROM))).not.toContain(ACK_TEXT);
+  });
+
+  it("sends no ack for picks, STOP, START, HELP, the welcome, the pick-first prompt or an empty message", async () => {
+    // Opted in, no advisor yet: the pick-first prompt.
+    expect((await processSms(inbound("What sofa?"), deps()))[0]).toContain("Pick an advisor first");
+    await processSms(inbound("2"), deps());
+    await processSms(inbound("switch to gio"), deps());
+    await processSms(inbound("HELP"), deps());
+    expect(await processSms(inbound(""), deps())).toEqual([NO_QUESTION_TEXT]);
+    await processSms(inbound("START"), deps());
+    await processSms(inbound("STOP"), deps());
+    await processSms(inbound("START"), deps());
+    // A brand-new number's first text gets the welcome, not an ack.
+    await processSms(inbound("What sofa?", { from: "+15550000000" }), deps());
+    expect(acks).toEqual([]);
+    expect(ask.calls).toHaveLength(0);
+  });
+
+  it("acks once and then sends the fallback when the answer fails", async () => {
+    await processSms(inbound("3"), deps());
+    ask.failOnce();
+    expect(await processSms(inbound("What sofa?"), deps())).toEqual([FALLBACK_TEXT]);
+    expect(acks).toEqual([ACK_TEXT]);
+  });
+
+  it("returns the answer only after the ack has gone, and a failed ack never holds it up", async () => {
+    await processSms(inbound("3"), deps());
+    const order: string[] = [];
+    const slowAck = () => new Promise<void>((r) => setTimeout(() => (order.push("ack"), r()), 20));
+    const replies = await processSms(inbound("What sofa?"), { store, ask: ask.ask, acknowledge: slowAck });
+    order.push("answer");
+    expect(order).toEqual(["ack", "answer"]);
+    expect(replies).toEqual(["Canned answer."]);
+
+    const failing = () => Promise.reject(new Error("twilio down"));
+    expect(await processSms(inbound("And a rug?"), { store, ask: ask.ask, acknowledge: failing })).toEqual(["Canned answer."]);
+  });
+
+  it("acks a photo sent alone once the photo is in, but not when no photo could be read", async () => {
+    await processSms(inbound("3"), deps());
+    const photo = { media: [{ url: "https://media/1", contentType: "image/jpeg" }] };
+    const readable = async () => ({ data: "aGk=", mediaType: "image/jpeg" });
+    await processSms(inbound("", photo), { ...deps(), downloadMedia: readable });
+    expect(acks).toEqual([ACK_TEXT]);
+
+    const unreadable = async () => null;
+    expect(await processSms(inbound("", photo), { ...deps(), downloadMedia: unreadable })).toEqual([NO_QUESTION_TEXT]);
+    expect(acks).toEqual([ACK_TEXT]);
+  });
+
+  it("sends nothing at all for a duplicate delivery", async () => {
+    await processSms(inbound("3"), deps());
+    const first = inbound("What sofa?", { messageSid: "SMackdup" });
+    await processSms(first, deps());
+    await processSms(first, deps());
+    expect(acks).toEqual([ACK_TEXT]);
   });
 });

@@ -100,6 +100,8 @@ export async function POST(request: Request): Promise<Response> {
           },
           downloadMedia: async (url: string) =>
             downloadTwilioMedia({ accountSid, authToken, url }),
+          // "Give me a second…" goes out while the answer is still being written.
+          acknowledge: (text) => sender.send(from, text),
         });
         for (const reply of replies) {
           await sender.send(from, reply);
