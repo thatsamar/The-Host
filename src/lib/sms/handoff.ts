@@ -121,9 +121,12 @@ const OFFER_CHARS = Math.max(...SMS_ADVISORS.map((a) => offerText(a.id).length))
  */
 export function shortTextVoice(budget: number): string {
   const offerBudget = Math.max(40, budget - OFFER_CHARS);
+  // Roughly six characters a word in a text like this.
+  const words = Math.max(6, Math.floor(budget / 6));
   return [
-    `Here every answer is one short text: your words must fit in ${budget} characters, after the name and any introduction Cinq adds (${offerBudget} if you offer to bring in another advisor, since Cinq adds a line asking the person).`,
-    "Write like a well-informed friend with good taste texting a friend: natural, warm, and opinionated where you have a real view. Give the single most useful thing, specific (a name, a detail, a clear call) rather than a list or an overview, and keep the rest for their next text; if they ask for a list, give the top one or two that fit.",
+    `Here every answer is one short text: your words must fit in ${budget} characters, about ${words} words, after the name and any introduction Cinq adds (${offerBudget} characters if you offer to bring in another advisor, since Cinq adds a line asking the person).`,
+    "Design the text for that length; don't shorten a longer answer. Lead with the answer itself, as one complete thought that stands on its own and ends cleanly. Never start a list, a sequence or a \"first\" you can't finish in the text, and never trail off; if there is more worth knowing, it belongs in their next text.",
+    "Write like a well-informed friend with good taste texting a friend: natural, warm, and opinionated where you have a real view. Give the single most useful thing, specific (a name, a detail, a clear call) rather than a list or an overview; if they ask for a list, give the top one or two that fit.",
     "End with a hook only when one fits naturally: a specific recommendation, a real opinion, a detail worth knowing. Ask a question only when the answer honestly depends on something; never a forced question or a tacked-on offer to say more.",
     "Never sound like an agent: no disclaimers, no hedging, no filler, no headings or bullet lists.",
   ].join(" ");

@@ -5,7 +5,7 @@ import { shortTextVoice, textChannelNotes } from "../src/lib/sms/handoff";
 import { processSms, type SmsInbound } from "../src/lib/sms/handler";
 import { INTRODUCTIONS } from "../src/lib/sms/router";
 import { SMS_MAX_SEGMENTS, SMS_TEXT_CHARS, smsEncoding, smsSegments } from "../src/lib/sms/segments";
-import { answerBudget, shortAnswerText } from "../src/lib/sms/short";
+import { answerBudget, condensePrompt, roomForAnswer, shortAnswerText } from "../src/lib/sms/short";
 import { MemorySmsStore, type SmsTurn } from "../src/lib/sms/store";
 
 // A long, web-style answer: several sentences, a link, more than any one text holds.
@@ -157,5 +157,88 @@ describe("the voice of a short text, and the website", () => {
       expect(web.system.map((b) => b.label)).toEqual([...BLOCK_ORDER]);
       expect(web.system.map((b) => b.body).join("\n")).not.toMatch(/one short text|160 characters|well-informed friend/);
     }
+  });
+});
+
+describe("answers designed for one text, not cut down", () => {
+  const FROM = "+15551234567";
+  let sid = 0;
+  const inbound = (body: string): SmsInbound => ({ from: FROM, body, media: [], messageSid: `SMfit${++sid}` });
+  let store: MemorySmsStore;
+  let condensed: { advisorId: string; answer: string; room: number }[];
+  let rewrite: (answer: string, room: number) => Promise<string>;
+  let answers: string[];
+  const deps = () => ({
+    store,
+    route: async () => "tony",
+    ask: async () => answers.shift() ?? "Fine.",
+    condense: async (advisorId: string, answer: string, room: number) => {
+      condensed.push({ advisorId, answer, room });
+      return rewrite(answer, room);
+    },
+  });
+  const send = (body: string) => processSms(inbound(body), deps());
+
+  beforeEach(async () => {
+    store = new MemorySmsStore();
+    condensed = [];
+    answers = [];
+    rewrite = async () => "Shibuya, two nights at the Trunk Hotel, room on the park side. Easy, lively, and the best first base.";
+    await send("START");
+    await send("1");
+  });
+
+  it("asks the advisor to design for the length: one complete thought, nothing it can't finish", () => {
+    const voice = shortTextVoice(151);
+    expect(voice).toMatch(/about 25 words/);
+    expect(voice).toMatch(/Design the text for that length; don't shorten a longer answer/);
+    expect(voice).toMatch(/one complete thought that stands on its own and ends cleanly/);
+    expect(voice).toMatch(/Never start a list, a sequence or a "first" you can't finish/);
+  });
+
+  it("rewrites an answer that came back too long into one complete text, instead of cutting it", async () => {
+    answers = [LONG];
+    const replies = await send("Tokyo for a week?");
+    expect(condensed).toEqual([{ advisorId: "tony", answer: LONG, room: 160 - "Amar: ".length }]);
+    expect(replies).toEqual(["Amar: Shibuya, two nights at the Trunk Hotel, room on the park side. Easy, lively, and the best first base."]);
+    expect(replies[0]).not.toContain("...");
+    expect(smsSegments(replies[0])).toBe(1);
+    // History keeps the text as sent.
+    expect((await store.getSession(FROM))!.turnsByAdvisor.tony!.at(-1)!.text).toBe(
+      "Shibuya, two nights at the Trunk Hotel, room on the park side. Easy, lively, and the best first base.",
+    );
+  });
+
+  it("leaves an answer that already fits alone", async () => {
+    answers = ["Shibuya for a first visit; it is easy and lively."];
+    expect(await send("Tokyo?")).toEqual(["Amar: Shibuya for a first visit; it is easy and lively."]);
+    expect(condensed).toEqual([]);
+  });
+
+  it("leaves room for the YES line when the answer offers a handoff", () => {
+    expect(roomForAnswer(151, "Reply YES to bring in Martine, or carry on with me.")).toBe(151 - 52);
+    expect(roomForAnswer(151, null)).toBe(151);
+  });
+
+  it("falls back to the whole sentences that fit if the rewrite fails or is still too long", async () => {
+    answers = [LONG, LONG];
+    rewrite = async () => Promise.reject(new Error("down"));
+    const failed = await send("Tokyo for a week?");
+    rewrite = async () => LONG;
+    const tooLong = await send("And again?");
+    for (const replies of [failed, tooLong]) {
+      expect(replies).toHaveLength(1);
+      expect(smsSegments(replies[0])).toBe(1);
+      expect(replies[0].endsWith("facing the park.")).toBe(true);
+    }
+  });
+
+  it("gives the rewrite the advisor's voice to keep, one complete thought, and no trailing off", () => {
+    const prompt = condensePrompt("Amar", 151);
+    expect(prompt).toMatch(/text message from Amar/);
+    expect(prompt).toMatch(/at most 151 characters/);
+    expect(prompt).toMatch(/same voice, the same view and the single most useful point/);
+    expect(prompt).toMatch(/one complete thought that ends cleanly: not a shortened version that trails off/);
+    expect(prompt).toMatch(/keep that offer/);
   });
 });

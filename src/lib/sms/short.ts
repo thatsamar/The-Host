@@ -1,9 +1,10 @@
 /**
  * One short text per answer on Cinq by text (SMS_MAX_SEGMENTS). The advisor
- * is asked to write to fit (textChannelNotes); this module puts the text
- * together and, if the answer still runs long, keeps the whole sentences
- * that fit, or failing that the words that fit, with "...". It never cuts
- * a word or an address and never adds a second text.
+ * is asked to design its answer for that length (textChannelNotes). If one
+ * still runs long, it is rewritten to fit as one complete text (CONDENSE
+ * prompt, a quick model call); only if that fails does this module keep the
+ * whole sentences that fit, or as a last resort the words that fit, with
+ * "...". It never cuts a word or an address and never adds a second text.
  */
 
 import { fitsAnswerCap, plainPunctuation, SMS_TEXT_CHARS } from "./segments";
@@ -69,4 +70,28 @@ export function shortAnswerText(parts: { label: string; intro: string | null; an
   while (room > 0 && !fitsAnswerCap(compose(answer.slice(0, room) + ELLIPSIS))) room--;
   const forced = answer.slice(0, room) + ELLIPSIS;
   return { text: compose(forced), sent: forced };
+}
+
+/** Whether an answer, as it would be sent, fits the one text. */
+export function answerFits(parts: { label: string; intro: string | null; answer: string; offer: string | null }): boolean {
+  return shortAnswerText(parts).sent === shortPlain(parts.answer);
+}
+
+/** Characters the answer itself has, once the offer line (if any) is in the text too. */
+export function roomForAnswer(budget: number, offer: string | null): number {
+  return budget - (offer ? offer.length + 1 : 0);
+}
+
+/**
+ * Instructions for rewriting an answer that came back too long into one
+ * complete text: the same advisor's voice and view, designed for the room,
+ * not cut down.
+ */
+export function condensePrompt(name: string, room: number): string {
+  return [
+    `You rewrite a text message from ${name}, one of Cinq's advisors, so it fits in one text of at most ${room} characters. Reply with the rewritten text only.`,
+    "Keep the same voice, the same view and the single most useful point, specific and concrete. Make it one complete thought that ends cleanly: not a shortened version that trails off, no list or sequence it can't finish, no \"...\".",
+    "Write it as plain text: no name label, no greeting or introduction, no headings, bullets or Markdown, no disclaimers or filler.",
+    "If it offers to bring in another advisor, keep that offer, briefly.",
+  ].join("\n");
 }
