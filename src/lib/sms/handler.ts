@@ -12,7 +12,7 @@
  */
 
 import { advisorList, isAdvisorId, readNavigation, SMS_ADVISORS, type SmsAdvisorId } from "./navigation";
-import { agreesToHandoff, offerText, readSuggestion, type HandoffContext } from "./handoff";
+import { agreesToHandoff, handoffNote, offerText, readSuggestion, type HandoffContext } from "./handoff";
 import { INTRODUCTIONS, isGreeting, routeQuestion } from "./router";
 import { fitsInOneText, plainPunctuation } from "./segments";
 import { newSmsSession, type SmsImage, type SmsSession, type SmsStore, type SmsTurn } from "./store";
@@ -197,9 +197,25 @@ export function splitReply(text: string, max = MAX_REPLY_CHARS, fits: (piece: st
 /**
  * An answer as the texts that carry it: plain text, plain punctuation, and
  * each text short enough for carriers to deliver whole (see segments.ts).
+ * With a `label` ("Amar: "), every text starts with it, and its length counts
+ * toward each text's size. The label exists only in the texts, never in history.
  */
-export function answerTexts(answer: string): string[] {
-  return splitReply(plainPunctuation(toSmsText(answer)), MAX_REPLY_CHARS, (piece) => fitsInOneText(piece, MAX_REPLY_CHARS));
+export function answerTexts(answer: string, label = ""): string[] {
+  const pieces = splitReply(plainPunctuation(toSmsText(answer)), MAX_REPLY_CHARS - label.length, (piece) =>
+    fitsInOneText(label + piece, MAX_REPLY_CHARS),
+  );
+  return pieces.map((piece) => label + piece);
+}
+
+/** The speaker label on every text an advisor sends: "Amar: ". System texts have none. */
+export function speakerLabel(advisorId: SmsAdvisorId): string {
+  return `${SMS_ADVISORS.find((a) => a.id === advisorId)!.name}: `;
+}
+
+/** The answer without a speaker label the model wrote itself ("Gio: …" or "**Gio:** …"). */
+function withoutLabel(answer: string, advisorId: SmsAdvisorId): string {
+  const name = SMS_ADVISORS.find((a) => a.id === advisorId)!.name;
+  return answer.replace(new RegExp(String.raw`^\s*[*_]*${name}[*_]*\s*:[*_]*\s*`, "i"), "");
 }
 
 export interface SmsMedia {
@@ -295,18 +311,25 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
   /**
    * Ask an advisor and keep the exchange: the reply's texts, or null when the
    * answer failed (the turns are then left as they were). An advisor this
-   * number hasn't met opens with a one-line introduction, unless `introduced`
-   * (a handoff opens in the advisor's own words). A suggestion marker is
-   * removed here and becomes the pending offer.
+   * number hasn't met, routed or handed over, opens with its one-line
+   * introduction. Every text carries the advisor's speaker label. A
+   * suggestion marker is removed here and becomes the pending offer.
+   * `before` are turns stored ahead of the question (a handoff's note).
    */
-  const answerWith = async (advisorId: SmsAdvisorId, userTurn: SmsTurn, context?: { handoff?: HandoffContext }) => {
-    const intro = context?.handoff || hasMet(current, advisorId) ? null : INTRODUCTIONS[advisorId];
+  const answerWith = async (
+    advisorId: SmsAdvisorId,
+    userTurn: SmsTurn,
+    context?: { handoff?: HandoffContext },
+    before: SmsTurn[] = [],
+  ) => {
+    const intro = hasMet(current, advisorId) ? null : INTRODUCTIONS[advisorId];
     const history = current.turnsByAdvisor[advisorId] ?? [];
-    const turns = [...history, userTurn].slice(-MAX_STORED_TURNS);
+    const turns = [...history, ...before, userTurn].slice(-MAX_STORED_TURNS);
     let answer: string;
     let suggest: SmsAdvisorId | null;
     try {
       ({ text: answer, suggest } = readSuggestion(await deps.ask(advisorId, turns, context), advisorId));
+      answer = withoutLabel(answer, advisorId);
       if (!answer.trim()) throw new Error("empty_answer");
     } catch {
       await acked;
@@ -319,9 +342,9 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
     if (suggest) current.pendingHandoff = { from: advisorId, to: suggest };
     await store.saveSession(current);
     // Texts are plain: the reply loses its Markdown here; history above keeps it.
-    // The introduction and the offer line are part of the texts only, never of the stored answer.
+    // The label, the introduction and the offer line are part of the texts only, never of the stored answer.
     const body = [intro, answer, suggest ? offerText(suggest) : null].filter(Boolean).join("\n\n");
-    return answerTexts(body);
+    return answerTexts(body, speakerLabel(advisorId));
   };
 
   // An offer to bring in another advisor lasts for one text: a yes hands the
@@ -345,7 +368,14 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
       // The handoff: no pick confirmation, the ack as usual, then the new advisor answers the original question.
       acknowledge();
       session.advisorId = to;
-      const replies = await answerWith(to, { role: "user", text: asked.text, images: asked.images }, { handoff: { from, answer: offered.text } });
+      // The new advisor's history keeps a note of the handoff, with what the first advisor said,
+      // just before the question, so later answers know who brought them in and why.
+      const replies = await answerWith(
+        to,
+        { role: "user", text: asked.text, images: asked.images },
+        { handoff: { from, answer: offered.text } },
+        [handoffNote({ from, answer: offered.text })],
+      );
       if (replies) return replies;
       // Failed: stay with the first advisor, and keep the offer so YES can try again.
       session.advisorId = from;

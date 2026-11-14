@@ -9,6 +9,7 @@
 import type { ContextBlock } from "@/lib/ai/types";
 import { advisorArea } from "@/lib/companions/cinq";
 import { SMS_ADVISORS, isAdvisorId, readNavigation, tidy, type SmsAdvisorId } from "./navigation";
+import type { SmsTurn } from "./store";
 
 /** A suggestion waiting on the person's next text. */
 export interface PendingHandoff {
@@ -59,6 +60,23 @@ export function readSuggestion(answer: string, self: SmsAdvisorId): { text: stri
   return { text, suggest };
 }
 
+/** How a stored handoff note begins, so an advisor can tell it from the person's own words. */
+export const HANDOFF_NOTE_PREFIX = "[Cinq handoff note, not written by the person]";
+
+/**
+ * The note kept in the new advisor's history, just before the handed-over
+ * question: who brought them in and what that advisor said. It stays there,
+ * so later answers remember the handoff.
+ */
+export function handoffNote(handoff: HandoffContext): SmsTurn {
+  const from = nameOf(handoff.from);
+  const area = advisorArea(handoff.from)?.area;
+  return {
+    role: "user",
+    text: `${HANDOFF_NOTE_PREFIX} ${from}${area ? ` (${area})` : ""} brought you in for the question that follows, and the person agreed. ${from}'s answer to it was:\n\n${handoff.answer}`,
+  };
+}
+
 /** The one line Cinq adds after an answer that suggests another advisor. */
 export function offerText(to: SmsAdvisorId): string {
   return `Reply YES to bring in ${nameOf(to)}, or carry on with me.`;
@@ -96,13 +114,14 @@ export function textChannelNotes(self: SmsAdvisorId, handoff?: HandoffContext): 
     "You are answering by text message on Cinq by text. Here Cinq works as one collective: when a question is clearly better suited to another advisor, Cinq can bring that advisor in, with the person's agreement, and hand them the person's question together with your answer. On text this replaces the earlier note that you cannot transfer the conversation or share anything with the other advisors.",
     "If the question is clearly better suited to another advisor, give whatever genuinely useful help is yours to give (briefly, if the question is mostly theirs), then offer in your own words, in one sentence, to bring that advisor in, naming them. Then end the reply with a last line containing only the marker [[suggest:ID]] with their id. Cinq removes the marker and asks the person; never mention or explain the marker, and never say you have already brought them in.",
     `Suggest only when another advisor is clearly the better fit; when in doubt, answer it yourself and add no marker. At most one suggestion, never yourself, and never as a routine closing line. The ids: ${lineup()}.`,
+    `A message in the conversation that begins ${HANDOFF_NOTE_PREFIX} is from Cinq, not the person: it records that another advisor brought you in, and what they said. Treat it as part of this conversation's history: you know who brought you in and why.`,
+    "Cinq shows your name before each of your texts and, the first time you answer this person, a one-line introduction; never write your own name as a label, and don't introduce yourself again.",
   ];
   if (handoff) {
     const from = nameOf(handoff.from);
     lines.push(
-      `This question has just been handed to you. ${from} judged it better suited to you, offered to bring you in, and the person agreed. Their question is the latest message; you do not need them to repeat it. ${from}'s answer to it was:`,
-      `<previous_answer advisor="${from}">\n${handoff.answer}\n</previous_answer>`,
-      `Answer the question directly. Open with a brief, natural handoff in your own voice (that ${from} brought you in), not a generic greeting, and never ask what they need: they have already asked. Build on or differ from ${from} as your own judgment says, without repeating their answer. Here you do know what ${from} told them, from the answer above.`,
+      `This question has just been handed to you. ${from} judged it better suited to you, offered to bring you in, and the person agreed. Their question is the latest message, just after Cinq's handoff note with ${from}'s answer; you do not need them to repeat it.`,
+      `Answer the question directly. You may acknowledge in a few words that ${from} brought you in, but this is not a generic greeting, and never ask what they need: they have already asked. Build on or differ from ${from} as your own judgment says, without repeating their answer. Here you do know what ${from} told them, from the note.`,
     );
   }
   return { label: "channel_notes", title: "CINQ BY TEXT", body: lines.join("\n"), cacheable: false };

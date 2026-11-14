@@ -67,7 +67,7 @@ describe("Twilio webhook: Give me a second…", () => {
     await vi.waitFor(() => expect(state.sent).toEqual([ACK_TEXT])); // answer still being written
     state.releaseAnswer!();
     await settle();
-    expect(state.sent).toEqual([ACK_TEXT, "Start with a smaller sofa."]);
+    expect(state.sent).toEqual([ACK_TEXT, "Gio: Start with a smaller sofa."]);
   });
 
   it("sends no ack for a pick or HELP", async () => {
@@ -88,8 +88,10 @@ describe("Twilio webhook: Give me a second…", () => {
     const replies = lines.find((l) => l.startsWith("SMS replies sent"))!;
     expect(replies).toBeTruthy();
     const logged = JSON.parse(replies.slice("SMS replies sent ".length));
-    expect(logged).toMatchObject({ texts: 1, chars: 26, sent: 1 });
-    expect(logged.parts[0]).toMatchObject({ chars: 26, encoding: "GSM-7", segments: 1, twilioSegments: 1 });
+    // The earlier test left this number with Martine, so the text is "Martine: Start with a smaller sofa.".
+    const chars = "Martine: Start with a smaller sofa.".length;
+    expect(logged).toMatchObject({ texts: 1, chars, sent: 1 });
+    expect(logged.parts[0]).toMatchObject({ chars, encoding: "GSM-7", segments: 1, twilioSegments: 1 });
     expect(logged.parts[0].sid).toMatch(/^SM\d+$/);
     expect(lines.some((l) => l.startsWith("SMS ack sent"))).toBe(true);
     for (const l of lines) {
