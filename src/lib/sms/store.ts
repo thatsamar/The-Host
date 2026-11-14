@@ -13,6 +13,12 @@ export interface SmsTurn {
   role: "user" | "assistant";
   text: string;
   images?: SmsImage[];
+  /** When the turn was stored (ms since the epoch). Turns stored before this field have none. */
+  at?: number;
+  /** A note from Cinq rather than the person: "handoff" (see handoff.ts). */
+  note?: "handoff";
+  /** For a handoff note, the advisor who handed over. */
+  from?: string;
 }
 
 export interface SmsSession {

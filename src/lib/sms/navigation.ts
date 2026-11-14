@@ -89,5 +89,5 @@ export function readNavigation(body: string): Navigation | null {
 
 /** The five advisors, numbered, as the welcome and the list show them. */
 export function advisorList(): string {
-  return SMS_ADVISORS.map((a, i) => `${i + 1} ${a.name} — ${a.category}`).join("\n");
+  return SMS_ADVISORS.map((a, i) => `${i + 1} ${a.name} - ${a.category}`).join("\n");
 }

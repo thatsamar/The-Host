@@ -13,6 +13,7 @@
 
 import { advisorList, isAdvisorId, readNavigation, SMS_ADVISORS, type SmsAdvisorId } from "./navigation";
 import { agreesToHandoff, handoffNote, offerText, readSuggestion, type HandoffContext } from "./handoff";
+import { recentTurns } from "./context";
 import { INTRODUCTIONS, isGreeting, routeQuestion } from "./router";
 import { fitsInOneText, plainPunctuation } from "./segments";
 import { newSmsSession, type SmsImage, type SmsSession, type SmsStore, type SmsTurn } from "./store";
@@ -32,16 +33,27 @@ export const MAX_REPLY_CHARS = 1500;
 
 const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
-export const WELCOME_TEXT =
-  "Welcome to Cinq by text. Five advisors: 1 Amar — travel, 2 Martine — style, 3 Gio — design, 4 Alden — wine, cocktails & spirits, 5 Goldie — sounding board. What's on your mind? Ask anything and the right advisor will answer. Switch anytime — reply SWITCH for the list, or say 'talk to Martine'. Reply STOP to opt out, HELP for help. Message frequency varies with your usage. Message and data rates may apply.";
+// The welcome, list and HELP texts are plain punctuation like every other text, so phones show hyphens.
+export const WELCOME_TEXT = plainPunctuation(
+  [
+    "Welcome to Cinq by text.",
+    "Five advisors:",
+    advisorList(),
+    "What's on your mind? Ask anything and the right advisor will answer.",
+    "Switch anytime - reply SWITCH for the list, or say 'talk to Martine'.",
+    "Reply STOP to opt out, HELP for help.",
+    "Message frequency varies with your usage. Message and data rates may apply.",
+  ].join("\n"),
+);
 
-export const HELP_TEXT =
+export const HELP_TEXT = plainPunctuation(
   "Cinq by text. The five advisors:\n\n" +
-  advisorList() +
-  "\n\nReply a number or name to pick or switch, or say 'talk to Martine', then send your question or a photo. Reply START to join, STOP to opt out. Message and data rates may apply. Contact: amar@cinqcollective.com";
+    advisorList() +
+    "\n\nReply a number or name to pick or switch, or say 'talk to Martine', then send your question or a photo. Reply START to join, STOP to opt out. Message and data rates may apply. Contact: amar@cinqcollective.com",
+);
 
 /** The reply to SWITCH, MENU or "switch" alone: the five advisors and how to pick one. */
-export const ADVISOR_LIST_TEXT = "The five advisors. Reply with a number or name, or say 'talk to Martine':\n\n" + advisorList();
+export const ADVISOR_LIST_TEXT = plainPunctuation("The five advisors. Reply with a number or name, or say 'talk to Martine':\n\n" + advisorList());
 
 export const OPT_OUT_TEXT = "You’ve opted out of Cinq texts. No further messages will be sent. Reply START to opt back in.";
 export const FALLBACK_TEXT = "Something went wrong on our side. Try again.";
@@ -233,7 +245,9 @@ export interface SmsInbound {
 export interface SmsDeps {
   store: SmsStore;
   /** Ask an advisor. `context.handoff` carries the previous advisor's answer when a question was handed over. */
-  ask: (advisorId: SmsAdvisorId, turns: SmsTurn[], context?: { handoff?: HandoffContext }) => Promise<string>;
+  ask: (advisorId: SmsAdvisorId, turns: SmsTurn[], context?: { handoff?: HandoffContext; met?: string[] }) => Promise<string>;
+  /** The time now, in ms (tests set it); Date.now otherwise. */
+  now?: () => number;
   downloadMedia?: (url: string) => Promise<{ data: string; mediaType: string } | null>;
   /**
    * Sends an ack line (ACK_TEXTS, rotating per number) right away, while the answer is still being written. Only a
@@ -322,13 +336,21 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
     context?: { handoff?: HandoffContext },
     before: SmsTurn[] = [],
   ) => {
-    const intro = hasMet(current, advisorId) ? null : INTRODUCTIONS[advisorId];
+    // A handoff always opens with the introduction; a routed answer only the first time.
+    const intro = context?.handoff || !hasMet(current, advisorId) ? INTRODUCTIONS[advisorId] : null;
+    const now = deps.now?.() ?? Date.now();
     const history = current.turnsByAdvisor[advisorId] ?? [];
-    const turns = [...history, ...before, userTurn].slice(-MAX_STORED_TURNS);
+    // Every new turn carries its time, so it can leave the advisor's view after a day.
+    const turns = [...history, ...before.map((t) => ({ ...t, at: now })), { ...userTurn, at: now }].slice(-MAX_STORED_TURNS);
+    // Everything stays stored; the advisor sees only the last day (context.ts).
+    const met = (current.introduced ?? []).filter((id) => id !== advisorId);
     let answer: string;
     let suggest: SmsAdvisorId | null;
     try {
-      ({ text: answer, suggest } = readSuggestion(await deps.ask(advisorId, turns, context), advisorId));
+      ({ text: answer, suggest } = readSuggestion(
+        await deps.ask(advisorId, recentTurns(turns, now), context || met.length ? { ...context, ...(met.length ? { met } : {}) } : undefined),
+        advisorId,
+      ));
       answer = withoutLabel(answer, advisorId);
       if (!answer.trim()) throw new Error("empty_answer");
     } catch {
@@ -336,7 +358,7 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
       return null;
     }
     await acked;
-    current.turnsByAdvisor[advisorId] = [...turns, { role: "assistant" as const, text: answer }].slice(-MAX_STORED_TURNS);
+    current.turnsByAdvisor[advisorId] = [...turns, { role: "assistant" as const, text: answer, at: now }].slice(-MAX_STORED_TURNS);
     introduce(current, advisorId);
     // One offer at a time: a new one replaces any other.
     if (suggest) current.pendingHandoff = { from: advisorId, to: suggest };
