@@ -119,8 +119,8 @@ describe("SMS rehearsal: full journey with a restart", () => {
 
     // START -> welcome with all five advisors and disclosures.
     expect(await processSms(inbound("START"), deps())).toEqual([WELCOME_TEXT]);
-    expect(WELCOME_TEXT).toContain("Message frequency varies with your usage");
-    expect(WELCOME_TEXT).toContain("Message and data rates may apply");
+    expect(WELCOME_TEXT).toContain("Message frequency varies with usage");
+    expect(WELCOME_TEXT).toContain("Message & data rates may apply");
     expect(WELCOME_TEXT).toContain("STOP");
     expect(WELCOME_TEXT).toContain("HELP");
 

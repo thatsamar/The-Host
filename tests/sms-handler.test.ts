@@ -62,13 +62,11 @@ describe("START, STOP, HELP", () => {
     const ask = makeAsk();
     const replies = await processSms(inbound("START"), { store, ask: ask.ask });
     expect(replies).toEqual([WELCOME_TEXT]);
-    expect(WELCOME_TEXT).toContain("Amar");
-    expect(WELCOME_TEXT).toContain("Martine");
-    expect(WELCOME_TEXT).toContain("Gio");
-    expect(WELCOME_TEXT).toContain("Alden");
-    expect(WELCOME_TEXT).toContain("Goldie");
-    expect(WELCOME_TEXT).toContain("Message frequency varies with your usage");
-    expect(WELCOME_TEXT).toContain("Message and data rates may apply");
+    // The welcome names the five roles; the advisors' names are in the SWITCH list.
+    expect(WELCOME_TEXT).toContain("5 advisors: travel, style, design, drinks and sounding board.");
+    expect(WELCOME_TEXT).toContain("SWITCH for their names.");
+    expect(WELCOME_TEXT).toContain("Message frequency varies with usage.");
+    expect(WELCOME_TEXT).toContain("Message & data rates may apply.");
     const session = await store.getSession(FROM);
     expect(session?.optedIn).toBe(true);
     expect(session?.advisorId).toBeNull();
@@ -81,7 +79,7 @@ describe("START, STOP, HELP", () => {
       const ask = makeAsk();
       const replies = await processSms(inbound(first), { store, ask: ask.ask });
       expect(replies[0]).toBe(WELCOME_TEXT);
-      expect(WELCOME_TEXT).toContain("Reply STOP to opt out, HELP for help");
+      expect(WELCOME_TEXT).toContain("STOP to opt out\nHELP for help.");
       // Only a question is answered, after the welcome.
       expect(ask.calls).toHaveLength(first.endsWith("?") ? 1 : 0);
       expect((await store.getSession(FROM))?.optedIn).toBe(true);

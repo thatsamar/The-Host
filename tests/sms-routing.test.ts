@@ -183,20 +183,18 @@ describe("routing and introductions in the conversation", () => {
     expect(replies[1].startsWith("Amar: I'm Amar")).toBe(true);
   });
 
-  it("reads exactly as written: the welcome, one line each, with plain hyphens", () => {
+  it("reads exactly as written: the welcome, one line each, roles only, with every required disclosure", () => {
     expect(WELCOME_TEXT).toBe(
       [
-        "Welcome to Cinq by text.",
-        "Five advisors:",
-        "1 Amar - travel",
-        "2 Martine - style",
-        "3 Gio - design",
-        "4 Alden - wine, cocktails & spirits",
-        "5 Goldie - sounding board",
-        "What's on your mind? Ask anything and the right advisor will answer.",
-        "Switch anytime - reply SWITCH for the list, or say 'talk to Martine'.",
-        "Reply STOP to opt out, HELP for help.",
-        "Message frequency varies with your usage. Message and data rates may apply.",
+        "Welcome to Cinq.",
+        "5 advisors: travel, style, design, drinks and sounding board.",
+        "Ask anything and the right advisor will answer.",
+        "SWITCH for their names.",
+        "Say 'Martine' to talk style or 'Gio' to talk design, etc.",
+        "STOP to opt out",
+        "HELP for help.",
+        "Message frequency varies with usage.",
+        "Message & data rates may apply.",
       ].join("\n"),
     );
   });
