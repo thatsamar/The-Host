@@ -54,7 +54,12 @@ export const OPT_OUT_TEXT = "You’ve opted out of Cinq texts. No further messag
 export const FALLBACK_TEXT = "Something went wrong on our side. Try again.";
 export const NO_QUESTION_TEXT = "Add a photo or a question.";
 /** Sent the moment a question goes to the advisor, so the wait for the answer isn't silent. Never stored as a turn. */
-export const ACK_TEXT = "Give me a second…";
+export const ACK_TEXTS = ["Give me a second…", "Working on it…", "Let me think about it…", "Hmm…"] as const;
+
+/** The ack line after `last`: rotating through the four, so a number never gets the same line twice in a row. */
+export function nextAck(last: number | undefined): number {
+  return last === undefined || !Number.isInteger(last) || last < 0 ? 0 : (last + 1) % ACK_TEXTS.length;
+}
 
 export function advisorPromptText(): string {
   return "Pick an advisor first — reply with the number or name:\n\n" + advisorList();
@@ -238,7 +243,7 @@ export interface SmsDeps {
   ask: (advisorId: SmsAdvisorId, turns: SmsTurn[]) => Promise<string>;
   downloadMedia?: (url: string) => Promise<{ data: string; mediaType: string } | null>;
   /**
-   * Sends ACK_TEXT right away, while the answer is still being written. Only a
+   * Sends an ack line (ACK_TEXTS, rotating per number) right away, while the answer is still being written. Only a
    * question to the selected advisor gets one, at most once. The answer (or
    * the fallback) is returned only after the ack has gone out, so it always
    * arrives second; a failed ack never holds up the answer.
@@ -321,8 +326,12 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
   // The ack goes out without waiting: the answer is written while it travels.
   let acked: Promise<void> | null = null;
   const acknowledge = () => {
-    acked ??= Promise.resolve()
-      .then(() => deps.acknowledge?.(ACK_TEXT))
+    if (acked) return;
+    const line = nextAck(session.lastAck);
+    // Remembered with the session, even when the answer fails, so the next question's line differs.
+    session.lastAck = line;
+    acked = Promise.resolve()
+      .then(() => deps.acknowledge?.(ACK_TEXTS[line]))
       .catch(() => {});
   };
   // A worded question is certain to go to the advisor, so ack before downloading photos.
@@ -354,6 +363,8 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
   } catch {
     // Failed answers leave the session untouched, so a retry starts clean.
     await acked;
+    // Turns stay as they were; only which ack line was used is kept. A failed save still sends the fallback.
+    await store.saveSession(session).catch(() => {});
     return [FALLBACK_TEXT];
   }
   await acked;

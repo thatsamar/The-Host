@@ -21,6 +21,8 @@ export interface SmsSession {
   advisorId: string | null;
   /** Conversation history per advisor, so switching never mixes contexts. */
   turnsByAdvisor: Record<string, SmsTurn[]>;
+  /** Which "Give me a second…" line this number got last (an index into ACK_TEXTS), so the next one differs. */
+  lastAck?: number;
 }
 
 export interface SmsStore {
