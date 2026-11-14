@@ -25,7 +25,7 @@ vi.mock("@/lib/sms/twilio", () => ({
     },
   }),
 }));
-vi.mock("@/lib/ai", () => ({ getChatProvider: () => ({}) }));
+vi.mock("@/lib/ai", () => ({ getChatProvider: () => ({}), getRouterProvider: () => ({}) }));
 vi.mock("@/lib/ask/ask", () => ({
   ask: async function* () {
     await new Promise<void>((resolve) => (state.releaseAnswer = resolve));

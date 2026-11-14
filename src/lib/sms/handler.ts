@@ -11,19 +11,12 @@
  * fabricated answer.
  */
 
+import { advisorList, isAdvisorId, readNavigation, SMS_ADVISORS, type SmsAdvisorId } from "./navigation";
+import { INTRODUCTIONS, isGreeting, routeQuestion } from "./router";
 import { fitsInOneText, plainPunctuation } from "./segments";
 import { newSmsSession, type SmsImage, type SmsSession, type SmsStore, type SmsTurn } from "./store";
 
-/** The five advisors, in the order the hub lists them. */
-export const SMS_ADVISORS = [
-  { id: "tony", name: "Amar", category: "travel" },
-  { id: "martini", name: "Martine", category: "style" },
-  { id: "gio", name: "Gio", category: "design" },
-  { id: "alden", name: "Alden", category: "wine, cocktails & spirits" },
-  { id: "goldie", name: "Goldie", category: "sounding board" },
-] as const;
-
-export type SmsAdvisorId = (typeof SMS_ADVISORS)[number]["id"];
+export { SMS_ADVISORS, type SmsAdvisorId } from "./navigation";
 
 const STOP_WORDS = new Set(["stop", "stopall", "unsubscribe", "cancel", "end", "quit"]);
 const START_WORDS = new Set(["start", "unstop"]);
@@ -38,17 +31,16 @@ export const MAX_REPLY_CHARS = 1500;
 
 const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
-function advisorList(): string {
-  return SMS_ADVISORS.map((a, i) => `${i + 1} ${a.name} — ${a.category}`).join("\n");
-}
-
 export const WELCOME_TEXT =
-  "Welcome to Cinq by text. Pick an advisor by replying with the number or name:\n\n" +
-  advisorList() +
-  "\n\nThen send your question. You can switch advisors anytime by replying with another number or name. Reply STOP to opt out, HELP for help. Message frequency varies with your usage. Message and data rates may apply.";
+  "Welcome to Cinq by text. Five advisors: 1 Amar — travel, 2 Martine — style, 3 Gio — design, 4 Alden — wine, cocktails & spirits, 5 Goldie — sounding board. What's on your mind? Ask anything and the right advisor will answer. Switch anytime — reply SWITCH for the list, or say 'talk to Martine'. Reply STOP to opt out, HELP for help. Message frequency varies with your usage. Message and data rates may apply.";
 
 export const HELP_TEXT =
-  "Cinq by text: reply 1-5 or an advisor name to pick or switch advisors, then send your question or a photo. Reply START to join, STOP to opt out. Message and data rates may apply. Contact: amar@cinqcollective.com";
+  "Cinq by text. The five advisors:\n\n" +
+  advisorList() +
+  "\n\nReply a number or name to pick or switch, or say 'talk to Martine', then send your question or a photo. Reply START to join, STOP to opt out. Message and data rates may apply. Contact: amar@cinqcollective.com";
+
+/** The reply to SWITCH, MENU or "switch" alone: the five advisors and how to pick one. */
+export const ADVISOR_LIST_TEXT = "The five advisors. Reply with a number or name, or say 'talk to Martine':\n\n" + advisorList();
 
 export const OPT_OUT_TEXT = "You’ve opted out of Cinq texts. No further messages will be sent. Reply START to opt back in.";
 export const FALLBACK_TEXT = "Something went wrong on our side. Try again.";
@@ -61,10 +53,6 @@ export function nextAck(last: number | undefined): number {
   return last === undefined || !Number.isInteger(last) || last < 0 ? 0 : (last + 1) % ACK_TEXTS.length;
 }
 
-export function advisorPromptText(): string {
-  return "Pick an advisor first — reply with the number or name:\n\n" + advisorList();
-}
-
 function advisorConfirmText(id: SmsAdvisorId): string {
   const advisor = SMS_ADVISORS.find((a) => a.id === id)!;
   return `You're with ${advisor.name} (${advisor.category}). Send your question as a text or a photo.`;
@@ -74,23 +62,10 @@ function normalize(body: string): string {
   return body.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-/** Match "3", "gio", "Martine", "switch to alden", and similar picks. */
+/** The advisor a text switches to, if it is a switch (see navigation.ts); otherwise null. */
 export function pickAdvisor(text: string): SmsAdvisorId | null {
-  const cleaned = text.replace(/^(switch to|talk to|ask)\s+/, "");
-  const byNumber: Record<string, SmsAdvisorId> = {
-    "1": "tony",
-    "2": "martini",
-    "3": "gio",
-    "4": "alden",
-    "5": "goldie",
-  };
-  if (byNumber[cleaned]) return byNumber[cleaned];
-  for (const advisor of SMS_ADVISORS) {
-    if (cleaned === advisor.name.toLowerCase() || cleaned === advisor.category.toLowerCase()) {
-      return advisor.id;
-    }
-  }
-  return null;
+  const nav = readNavigation(text);
+  return nav?.kind === "switch" ? nav.advisorId : null;
 }
 
 /**
@@ -249,6 +224,12 @@ export interface SmsDeps {
    * arrives second; a failed ack never holds up the answer.
    */
   acknowledge?: (text: string) => Promise<void> | void;
+  /**
+   * Which advisor a question goes to when none is picked: a short model call
+   * given ROUTER_PROMPT (router.ts), returning its reply. Without it, or when
+   * it fails, the question goes to Goldie.
+   */
+  route?: (question: string) => Promise<string>;
 }
 
 /**
@@ -289,52 +270,75 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
 
   // First message: the number opts in by texting us, and its first reply is
   // always the welcome, so the opt-out, frequency and rates terms arrive
-  // before anything else. Choosing an advisor straight away also confirms it.
+  // before anything else. A pick is confirmed; a question is answered after it.
+  let firstContact = false;
   if (isNew) {
-    const firstPick = pickAdvisor(text);
     session.optedIn = true;
-    session.advisorId = firstPick;
+    const nav = readNavigation(inbound.body);
+    if (nav?.kind === "switch") {
+      session.advisorId = nav.advisorId;
+      introduce(session, nav.advisorId);
+      await store.saveSession(session);
+      return [WELCOME_TEXT, advisorConfirmText(nav.advisorId)];
+    }
+    if (START_WORDS.has(text) || nav?.kind === "list" || isGreeting(inbound.body) || (!inbound.body.trim() && !inbound.media.length)) {
+      await store.saveSession(session);
+      return [WELCOME_TEXT];
+    }
+    // A question: the welcome goes first, then the answer.
+    firstContact = true;
     await store.saveSession(session);
-    return firstPick ? [WELCOME_TEXT, advisorConfirmText(firstPick)] : [WELCOME_TEXT];
+  } else {
+    // Re-START while opted in restarts the welcome.
+    if (START_WORDS.has(text)) {
+      session.advisorId = null;
+      await store.saveSession(session);
+      return [WELCOME_TEXT];
+    }
+
+    if (STOP_WORDS.has(text)) {
+      session.optedIn = false;
+      session.advisorId = null;
+      await store.saveSession(session);
+      return [OPT_OUT_TEXT];
+    }
+
+    // Navigation: the advisor list, or a switch. Never stored as a turn, and
+    // anything bundled into a switch ("talk to Gio about my sofa") isn't answered.
+    // The confirmation introduces the advisor, so no separate introduction follows.
+    const nav = readNavigation(inbound.body);
+    if (nav?.kind === "list") return [ADVISOR_LIST_TEXT];
+    if (nav?.kind === "switch") {
+      session.advisorId = nav.advisorId;
+      introduce(session, nav.advisorId);
+      await store.saveSession(session);
+      return [advisorConfirmText(nav.advisorId)];
+    }
   }
 
-  // Re-START while opted in restarts the welcome.
-  if (START_WORDS.has(text)) {
-    session.advisorId = null;
-    await store.saveSession(session);
-    return [WELCOME_TEXT];
-  }
-
-  if (STOP_WORDS.has(text)) {
-    session.optedIn = false;
-    session.advisorId = null;
-    await store.saveSession(session);
-    return [OPT_OUT_TEXT];
-  }
-
-  const picked = pickAdvisor(text);
-  if (picked) {
-    session.advisorId = picked;
-    await store.saveSession(session);
-    return [advisorConfirmText(picked)];
-  }
-
-  if (!session.advisorId) return [advisorPromptText()];
-
-  const advisorId = session.advisorId as SmsAdvisorId;
+  const current = session;
   const question = inbound.body.trim();
   // The ack goes out without waiting: the answer is written while it travels.
+  // On first contact the welcome goes out in its place.
   let acked: Promise<void> | null = null;
+  let welcomeSent = false;
   const acknowledge = () => {
     if (acked) return;
-    const line = nextAck(session.lastAck);
-    // Remembered with the session, even when the answer fails, so the next question's line differs.
-    session.lastAck = line;
+    let line: string;
+    if (firstContact) {
+      line = WELCOME_TEXT;
+      welcomeSent = !!deps.acknowledge;
+    } else {
+      const next = nextAck(current.lastAck);
+      // Remembered with the session, even when the answer fails, so the next question's line differs.
+      current.lastAck = next;
+      line = ACK_TEXTS[next];
+    }
     acked = Promise.resolve()
-      .then(() => deps.acknowledge?.(ACK_TEXTS[line]))
+      .then(() => deps.acknowledge?.(line))
       .catch(() => {});
   };
-  // A worded question is certain to go to the advisor, so ack before downloading photos.
+  // A worded question is certain to go to an advisor, so ack before downloading photos.
   if (question) acknowledge();
   const images: SmsImage[] = [];
   if (deps.downloadMedia) {
@@ -349,29 +353,54 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
       }
     }
   }
-  if (!question && images.length === 0) return [NO_QUESTION_TEXT];
+  if (!question && images.length === 0) {
+    await acked;
+    return firstContact && !welcomeSent ? [WELCOME_TEXT] : [NO_QUESTION_TEXT];
+  }
   acknowledge(); // photos alone: now known to be a question
+
+  // No advisor yet: the question is routed to the best fit, never bounced.
+  let advisorId = isAdvisorId(session.advisorId) ? session.advisorId : null;
+  if (!advisorId) {
+    advisorId = await routeQuestion(question, images.length, deps.route);
+    session.advisorId = advisorId;
+  }
+  // An advisor this number hasn't met opens with a one-line introduction.
+  const intro = hasMet(session, advisorId) ? null : INTRODUCTIONS[advisorId];
 
   const userTurn: SmsTurn = { role: "user", text: question, images: images.length ? images : undefined };
   const history = session.turnsByAdvisor[advisorId] ?? [];
   const turns = [...history, userTurn].slice(-MAX_STORED_TURNS);
 
+  const lead = firstContact && !welcomeSent ? [WELCOME_TEXT] : [];
   let answer: string;
   try {
     answer = await deps.ask(advisorId, turns);
     if (!answer.trim()) throw new Error("empty_answer");
   } catch {
-    // Failed answers leave the session untouched, so a retry starts clean.
+    // Failed answers leave the turns untouched, so a retry starts clean.
     await acked;
-    // Turns stay as they were; only which ack line was used is kept. A failed save still sends the fallback.
+    // Only the ack line used, and the routed advisor, are kept. A failed save still sends the fallback.
     await store.saveSession(session).catch(() => {});
-    return [FALLBACK_TEXT];
+    return [...lead, FALLBACK_TEXT];
   }
   await acked;
 
   const assistantTurn: SmsTurn = { role: "assistant", text: answer };
   session.turnsByAdvisor[advisorId] = [...turns, assistantTurn].slice(-MAX_STORED_TURNS);
+  introduce(session, advisorId);
   await store.saveSession(session);
   // Texts are plain: the reply loses its Markdown here; history above keeps it.
-  return answerTexts(answer);
+  // The introduction is part of the texts only, never of the stored answer.
+  return [...lead, ...answerTexts(intro ? `${intro}\n\n${answer}` : answer)];
+}
+
+/** Whether this number has met an advisor: introduced, confirmed, or already in conversation. */
+function hasMet(session: SmsSession, advisorId: SmsAdvisorId): boolean {
+  return (session.introduced ?? []).includes(advisorId) || (session.turnsByAdvisor[advisorId]?.length ?? 0) > 0;
+}
+
+function introduce(session: SmsSession, advisorId: SmsAdvisorId): void {
+  const met = session.introduced ?? [];
+  if (!met.includes(advisorId)) session.introduced = [...met, advisorId];
 }

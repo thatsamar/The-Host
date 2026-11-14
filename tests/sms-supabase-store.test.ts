@@ -35,3 +35,20 @@ describe("Supabase SMS store", () => {
     expect(await store.getSession("+1555")).toEqual({ phone: "+1555", optedIn: true, advisorId: null, turnsByAdvisor: {} });
   });
 });
+
+describe("Supabase SMS store: introductions", () => {
+  it("remembers which advisors a number has met, beside the turns", async () => {
+    const rows = new Map<string, Record<string, unknown>>();
+    const client = {
+      from: () => ({
+        select: () => ({ eq: (_: string, phone: string) => ({ maybeSingle: async () => ({ data: rows.get(phone) ?? null, error: null }) }) }),
+        upsert: async (row: Record<string, unknown>) => (rows.set(row.phone_number as string, row), { error: null }),
+      }),
+    };
+    const store = new SupabaseSmsStore(client as unknown as SupabaseClient);
+    await store.saveSession({ phone: "+1555", optedIn: true, advisorId: "gio", turnsByAdvisor: {}, introduced: ["gio"] });
+    expect(rows.get("+1555")!.turns_by_advisor).toEqual({ _introduced: ["gio"] });
+    expect((await store.getSession("+1555"))?.introduced).toEqual(["gio"]);
+    expect((await store.getSession("+1555"))?.turnsByAdvisor).toEqual({});
+  });
+});

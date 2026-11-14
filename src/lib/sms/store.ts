@@ -23,6 +23,8 @@ export interface SmsSession {
   turnsByAdvisor: Record<string, SmsTurn[]>;
   /** Which "Give me a second…" line this number got last (an index into ACK_TEXTS), so the next one differs. */
   lastAck?: number;
+  /** Advisors this number has met (introduced or confirmed), so each introduces themselves once. */
+  introduced?: string[];
 }
 
 export interface SmsStore {

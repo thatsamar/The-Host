@@ -75,13 +75,14 @@ describe("START, STOP, HELP", () => {
   });
 
   it("sends the welcome, with its opt-out and rates terms, first to every new number", async () => {
-    for (const first of ["3", "Gio", "What sofa fits a small room?"]) {
+    for (const first of ["3", "Gio", "START", "hi", "What sofa fits a small room?"]) {
       const store = new MemorySmsStore();
       const ask = makeAsk();
       const replies = await processSms(inbound(first), { store, ask: ask.ask });
       expect(replies[0]).toBe(WELCOME_TEXT);
       expect(WELCOME_TEXT).toContain("Reply STOP to opt out, HELP for help");
-      expect(ask.calls).toHaveLength(0);
+      // Only a question is answered, after the welcome.
+      expect(ask.calls).toHaveLength(first.endsWith("?") ? 1 : 0);
       expect((await store.getSession(FROM))?.optedIn).toBe(true);
     }
     const store = new MemorySmsStore();
@@ -171,10 +172,11 @@ describe("advisor choice, questions, history, switching", () => {
     ]);
   });
 
-  it("asks for an advisor before answering a question", async () => {
+  it("never asks for an advisor first: an unpicked question is routed and answered", async () => {
     const replies = await processSms(inbound("Where should I go?"), { store, ask: ask.ask });
-    expect(replies[0]).toContain("Pick an advisor first");
-    expect(ask.calls).toHaveLength(0);
+    expect(replies.join(" ")).not.toContain("Pick an advisor");
+    // With no router to ask, it goes to Goldie.
+    expect(ask.calls.map((c) => c.advisorId)).toEqual(["goldie"]);
   });
 
   it("accepts names and switch phrases, not just numbers", async () => {
@@ -309,9 +311,7 @@ describe("\"Give me a second…\" while an answer is written", () => {
     for (const line of ACK_TEXTS) expect(JSON.stringify(await store.getSession(FROM))).not.toContain(line);
   });
 
-  it("sends no ack for picks, STOP, START, HELP, the welcome, the pick-first prompt or an empty message", async () => {
-    // Opted in, no advisor yet: the pick-first prompt.
-    expect((await processSms(inbound("What sofa?"), deps()))[0]).toContain("Pick an advisor first");
+  it("sends no ack for picks, STOP, START, HELP, the welcome or an empty message", async () => {
     await processSms(inbound("2"), deps());
     await processSms(inbound("switch to gio"), deps());
     await processSms(inbound("HELP"), deps());
@@ -319,10 +319,12 @@ describe("\"Give me a second…\" while an answer is written", () => {
     await processSms(inbound("START"), deps());
     await processSms(inbound("STOP"), deps());
     await processSms(inbound("START"), deps());
-    // A brand-new number's first text gets the welcome, not an ack.
-    await processSms(inbound("What sofa?", { from: "+15550000000" }), deps());
     expect(acks).toEqual([]);
     expect(ask.calls).toHaveLength(0);
+    // A brand-new number's first question gets the welcome in the ack's place, then its answer.
+    await processSms(inbound("What sofa?", { from: "+15550000000" }), deps());
+    expect(acks).toEqual([WELCOME_TEXT]);
+    expect(ask.calls).toHaveLength(1);
   });
 
   it("acks once and then sends the fallback when the answer fails", async () => {

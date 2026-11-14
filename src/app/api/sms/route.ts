@@ -1,10 +1,11 @@
 import { after } from "next/server";
-import { getChatProvider } from "@/lib/ai";
+import { getChatProvider, getRouterProvider } from "@/lib/ai";
 import { ask } from "@/lib/ask/ask";
 import type { CompanionId } from "@/lib/companions/types";
 import { COMPANIONS } from "@/lib/companions";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { processSms, type SmsInbound } from "@/lib/sms/handler";
+import { ROUTE_TIMEOUT_MS, ROUTER_PROMPT } from "@/lib/sms/router";
 import { smsEncoding, smsSegments } from "@/lib/sms/segments";
 import { SupabaseSmsStore } from "@/lib/sms/supabase-store";
 import {
@@ -98,6 +99,19 @@ export async function POST(request: Request): Promise<Response> {
             }
             if (!text.trim()) throw new Error("ask_empty");
             return text;
+          },
+          // Which advisor a question goes to when none is picked: one short, low-effort call.
+          route: async (question) => {
+            let reply = "";
+            for await (const event of getRouterProvider().streamChat({
+              system: [{ label: "router", title: "ROUTER", body: ROUTER_PROMPT, cacheable: true }],
+              messages: [{ role: "user", content: [{ type: "text", text: question }] }],
+              webSearch: false,
+              signal: AbortSignal.timeout(ROUTE_TIMEOUT_MS),
+            })) {
+              if (event.type === "text") reply += event.text;
+            }
+            return reply;
           },
           downloadMedia: async (url: string) =>
             downloadTwilioMedia({ accountSid, authToken, url }),
