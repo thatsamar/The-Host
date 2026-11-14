@@ -12,6 +12,11 @@ const AREAS: Partial<Record<CompanionId, { name: string; area: string }>> = {
   goldie: { name: "Goldie", area: "complex personal and professional decisions" },
 };
 
+/** An advisor's name and area, as the others describe them. */
+export function advisorArea(id: CompanionId): { name: string; area: string } | undefined {
+  return AREAS[id];
+}
+
 /** The one shared line about the other advisors and when to mention them. */
 export function cinqAdvisors(self: CompanionId): string {
   const others = Object.entries(AREAS)

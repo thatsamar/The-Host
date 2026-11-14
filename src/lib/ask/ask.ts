@@ -1,4 +1,4 @@
-import { ChatError, type AnswerPhase, type ChatProvider, type FailureInfo, type WebSourceRef } from "@/lib/ai/types";
+import { ChatError, type AnswerPhase, type ChatProvider, type ContextBlock, type FailureInfo, type WebSourceRef } from "@/lib/ai/types";
 import type { Companion } from "@/lib/companions/types";
 import { safeToken } from "@/lib/diagnostics";
 import { assemblePrompt, type AskTurn } from "./prompt";
@@ -38,6 +38,8 @@ export async function* ask(
     provider: ChatProvider;
     companion: Companion;
     webSearch?: boolean;
+    /** Notes for a channel other than the website (see assemblePrompt). */
+    channel?: ContextBlock;
     signal?: AbortSignal;
     onFinish?: (info: AnswerInfo) => void;
     /** A failed model call, as the log records it. */
@@ -45,7 +47,7 @@ export async function* ask(
   },
   turns: AskTurn[],
 ): AsyncGenerator<AskEvent> {
-  const request = assemblePrompt({ companion: deps.companion, turns, webSearch: deps.webSearch });
+  const request = assemblePrompt({ companion: deps.companion, turns, webSearch: deps.webSearch, channel: deps.channel });
   if (request.messages.at(-1)?.role !== "user") {
     yield { type: "error", message: "Add a photo or a question." };
     return;

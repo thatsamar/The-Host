@@ -7,6 +7,8 @@ import type { SmsSession, SmsStore, SmsTurn } from "./store";
 const LAST_ACK_KEY = "_lastAck";
 // So do the advisors this number has met.
 const INTRODUCED_KEY = "_introduced";
+// And a pending handoff offer.
+const PENDING_KEY = "_pendingHandoff";
 
 /**
  * Supabase-backed SMS store, using the service-role client so no signed-in
@@ -30,7 +32,11 @@ export class SupabaseSmsStore implements SmsStore {
       advisor_id: string | null;
       turns_by_advisor: Record<string, unknown> | null;
     };
-    const { [LAST_ACK_KEY]: lastAck, [INTRODUCED_KEY]: met, ...turns } = row.turns_by_advisor ?? {};
+    const { [LAST_ACK_KEY]: lastAck, [INTRODUCED_KEY]: met, [PENDING_KEY]: pending, ...turns } = row.turns_by_advisor ?? {};
+    const pendingHandoff =
+      pending && typeof pending === "object" && typeof (pending as { from?: unknown }).from === "string" && typeof (pending as { to?: unknown }).to === "string"
+        ? { from: (pending as { from: string }).from, to: (pending as { to: string }).to }
+        : undefined;
     const introduced = Array.isArray(met) ? met.filter((id): id is string => typeof id === "string") : undefined;
     return {
       phone: row.phone_number,
@@ -39,6 +45,7 @@ export class SupabaseSmsStore implements SmsStore {
       turnsByAdvisor: turns as Record<string, SmsTurn[]>,
       ...(typeof lastAck === "number" ? { lastAck } : {}),
       ...(introduced ? { introduced } : {}),
+      ...(pendingHandoff ? { pendingHandoff } : {}),
     };
   }
 
@@ -52,6 +59,7 @@ export class SupabaseSmsStore implements SmsStore {
           ...session.turnsByAdvisor,
           ...(session.lastAck === undefined ? {} : { [LAST_ACK_KEY]: session.lastAck }),
           ...(session.introduced?.length ? { [INTRODUCED_KEY]: session.introduced } : {}),
+          ...(session.pendingHandoff ? { [PENDING_KEY]: session.pendingHandoff } : {}),
         },
         updated_at: new Date().toISOString(),
       },

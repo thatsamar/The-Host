@@ -34,6 +34,17 @@ describe("Supabase SMS store", () => {
     expect(rows.get("+1555")!.turns_by_advisor).toEqual({});
     expect(await store.getSession("+1555")).toEqual({ phone: "+1555", optedIn: true, advisorId: null, turnsByAdvisor: {} });
   });
+
+  it("keeps a pending handoff offer beside the turns, and drops a malformed one", async () => {
+    const { rows, store } = fakeClient();
+    await store.saveSession({ phone: "+1555", optedIn: true, advisorId: "alden", turnsByAdvisor: {}, pendingHandoff: { from: "alden", to: "martini" } });
+    expect(rows.get("+1555")!.turns_by_advisor).toEqual({ _pendingHandoff: { from: "alden", to: "martini" } });
+    expect((await store.getSession("+1555"))?.pendingHandoff).toEqual({ from: "alden", to: "martini" });
+    rows.get("+1555")!.turns_by_advisor = { _pendingHandoff: "martini" };
+    const session = await store.getSession("+1555");
+    expect(session?.pendingHandoff).toBeUndefined();
+    expect(session?.turnsByAdvisor).toEqual({});
+  });
 });
 
 describe("Supabase SMS store: introductions", () => {

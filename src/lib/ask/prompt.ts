@@ -6,7 +6,9 @@
 //                          then the shared answer principle and output limits
 //   3. CONVERSATION      – this visit's turns, oldest first
 //
-// 1–2 are system blocks; 3 is the messages array. Nothing is stored: the
+// 1–2 are system blocks; 3 is the messages array. A channel other than the
+// website (Cinq by text) may add one more system block after 2, with notes
+// that apply only there (CHANNEL_BLOCK); the website never has one. Nothing is stored: the
 // browser sends the whole conversation with each question. This module is
 // pure: no I/O, fully covered by tests.
 
@@ -25,6 +27,8 @@ export interface AskTurn {
 }
 
 export const BLOCK_ORDER = ["system_prompt", "app_capabilities"] as const;
+/** The label of the optional third block a channel such as Cinq by text adds. */
+export const CHANNEL_BLOCK = "channel_notes";
 
 /** Most photos in one question. */
 export const MAX_PHOTOS_PER_TURN = 10;
@@ -102,6 +106,8 @@ export function assemblePrompt(input: {
   turns: AskTurn[];
   webSearch?: boolean;
   maxTurns?: number;
+  /** Notes for this channel only (label CHANNEL_BLOCK), placed after the capabilities. */
+  channel?: ContextBlock;
 }): Omit<ChatRequest, "signal"> {
   const { companion } = input;
   const webSearch = input.webSearch ?? true;
@@ -109,6 +115,7 @@ export function assemblePrompt(input: {
     system: [
       { label: "system_prompt", title: "SYSTEM PROMPT", body: companion.systemPrompt, cacheable: true },
       capabilitiesBlock(companion, webSearch),
+      ...(input.channel ? [{ ...input.channel, label: CHANNEL_BLOCK }] : []),
     ],
     messages: toChatTurns(input.turns, companion.photosOnly, input.maxTurns),
     webSearch,
