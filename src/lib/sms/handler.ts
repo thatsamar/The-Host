@@ -11,6 +11,7 @@
  * fabricated answer.
  */
 
+import { fitsInOneText, plainPunctuation } from "./segments";
 import { newSmsSession, type SmsImage, type SmsSession, type SmsStore, type SmsTurn } from "./store";
 
 /** The five advisors, in the order the hub lists them. */
@@ -147,12 +148,12 @@ export function toSmsText(markdown: string): string {
 }
 
 /**
- * Split a long answer into readable consecutive messages of at most `max`
- * characters: between paragraphs where possible, then at a line break or the
- * last space, so no word or address is cut in two. Only a single word longer
- * than `max` is cut.
+ * Split a long answer into readable consecutive messages, each passing `fits`
+ * (by default, at most `max` characters): between paragraphs where possible,
+ * then at a line break or the last space, so no word or address is cut in
+ * two. Only a single word too long for a whole message is cut.
  */
-export function splitReply(text: string, max = MAX_REPLY_CHARS): string[] {
+export function splitReply(text: string, max = MAX_REPLY_CHARS, fits: (piece: string) => boolean = (p) => p.length <= max): string[] {
   const out: string[] = [];
   let current = "";
   const flush = () => {
@@ -164,40 +165,60 @@ export function splitReply(text: string, max = MAX_REPLY_CHARS): string[] {
       current = piece;
       return;
     }
-    if (current.length + 2 + piece.length <= max) {
+    if (fits(current + "\n\n" + piece)) {
       current += "\n\n" + piece;
       return;
     }
     flush();
     current = piece;
   };
+  // The longest start of `text` that fits (fits only gets harder as text grows).
+  const longestFit = (rest: string) => {
+    let lo = 1;
+    let hi = Math.min(rest.length, max);
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      if (fits(rest.slice(0, mid))) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo;
+  };
   for (const para of text.split(/\n\n+/)) {
     if (!para.trim()) continue;
-    if (para.length <= max) {
+    if (fits(para)) {
       append(para);
       continue;
     }
     flush();
     let rest = para;
-    while (rest.length > max) {
-      const window = rest.slice(0, max + 1);
+    while (!fits(rest)) {
+      const room = longestFit(rest);
+      const window = rest.slice(0, room + 1);
       // Prefer a line break (a list item, say) in the second half; otherwise the last space.
       const newline = window.lastIndexOf("\n");
       const space = Math.max(window.lastIndexOf(" "), window.lastIndexOf("\t"));
-      const at = newline > max / 2 ? newline : space > 0 ? space : newline > 0 ? newline : -1;
+      const at = newline > room / 2 ? newline : space > 0 ? space : newline > 0 ? newline : -1;
       if (at > 0) {
         out.push(rest.slice(0, at).trimEnd());
         rest = rest.slice(at + 1).trimStart();
       } else {
         // One word longer than a whole message: the only place a cut is unavoidable.
-        out.push(rest.slice(0, max));
-        rest = rest.slice(max);
+        out.push(rest.slice(0, room));
+        rest = rest.slice(room);
       }
     }
     current = rest;
   }
   flush();
   return out;
+}
+
+/**
+ * An answer as the texts that carry it: plain text, plain punctuation, and
+ * each text short enough for carriers to deliver whole (see segments.ts).
+ */
+export function answerTexts(answer: string): string[] {
+  return splitReply(plainPunctuation(toSmsText(answer)), MAX_REPLY_CHARS, (piece) => fitsInOneText(piece, MAX_REPLY_CHARS));
 }
 
 export interface SmsMedia {
@@ -341,5 +362,5 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
   session.turnsByAdvisor[advisorId] = [...turns, assistantTurn].slice(-MAX_STORED_TURNS);
   await store.saveSession(session);
   // Texts are plain: the reply loses its Markdown here; history above keeps it.
-  return splitReply(toSmsText(answer));
+  return answerTexts(answer);
 }
