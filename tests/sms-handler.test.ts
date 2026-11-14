@@ -435,17 +435,16 @@ describe("answers as plain text messages", () => {
     expect(toSmsText("Just a sentence.")).toBe("Just a sentence.");
   });
 
-  it("is what gets texted, while history keeps the Markdown", async () => {
+  it("is what gets texted, as one plain short text, and history keeps what was sent", async () => {
     const store = new MemorySmsStore();
     const ask = makeAsk();
     await processSms(inbound("START"), { store, ask: ask.ask });
     await processSms(inbound("3"), { store, ask: ask.ask });
     const markdown = "## The call\n\n**Paint it white.** See [this](https://a.example).\n\n- One coat\n- Two coats";
     ask.setAnswer(markdown);
-    expect(await processSms(inbound("Hall colour?"), { store, ask: ask.ask })).toEqual([
-      "Gio: The call\n\nPaint it white. See this (https://a.example).\n\n• One coat\n• Two coats",
-    ]);
-    expect((await store.getSession(FROM))?.turnsByAdvisor.gio?.at(-1)).toMatchObject({ role: "assistant", text: markdown });
+    const sent = "The call\nPaint it white. See this (https://a.example).\n- One coat\n- Two coats";
+    expect(await processSms(inbound("Hall colour?"), { store, ask: ask.ask })).toEqual([`Gio: ${sent}`]);
+    expect((await store.getSession(FROM))?.turnsByAdvisor.gio?.at(-1)).toMatchObject({ role: "assistant", text: sent });
   });
 });
 
@@ -626,22 +625,15 @@ describe("texts short enough to arrive whole (the missing-head fix)", () => {
 describe("speaker labels", () => {
   const labels = ["Amar: ", "Martine: ", "Gio: ", "Alden: ", "Goldie: "];
 
-  it("start every text of a long answer, each still within one text's limits, and are never stored", async () => {
+  it("start the one text of every answer, count toward its one segment, and are never stored", async () => {
     const store = new MemorySmsStore();
     const ask = makeAsk();
     await processSms(inbound("START"), { store, ask: ask.ask });
     await processSms(inbound("3"), { store, ask: ask.ask });
-    const long = Array.from({ length: 30 }, (_, i) => `Paragraph ${i} about the sofa, the rug and the light in the room.`).join("\n\n");
-    ask.setAnswer(long);
-    const texts = await processSms(inbound("Plan the room?"), { store, ask: ask.ask });
-    expect(texts.length).toBeGreaterThan(1);
-    for (const t of texts) {
-      expect(t.startsWith("Gio: Paragraph")).toBe(true);
-      expect(t.length).toBeLessThanOrEqual(1500);
-      expect(smsSegments(t)).toBeLessThanOrEqual(MAX_SEGMENTS);
-    }
-    // Without the labels, the texts are the whole answer.
-    expect(texts.map((t) => t.slice("Gio: ".length)).join("\n\n")).toBe(long);
+    ask.setAnswer("Lower the lamp to eye level when seated; it warms the whole corner.");
+    const texts = await processSms(inbound("Lamp?"), { store, ask: ask.ask });
+    expect(texts).toEqual(["Gio: Lower the lamp to eye level when seated; it warms the whole corner."]);
+    expect(smsSegments(texts[0])).toBe(1);
     const session = JSON.stringify(await store.getSession(FROM));
     expect(session).not.toContain("Gio: ");
   });

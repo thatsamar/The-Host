@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { processSms, type SmsInbound } from "@/lib/sms/handler";
 import { textChannelNotes } from "@/lib/sms/handoff";
 import { ROUTE_TIMEOUT_MS, ROUTER_PROMPT } from "@/lib/sms/router";
+import { condensePrompt } from "@/lib/sms/short";
 import { smsEncoding, smsSegments } from "@/lib/sms/segments";
 import { SupabaseSmsStore } from "@/lib/sms/supabase-store";
 import {
@@ -88,7 +89,7 @@ export async function POST(request: Request): Promise<Response> {
             const provider = getChatProvider(companion);
             let text = "";
             for await (const event of ask(
-              { provider, companion, channel: textChannelNotes(advisorId, context?.handoff, context?.met) },
+              { provider, companion, channel: textChannelNotes(advisorId, context?.handoff, context?.met, context?.budget) },
               turns.map(
                 (turn: SmsTurn) => ({
                   role: turn.role,
@@ -109,6 +110,20 @@ export async function POST(request: Request): Promise<Response> {
             for await (const event of getRouterProvider().streamChat({
               system: [{ label: "router", title: "ROUTER", body: ROUTER_PROMPT, cacheable: true }],
               messages: [{ role: "user", content: [{ type: "text", text: question }] }],
+              webSearch: false,
+              signal: AbortSignal.timeout(ROUTE_TIMEOUT_MS),
+            })) {
+              if (event.type === "text") reply += event.text;
+            }
+            return reply;
+          },
+          // An answer longer than one text is rewritten to fit as one complete text: one quick, low-effort call.
+          condense: async (advisorId, answer, room) => {
+            let reply = "";
+            const name = COMPANIONS[advisorId as CompanionId].name;
+            for await (const event of getRouterProvider().streamChat({
+              system: [{ label: "condense", title: "CONDENSE", body: condensePrompt(name, room) }],
+              messages: [{ role: "user", content: [{ type: "text", text: answer }] }],
               webSearch: false,
               signal: AbortSignal.timeout(ROUTE_TIMEOUT_MS),
             })) {

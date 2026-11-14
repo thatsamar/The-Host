@@ -14,6 +14,7 @@
 import { advisorList, isAdvisorId, readNavigation, SMS_ADVISORS, type SmsAdvisorId } from "./navigation";
 import { agreesToHandoff, handoffNote, offerText, readSuggestion, type HandoffContext } from "./handoff";
 import { recentTurns } from "./context";
+import { answerBudget, answerFits, roomForAnswer, shortAnswerText } from "./short";
 import { INTRODUCTIONS, isGreeting, routeQuestion } from "./router";
 import { fitsInOneText, plainPunctuation } from "./segments";
 import { newSmsSession, type SmsImage, type SmsSession, type SmsStore, type SmsTurn } from "./store";
@@ -245,7 +246,17 @@ export interface SmsInbound {
 export interface SmsDeps {
   store: SmsStore;
   /** Ask an advisor. `context.handoff` carries the previous advisor's answer when a question was handed over. */
-  ask: (advisorId: SmsAdvisorId, turns: SmsTurn[], context?: { handoff?: HandoffContext; met?: string[] }) => Promise<string>;
+  ask: (
+    advisorId: SmsAdvisorId,
+    turns: SmsTurn[],
+    context?: { handoff?: HandoffContext; met?: string[]; budget?: number },
+  ) => Promise<string>;
+  /**
+   * Rewrites an answer that came back longer than one text into one complete
+   * text of at most `room` characters (a quick model call given
+   * condensePrompt). Without it, or if it fails, whole sentences that fit are kept.
+   */
+  condense?: (advisorId: SmsAdvisorId, answer: string, room: number) => Promise<string>;
   /** The time now, in ms (tests set it); Date.now otherwise. */
   now?: () => number;
   downloadMedia?: (url: string) => Promise<{ data: string; mediaType: string } | null>;
@@ -338,6 +349,9 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
   ) => {
     // A handoff always opens with the introduction; a routed answer only the first time.
     const intro = context?.handoff || !hasMet(current, advisorId) ? INTRODUCTIONS[advisorId] : null;
+    // One short text per answer: the advisor is told how many characters its own words have.
+    const label = speakerLabel(advisorId);
+    const budget = answerBudget(label, intro);
     const now = deps.now?.() ?? Date.now();
     const history = current.turnsByAdvisor[advisorId] ?? [];
     // Every new turn carries its time, so it can leave the advisor's view after a day.
@@ -348,7 +362,7 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
     let suggest: SmsAdvisorId | null;
     try {
       ({ text: answer, suggest } = readSuggestion(
-        await deps.ask(advisorId, recentTurns(turns, now), context || met.length ? { ...context, ...(met.length ? { met } : {}) } : undefined),
+        await deps.ask(advisorId, recentTurns(turns, now), { ...context, ...(met.length ? { met } : {}), budget }),
         advisorId,
       ));
       answer = withoutLabel(answer, advisorId);
@@ -357,16 +371,30 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
       await acked;
       return null;
     }
+    // One text, within SMS_MAX_SEGMENTS: label, introduction, answer and any offer line.
+    const offer = suggest ? offerText(suggest) : null;
+    let plain = toSmsText(answer);
+    // Too long even so: rewritten as one complete text that fits, rather than cut.
+    if (!answerFits({ label, intro, answer: plain, offer }) && deps.condense) {
+      const room = roomForAnswer(budget, offer);
+      try {
+        const rewritten = withoutLabel(readSuggestion(await deps.condense(advisorId, plain, room), advisorId).text, advisorId);
+        const candidate = toSmsText(rewritten);
+        if (candidate.trim() && answerFits({ label, intro, answer: candidate, offer })) plain = candidate;
+      } catch {
+        // Keep the original; whole sentences that fit are kept below.
+      }
+    }
     await acked;
-    current.turnsByAdvisor[advisorId] = [...turns, { role: "assistant" as const, text: answer, at: now }].slice(-MAX_STORED_TURNS);
+    const reply = shortAnswerText({ label, intro, answer: plain, offer });
+    // History keeps the answer as sent, so a follow-up carries on from what the person saw.
+    // The label, the introduction and the offer line are part of the text only, never of the stored answer.
+    current.turnsByAdvisor[advisorId] = [...turns, { role: "assistant" as const, text: reply.sent, at: now }].slice(-MAX_STORED_TURNS);
     introduce(current, advisorId);
     // One offer at a time: a new one replaces any other.
     if (suggest) current.pendingHandoff = { from: advisorId, to: suggest };
     await store.saveSession(current);
-    // Texts are plain: the reply loses its Markdown here; history above keeps it.
-    // The label, the introduction and the offer line are part of the texts only, never of the stored answer.
-    const body = [intro, answer, suggest ? offerText(suggest) : null].filter(Boolean).join("\n\n");
-    return answerTexts(body, speakerLabel(advisorId));
+    return [reply.text];
   };
 
   // An offer to bring in another advisor lasts for one text: a yes hands the

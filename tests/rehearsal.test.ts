@@ -199,11 +199,11 @@ describe("SMS rehearsal: full journey with a restart", () => {
       { role: "user", text: "And hotels near there?", images: undefined },
     ]);
 
-    // Long answer splits at 1500 chars.
+    // A long answer still goes out as one text of one segment.
     ask.setAnswer("z".repeat(1600));
-    const split = await processSms(inbound("Tell me everything"), deps());
-    expect(split).toHaveLength(2);
-    expect(split.every((part) => part.length <= 1500)).toBe(true);
+    const one = await processSms(inbound("Tell me everything"), deps());
+    expect(one).toHaveLength(1);
+    expect(one[0].length).toBeLessThanOrEqual(160);
 
     // STOP blocks further advisor replies; HELP still answers.
     expect(await processSms(inbound("STOP"), deps())).toEqual([OPT_OUT_TEXT]);
