@@ -2,9 +2,11 @@
  * Reading a text as navigation: show the advisors, or switch to one. A text
  * switches only when it is clearly about switching: a bare advisor (number
  * or name, with filler like "please"), or a switch verb followed by an
- * advisor ("talk to Gio", "switch to 2", "bring in Martine"). A name inside
- * any other sentence ("I'm having dinner with Gio", "Alden, what do you
- * think?") is a question for the current advisor, never a switch.
+ * advisor ("talk to Gio", "switch to 2", "bring in Martine"). A text that
+ * opens by addressing an advisor ("Martine, what shoes for Milan?") goes to
+ * that advisor, who answers it (addressedAdvisor). A name anywhere else in a
+ * sentence ("I'm having dinner with Gio") is a question for the current
+ * advisor, never a switch.
  */
 
 /** The five advisors, in the order the hub lists them. */
@@ -90,4 +92,19 @@ export function readNavigation(body: string): Navigation | null {
 /** The five advisors, numbered, as the welcome and the list show them. */
 export function advisorList(): string {
   return SMS_ADVISORS.map((a, i) => `${i + 1} ${a.name} - ${a.category}`).join("\n");
+}
+
+/**
+ * The advisor a question opens by addressing ("Martine, what shoes for
+ * Milan?", "hey Gio which rug"), if any: the name first (after at most a
+ * greeting), then more words. A bare name is a switch (readNavigation), and a
+ * possessive ("Gio's sofa") or a name later in the sentence addresses no one.
+ */
+export function addressedAdvisor(body: string): SmsAdvisorId | null {
+  const text = tidy(body);
+  for (const a of SMS_ADVISORS) {
+    const name = a.name.toLowerCase();
+    if (new RegExp(String.raw`^(?:(?:hi|hey|hello|ok|so)[\s,]+)?${name}\b[\s,:;!?-]+\S`).test(text)) return a.id;
+  }
+  return null;
 }
