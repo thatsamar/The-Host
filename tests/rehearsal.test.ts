@@ -126,7 +126,7 @@ describe("SMS rehearsal: full journey with a restart", () => {
 
     // Advisor selection by number.
     expect(await processSms(inbound("1"), deps())).toEqual([
-      "You're with Amar (travel). Send your question as a text or a photo.",
+      "Amar: I'm Amar, travel at Cinq. What's on your mind?",
     ]);
 
     // Question to Amar, then a follow-up that keeps context.
@@ -167,7 +167,7 @@ describe("SMS rehearsal: full journey with a restart", () => {
 
     // Advisor switch: Martine starts with NO Amar history.
     expect(await processSms(inbound("Martine"), deps())).toEqual([
-      "You're with Martine (style). Send your question as a text or a photo.",
+      "Martine: I'm Martine, style at Cinq. What's on your mind?",
     ]);
     ask.setAnswer("Style answer.");
     expect(await processSms(inbound("What should I wear to dinner?"), deps())).toEqual([
@@ -178,9 +178,9 @@ describe("SMS rehearsal: full journey with a restart", () => {
       turns: [{ role: "user", text: "What should I wear to dinner?", images: undefined }],
     });
 
-    // Switch back to Amar: Amar's own history resumes, Martine's absent.
+    // Switch back to Amar: he says he's back, and his own history resumes, Martine's absent.
     expect(await processSms(inbound("1"), deps())).toEqual([
-      "You're with Amar (travel). Send your question as a text or a photo.",
+      "Amar: I'm back. What's on your mind?",
     ]);
     ask.setAnswer("Marfa answer three.");
     expect(await processSms(inbound("And hotels near there?"), deps())).toEqual([
@@ -213,7 +213,7 @@ describe("SMS rehearsal: full journey with a restart", () => {
     // Re-START welcomes again; a fresh advisor starts with empty history.
     expect(await processSms(inbound("START"), deps())).toEqual([WELCOME_TEXT]);
     expect(await processSms(inbound("Gio"), deps())).toEqual([
-      "You're with Gio (design). Send your question as a text or a photo.",
+      "Gio: I'm Gio, design at Cinq. What's on your mind?",
     ]);
 
     // Failed answer: fallback reply, session untouched, retry starts clean.
@@ -233,9 +233,9 @@ describe("SMS rehearsal: full journey with a restart", () => {
     expect(ask.calls).toHaveLength(callsBefore);
 
     // Observed behavior (noted for the report): after STOP + START, picking
-    // Amar again resumes Amar's pre-STOP history.
+    // Amar again resumes Amar's pre-STOP history, and he says he's back.
     expect(await processSms(inbound("1"), deps())).toEqual([
-      "You're with Amar (travel). Send your question as a text or a photo.",
+      "Amar: I'm back. What's on your mind?",
     ]);
     ask.setAnswer("Resumed answer.");
     await processSms(inbound("Continue Marfa planning"), deps());

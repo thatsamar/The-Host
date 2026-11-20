@@ -156,7 +156,7 @@ describe("a failed session save never silences an answer", () => {
     const deps: SmsDeps = { store, ask: async () => "unused", onSaveError: () => {} };
     expect(await processSms({ from: "+15559990001", body: "START", media: [], messageSid: "SMw1" }, deps)).toEqual([WELCOME_TEXT]);
     const pick = await processSms({ from: "+15559990001", body: "3", media: [], messageSid: "SMw2" }, deps);
-    expect(pick.at(-1)).toMatch(/^You're with Gio/);
+    expect(pick.at(-1)).toBe("Gio: I'm Gio, design at Cinq. What's on your mind?");
   });
 
   it("never lets a throwing error reporter cost the reply", async () => {

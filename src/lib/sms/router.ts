@@ -6,7 +6,7 @@
  * A wrong route is fine: the advisor can offer a handoff.
  */
 
-import { SMS_ADVISORS, tidy, type SmsAdvisorId } from "./navigation";
+import { addressedAdvisor, SMS_ADVISORS, tidy, type SmsAdvisorId } from "./navigation";
 
 /** Where a question goes when nothing else fits: the sounding board, Cinq's generalist. */
 export const DEFAULT_ADVISOR: SmsAdvisorId = "goldie";
@@ -18,20 +18,11 @@ export function isGreeting(body: string): boolean {
   return GREETING.test(tidy(body));
 }
 
-/** The advisor a question opens by addressing ("Martine, what shoes for Milan?"), if any. */
-function addressed(text: string): SmsAdvisorId | null {
-  for (const a of SMS_ADVISORS) {
-    const name = a.name.toLowerCase();
-    if (new RegExp(String.raw`^(?:(?:hi|hey|hello|ok|so)[\s,]+)?${name}\b[\s,:;!?-]+\S`).test(text)) return a.id;
-  }
-  return null;
-}
-
 /** A route that needs no model: an addressed advisor, or Goldie for a greeting. Null means ask the router. */
 export function routeShortcut(body: string): SmsAdvisorId | null {
   const text = tidy(body);
   if (!text || GREETING.test(text)) return DEFAULT_ADVISOR;
-  return addressed(text);
+  return addressedAdvisor(text);
 }
 
 /** The router's instructions: one id back, nothing else. */
