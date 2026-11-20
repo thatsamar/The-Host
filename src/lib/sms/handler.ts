@@ -69,6 +69,14 @@ export const ADVISOR_LIST_TEXT = plainPunctuation("The five advisors. Reply with
 export const OPT_OUT_TEXT = "You’ve opted out of Cinq texts. No further messages will be sent. Reply START to opt back in.";
 export const FALLBACK_TEXT = "Something went wrong on our side. Try again.";
 export const NO_QUESTION_TEXT = "Add a photo or a question.";
+/** Sent once when an answer is taking a while, so the person knows it hasn't stalled. Never stored as a turn. */
+export const STILL_THINKING_TEXT = "Still thinking...";
+/** Sent instead of an answer that has stalled; the late answer, if it ever comes, is dropped. */
+export const STALLED_TEXT = "I'm sorry, please try again in a little while.";
+/** How long an answer may take before "Still thinking..." goes out. */
+export const STILL_THINKING_MS = 25_000;
+/** How long an answer may take before it counts as stalled (well inside the webhook's 300 s). */
+export const STALLED_MS = 150_000;
 /** Sent the moment a question goes to the advisor, so the wait for the answer isn't silent. Never stored as a turn. */
 export const ACK_TEXTS = ["Give me a second…", "Working on it…", "Let me think about it…", "Hmm…"] as const;
 
@@ -259,7 +267,7 @@ export interface SmsDeps {
   ask: (
     advisorId: SmsAdvisorId,
     turns: SmsTurn[],
-    context?: { handoff?: HandoffContext; met?: string[]; budget?: number },
+    context?: { handoff?: HandoffContext; met?: string[]; budget?: number; signal?: AbortSignal },
   ) => Promise<string>;
   /**
    * Rewrites an answer that came back longer than one text into one complete
@@ -288,6 +296,8 @@ export interface SmsDeps {
    * A failed save never holds back a reply: the turn is simply not stored.
    */
   onSaveError?: (err: unknown) => void;
+  /** When "Still thinking..." goes out and when an answer counts as stalled (tests shorten them). */
+  timing?: { stillThinkingMs?: number; stalledMs?: number };
 }
 
 // The ack line each number got last, kept here only while its session could
@@ -361,6 +371,8 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
   // On first contact the welcome goes out in its place.
   let acked: Promise<void> | null = null;
   let welcomeSent = false;
+  // Set when an answer stalled: the person is told to try again later rather than the usual fallback.
+  let stalled = false;
   const acknowledge = () => {
     if (acked) return;
     let line: string;
@@ -406,16 +418,40 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
     const met = (current.introduced ?? []).filter((id) => id !== advisorId);
     let answer: string;
     let suggest: SmsAdvisorId | null;
+    // A slow answer gets one "Still thinking..." (after the ack); a stalled one is given up on.
+    const controller = new AbortController();
+    let thinking: Promise<void> | null = null;
+    const thinkingTimer = setTimeout(() => {
+      if (!deps.acknowledge) return;
+      thinking = Promise.resolve(acked)
+        .then(() => deps.acknowledge?.(STILL_THINKING_TEXT))
+        .catch(() => {});
+    }, deps.timing?.stillThinkingMs ?? STILL_THINKING_MS);
+    let stallTimer: ReturnType<typeof setTimeout> | undefined;
+    const stall = new Promise<never>((_, reject) => {
+      stallTimer = setTimeout(() => {
+        stalled = true;
+        controller.abort();
+        reject(new Error("answer_stalled"));
+      }, deps.timing?.stalledMs ?? STALLED_MS);
+    });
     try {
       ({ text: answer, suggest } = readSuggestion(
-        await deps.ask(advisorId, recentTurns(turns, now), { ...context, ...(met.length ? { met } : {}), budget }),
+        await Promise.race([
+          deps.ask(advisorId, recentTurns(turns, now), { ...context, ...(met.length ? { met } : {}), budget, signal: controller.signal }),
+          stall,
+        ]),
         advisorId,
       ));
       answer = withoutLabel(answer, advisorId);
       if (!answer.trim()) throw new Error("empty_answer");
     } catch {
       await acked;
+      await thinking;
       return null;
+    } finally {
+      clearTimeout(thinkingTimer);
+      clearTimeout(stallTimer);
     }
     // One text, within SMS_MAX_SEGMENTS: label, introduction, answer and any offer line.
     const offer = suggest ? offerText(suggest) : null;
@@ -432,6 +468,7 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
       }
     }
     await acked;
+    await thinking;
     const reply = shortAnswerText({ label, intro, answer: plain, offer });
     // History keeps the answer as sent, so a follow-up carries on from what the person saw.
     // The label, the introduction and the offer line are part of the text only, never of the stored answer.
@@ -477,7 +514,7 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
       session.advisorId = from;
       session.pendingHandoff = pending;
       await save(session);
-      return [FALLBACK_TEXT];
+      return [stalled ? STALLED_TEXT : FALLBACK_TEXT];
     }
     await save(session);
   }
@@ -566,7 +603,7 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
   // Failed answers leave the turns untouched, so a retry starts clean. Only
   // the ack line used, and the routed advisor, are kept. A failed save never holds back a reply.
   await save(session);
-  return [...lead, FALLBACK_TEXT];
+  return [...lead, stalled ? STALLED_TEXT : FALLBACK_TEXT];
 }
 
 /** Whether this number has met an advisor: introduced, confirmed, or already in conversation. */
