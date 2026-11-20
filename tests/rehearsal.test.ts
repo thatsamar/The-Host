@@ -191,11 +191,9 @@ describe("SMS rehearsal: full journey with a restart", () => {
       { role: "assistant", text: "Marfa answer one." },
       { role: "user", text: "Add a second day", images: undefined },
       { role: "assistant", text: "Marfa answer two." },
-      {
-        role: "user",
-        text: "Is this hotel area good?",
-        images: [{ data: "aGVsbG8=", mediaType: "image/jpeg" }],
-      },
+      // Photos stay stored only on the current advisor's latest question (compact.ts):
+      // once the number moved to Martine, Amar's photo went; its words stay.
+      { role: "user", text: "Is this hotel area good?", images: undefined },
       { role: "assistant", text: "Photo answer." },
       { role: "user", text: "And hotels near there?", images: undefined },
     ]);

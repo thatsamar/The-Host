@@ -62,4 +62,16 @@ describe("Supabase SMS store: introductions", () => {
     expect((await store.getSession("+1555"))?.introduced).toEqual(["gio"]);
     expect((await store.getSession("+1555"))?.turnsByAdvisor).toEqual({});
   });
+
+  it("names a failed save for its kind, never carrying the database's message", async () => {
+    const failing = (code: string) =>
+      new SupabaseSmsStore({
+        from: () => ({ upsert: async () => ({ error: { code, message: "canceling statement due to statement timeout" } }) }),
+      } as unknown as SupabaseClient);
+    const timeout = await failing("57014").saveSession({ phone: "+1555", optedIn: true, advisorId: null, turnsByAdvisor: {} }).catch((e: Error) => e);
+    expect((timeout as Error).name).toBe("SmsStoreTimeoutError");
+    expect((timeout as Error).message).toBe("sms_store_save_failed");
+    const other = await failing("PGRST000").saveSession({ phone: "+1555", optedIn: true, advisorId: null, turnsByAdvisor: {} }).catch((e: Error) => e);
+    expect((other as Error).name).toBe("SmsStoreSaveError");
+  });
 });
