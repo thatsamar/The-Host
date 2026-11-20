@@ -75,7 +75,7 @@ describe("the one-day window in the conversation", () => {
     await send("1");
   });
 
-  it("starts a new day fresh on specifics, keeps everything stored, and remembers who the person has met", async () => {
+  it("starts a new day fresh on specifics, stores only the last day, and remembers who the person has met", async () => {
     await send("Which suitcase for a week in Lisbon?");
     clock += 2 * HOUR;
     await send("And for the flight?");
@@ -85,16 +85,9 @@ describe("the one-day window in the conversation", () => {
     clock += 26 * HOUR;
     await send("Where should we eat tonight?");
     expect(calls.at(-1)!.turns).toEqual([{ role: "user", text: "Where should we eat tonight?" }]);
-    // Still stored, with their times.
+    // Turns no advisor will see again are not kept: the row stays small (compact.ts).
     const stored = (await store.getSession(FROM))!.turnsByAdvisor.tony!;
-    expect(stored.map((t) => t.text)).toEqual([
-      "Which suitcase for a week in Lisbon?",
-      "tony answers.",
-      "And for the flight?",
-      "tony answers.",
-      "Where should we eat tonight?",
-      "tony answers.",
-    ]);
+    expect(stored.map((t) => t.text)).toEqual(["Where should we eat tonight?", "tony answers."]);
     expect(stored.every((t) => typeof t.at === "number")).toBe(true);
     // And the same advisor carries on: label, no introduction.
     expect(await send("A bar after?")).toEqual(["Amar: tony answers."]);
@@ -120,7 +113,9 @@ describe("the one-day window in the conversation", () => {
     await store.saveSession(session);
     await send("New question");
     expect(calls.at(-1)!.turns).toEqual([{ role: "user", text: "New question" }]);
-    // Nothing is deleted.
-    expect((await store.getSession(FROM))!.turnsByAdvisor.tony!.slice(0, 2).map((t) => t.text)).toEqual(["Old question from before times were kept", "Old answer"]);
+    // The old turns go at the next save; the advisor still counts as met.
+    const saved = (await store.getSession(FROM))!;
+    expect(saved.turnsByAdvisor.tony!.map((t) => t.text)).toEqual(["New question", "tony answers."]);
+    expect(saved.introduced).toContain("tony");
   });
 });

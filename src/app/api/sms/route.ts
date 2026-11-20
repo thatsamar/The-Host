@@ -16,6 +16,7 @@ import {
   validTwilioSignature,
 } from "@/lib/sms/twilio";
 import type { SmsTurn } from "@/lib/sms/store";
+import { errorClass } from "@/lib/diagnostics";
 
 // Answers can take a while; the webhook itself answers immediately (below)
 // and the replies go out through the REST API after the handler finishes.
@@ -133,6 +134,10 @@ export async function POST(request: Request): Promise<Response> {
           },
           downloadMedia: async (url: string) =>
             downloadTwilioMedia({ accountSid, authToken, url }),
+          // A failed save never holds back a reply; the log names its class only.
+          onSaveError: (err) => {
+            console.error("SMS session save failed", JSON.stringify({ error: errorClass(err) }));
+          },
           // "Give me a second…" goes out while the answer is still being written.
           acknowledge: async (text) => {
             const sent = await sender.send(from, text);

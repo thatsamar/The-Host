@@ -14,6 +14,7 @@
 import { advisorList, isAdvisorId, readNavigation, SMS_ADVISORS, type SmsAdvisorId } from "./navigation";
 import { agreesToHandoff, handoffNote, offerText, readSuggestion, type HandoffContext } from "./handoff";
 import { recentTurns } from "./context";
+import { compactSession } from "./compact";
 import { answerBudget, answerFits, roomForAnswer, shortAnswerText } from "./short";
 import { INTRODUCTIONS, isGreeting, routeQuestion } from "./router";
 import { fitsInOneText, plainPunctuation } from "./segments";
@@ -282,6 +283,23 @@ export interface SmsDeps {
    * it fails, the question goes to Goldie.
    */
   route?: (question: string) => Promise<string>;
+  /**
+   * Told when a session save fails (the route logs the error class only).
+   * A failed save never holds back a reply: the turn is simply not stored.
+   */
+  onSaveError?: (err: unknown) => void;
+}
+
+// The ack line each number got last, kept here only while its session could
+// not be saved, so a failed save doesn't repeat the same line next time.
+const unsavedAcks = new Map<string, number>();
+const MAX_UNSAVED_ACKS = 1000;
+
+function rememberUnsavedAck(phone: string, ack: number | undefined): void {
+  if (ack === undefined) return;
+  unsavedAcks.delete(phone);
+  unsavedAcks.set(phone, ack);
+  if (unsavedAcks.size > MAX_UNSAVED_ACKS) unsavedAcks.delete(unsavedAcks.keys().next().value!);
 }
 
 /**
@@ -299,10 +317,28 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
 
   const text = normalize(inbound.body);
 
+  // Every save is compacted (compact.ts) and best effort: a failure is
+  // reported, and the reply goes out all the same.
+  const save = async (s: SmsSession): Promise<boolean> => {
+    try {
+      await store.saveSession(compactSession(s, deps.now?.() ?? Date.now()));
+      unsavedAcks.delete(s.phone);
+      return true;
+    } catch (err) {
+      rememberUnsavedAck(s.phone, s.lastAck);
+      try {
+        deps.onSaveError?.(err);
+      } catch {
+        // Reporting must not cost the reply either.
+      }
+      return false;
+    }
+  };
+
   // Brand-new number texting STOP: confirm the opt-out, nothing else.
   if (isNew && STOP_WORDS.has(text)) {
     session.optedIn = false;
-    await store.saveSession(session);
+    await save(session);
     return [OPT_OUT_TEXT];
   }
 
@@ -311,7 +347,7 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
     if (START_WORDS.has(text)) {
       session.optedIn = true;
       session.advisorId = null;
-      await store.saveSession(session);
+      await save(session);
       return [WELCOME_TEXT];
     }
     if (HELP_WORDS.has(text)) return [HELP_TEXT];
@@ -332,8 +368,9 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
       line = WELCOME_TEXT;
       welcomeSent = !!deps.acknowledge;
     } else {
-      const next = nextAck(current.lastAck);
-      // Remembered with the session, even when the answer fails, so the next question's line differs.
+      const next = nextAck(unsavedAcks.get(current.phone) ?? current.lastAck);
+      // Remembered with the session, even when the answer fails, so the next question's line differs
+      // (and in memory if the save fails).
       current.lastAck = next;
       line = ACK_TEXTS[next];
     }
@@ -365,7 +402,7 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
     const history = current.turnsByAdvisor[advisorId] ?? [];
     // Every new turn carries its time, so it can leave the advisor's view after a day.
     const turns = [...history, ...before.map((t) => ({ ...t, at: now })), { ...userTurn, at: now }].slice(-MAX_STORED_TURNS);
-    // Everything stays stored; the advisor sees only the last day (context.ts).
+    // The advisor sees only the last day (context.ts); older turns go at the save (compact.ts).
     const met = (current.introduced ?? []).filter((id) => id !== advisorId);
     let answer: string;
     let suggest: SmsAdvisorId | null;
@@ -402,7 +439,7 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
     introduce(current, advisorId);
     // One offer at a time: a new one replaces any other.
     if (suggest) current.pendingHandoff = { from: advisorId, to: suggest };
-    await store.saveSession(current);
+    await save(current);
     return [reply.text];
   };
 
@@ -439,10 +476,10 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
       // Failed: stay with the first advisor, and keep the offer so YES can try again.
       session.advisorId = from;
       session.pendingHandoff = pending;
-      await store.saveSession(session).catch(() => {});
+      await save(session);
       return [FALLBACK_TEXT];
     }
-    await store.saveSession(session).catch(() => {});
+    await save(session);
   }
 
   if (HELP_WORDS.has(text)) return [HELP_TEXT];
@@ -456,28 +493,28 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
     if (nav?.kind === "switch") {
       session.advisorId = nav.advisorId;
       introduce(session, nav.advisorId);
-      await store.saveSession(session);
+      await save(session);
       return [WELCOME_TEXT, advisorConfirmText(nav.advisorId)];
     }
     if (START_WORDS.has(text) || nav?.kind === "list" || isGreeting(inbound.body) || (!inbound.body.trim() && !inbound.media.length)) {
-      await store.saveSession(session);
+      await save(session);
       return [WELCOME_TEXT];
     }
     // A question: the welcome goes first, then the answer.
     firstContact = true;
-    await store.saveSession(session);
+    await save(session);
   } else {
     // Re-START while opted in restarts the welcome.
     if (START_WORDS.has(text)) {
       session.advisorId = null;
-      await store.saveSession(session);
+      await save(session);
       return [WELCOME_TEXT];
     }
 
     if (STOP_WORDS.has(text)) {
       session.optedIn = false;
       session.advisorId = null;
-      await store.saveSession(session);
+      await save(session);
       return [OPT_OUT_TEXT];
     }
 
@@ -489,7 +526,7 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
     if (nav?.kind === "switch") {
       session.advisorId = nav.advisorId;
       introduce(session, nav.advisorId);
-      await store.saveSession(session);
+      await save(session);
       return [advisorConfirmText(nav.advisorId)];
     }
   }
@@ -527,8 +564,8 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
   const replies = await answerWith(advisorId, userTurn);
   if (replies) return [...lead, ...replies];
   // Failed answers leave the turns untouched, so a retry starts clean. Only
-  // the ack line used, and the routed advisor, are kept. A failed save still sends the fallback.
-  await store.saveSession(session).catch(() => {});
+  // the ack line used, and the routed advisor, are kept. A failed save never holds back a reply.
+  await save(session);
   return [...lead, FALLBACK_TEXT];
 }
 

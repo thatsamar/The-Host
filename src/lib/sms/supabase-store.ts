@@ -11,6 +11,16 @@ const INTRODUCED_KEY = "_introduced";
 const PENDING_KEY = "_pendingHandoff";
 
 /**
+ * A failed save, named for its kind so the log can say which without any
+ * of the error's text: a statement timeout (Postgres 57014) or anything else.
+ */
+function saveError(code: unknown): Error {
+  const err = new Error("sms_store_save_failed");
+  err.name = code === "57014" ? "SmsStoreTimeoutError" : "SmsStoreSaveError";
+  return err;
+}
+
+/**
  * Supabase-backed SMS store, using the service-role client so no signed-in
  * user is needed. Tables live in supabase/migrations/20261028000001_sms.sql
  * and must be applied in the Supabase dashboard before the number goes live.
@@ -65,7 +75,7 @@ export class SupabaseSmsStore implements SmsStore {
       },
       { onConflict: "phone_number" },
     );
-    if (error) throw new Error("sms_store_save_failed");
+    if (error) throw saveError((error as { code?: unknown }).code);
   }
 
   async claimMessageSid(sid: string, phone: string): Promise<boolean> {

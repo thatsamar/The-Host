@@ -7,6 +7,7 @@ const state = vi.hoisted(() => ({
   releaseAnswer: null as null | (() => void),
   sent: [] as string[],
   channels: [] as ({ label: string; body: string } | undefined)[],
+  failSaves: false,
 }));
 
 vi.mock("next/server", () => ({ after: (fn: () => Promise<unknown>) => state.pending.push(fn()) }));
@@ -14,6 +15,12 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
 vi.mock("@/lib/sms/supabase-store", async () => {
   const { MemorySmsStore } = await import("@/lib/sms/store");
   const shared = new MemorySmsStore();
+  const save = shared.saveSession.bind(shared);
+  // A Supabase 500 on the upsert, as the real store reports it.
+  shared.saveSession = async (session) => {
+    if (state.failSaves) throw Object.assign(new Error("sms_store_save_failed: canceling statement due to statement timeout"), { name: "SmsStoreTimeoutError" });
+    return save(session);
+  };
   return { SupabaseSmsStore: class { constructor() { return shared; } } };
 });
 vi.mock("@/lib/sms/twilio", () => ({
@@ -109,5 +116,23 @@ describe("Twilio webhook: Give me a second…", () => {
     const notes = state.channels.at(-1)!;
     expect(notes.label).toBe("channel_notes");
     expect(notes.body).toContain("[[suggest:ID]]");
+  });
+
+  it("still texts the answer when the session save fails, and logs the error class only", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    state.failSaves = true;
+    try {
+      await text("Which rug for the hall?");
+      await vi.waitFor(() => expect(state.releaseAnswer).not.toBeNull());
+      state.releaseAnswer!();
+      await settle();
+      expect(state.sent.at(-1)).toMatch(/^[A-Z][a-z]+: Start with a smaller sofa\.$/);
+      const logged = errors.mock.calls.map((call) => call.join(" "));
+      expect(logged).toEqual(['SMS session save failed {"error":"SmsStoreTimeoutError"}']);
+      expect(logged.join(" ")).not.toMatch(/5551234567|rug|sofa|canceling/);
+    } finally {
+      state.failSaves = false;
+      errors.mockRestore();
+    }
   });
 });
