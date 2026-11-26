@@ -3,8 +3,11 @@
  *
  *   RUN_CREATIVE_EXPERIMENT=1 npx vitest run --config experiments/creative/vitest.config.mts
  *
- * DRY_RUN=1 makes no model calls and prints what it would send and roughly cost.
- * REPS (default 3), BUDGET_USD (default 30), CASES and CONFIGS (comma lists) narrow it.
+ * PILOT=1 runs the small first comparison (PILOT_CASE_IDS, every configuration, one
+ * run) and writes pilot.json: lengths, overlap between configurations, cost per call
+ * and what the full run would cost, to confirm the experiment draws real distinctions
+ * before the budget is committed. DRY_RUN=1 makes no model calls at all.
+ * REPS (default 2), BUDGET_USD (default 30), CASES and CONFIGS (comma lists) narrow it.
  * Results go to experiments/creative/out/ (never committed). Nothing touches production:
  * no database, no Twilio, no deployment; only model calls made from here.
  */
@@ -13,7 +16,7 @@ import { createHash } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { it } from "vitest";
-import { toChatTurns } from "@/lib/ask/prompt";
+import { toChatTurns, type AskTurn } from "@/lib/ask/prompt";
 import { COMPANIONS } from "@/lib/companions";
 import { callCost } from "@/lib/ops/rates";
 import { readSuggestion, offerText } from "@/lib/sms/handoff";
@@ -21,8 +24,8 @@ import { speakerLabel, toSmsText } from "@/lib/sms/handler";
 import { SMS_ADVISORS, type SmsAdvisorId } from "@/lib/sms/navigation";
 import { answerBudget, answerFits, condensePrompt, roomForAnswer, shortAnswerText } from "@/lib/sms/short";
 import type { ChatProvider, ChatRequest } from "@/lib/ai/types";
-import { CASES, type Case } from "./cases";
-import { CONFIGS, instructionSize, type Config } from "./configs";
+import { loadCases, loadPhoto, PILOT_CASE_IDS, type Case, type CaseTurn } from "./cases";
+import { configsFor, instructionSize, type Config } from "./configs";
 import { render } from "./render";
 
 const OUT = fileURLToPath(new URL("./out/", import.meta.url));
@@ -34,7 +37,10 @@ export interface RunResult {
   key: string;
   caseId: string;
   advisor: string;
+  kind: string;
+  source: string;
   config: string;
+  family: string;
   rep: number;
   at: string;
   model: string | null;
@@ -53,6 +59,9 @@ export interface RunResult {
   delivered: string;
   rewritten: boolean;
   trimmed: boolean;
+  /** For a challenge: the first exchange, before the follow-up (the answers above are the second). */
+  first?: { own: string; delivered: string; rewritten: boolean };
+  followUp?: { text: string; expect: string };
   error: string | null;
 }
 
@@ -82,16 +91,65 @@ const costOf = (model: string | null, usage: Record<string, unknown>, searches: 
   return (callCost({ model: model ?? undefined, input: n("input_tokens"), output: n("output_tokens"), cache_read: n("cache_read_input_tokens"), cache_write: n("cache_creation_input_tokens") }) ?? 0) + searches * SEARCH_USD;
 };
 
-async function runOne(c: Case, config: Config, rep: number, now: Date, providers: { chat: (id: SmsAdvisorId) => ChatProvider; router: () => ChatProvider }): Promise<RunResult> {
+const toAsk = (t: CaseTurn): AskTurn => ({ role: t.role, text: t.text, images: t.photos?.map(loadPhoto) });
+
+/** One answer through the configuration: the advisor's own words, and what the person would receive. */
+async function answer(
+  c: Case,
+  config: Config,
+  conversation: AskTurn[],
+  now: Date,
+  providers: { chat: (id: SmsAdvisorId) => ChatProvider; router: () => ChatProvider },
+) {
   const id = c.advisor as SmsAdvisorId;
   const companion = COMPANIONS[id];
   const system = config.system(c.advisor, now);
-  const request: ChatRequest = { system, messages: toChatTurns([{ role: "user", text: c.question }], companion.photosOnly), webSearch: config.webSearch };
+  const request: ChatRequest = { system, messages: toChatTurns(conversation, companion.photosOnly), webSearch: config.webSearch };
+  const first = await complete(providers.chat(id), request);
+  let cost = costOf(first.model, first.usage, first.searches);
+  const { text, suggest } = readSuggestion(first.text, id);
+  const own = toSmsText(withoutLabel(text, id));
+  let delivered = own;
+  let rewritten = false;
+  let trimmed = false;
+  let routerModel: string | null = null;
+  if (config.textPipeline) {
+    // Production's text pipeline, as handler.ts runs it: label, the 450-character check, the rewrite, the trim.
+    const label = speakerLabel(id);
+    const offer = suggest ? offerText(suggest) : null;
+    let plain = own;
+    if (!answerFits({ label, intro: null, answer: plain, offer })) {
+      const room = roomForAnswer(answerBudget(label, null), offer);
+      const second = await complete(providers.router(), {
+        system: [{ label: "condense", title: "CONDENSE", body: condensePrompt(companion.name, room) }],
+        messages: [{ role: "user", content: [{ type: "text", text: plain }] }],
+        webSearch: false,
+      });
+      routerModel = second.model;
+      cost += costOf(second.model, second.usage, 0);
+      const candidate = toSmsText(withoutLabel(readSuggestion(second.text, id).text, id));
+      if (candidate.trim() && answerFits({ label, intro: null, answer: candidate, offer })) {
+        plain = candidate;
+        rewritten = true;
+      }
+    }
+    const reply = shortAnswerText({ label, intro: null, answer: plain, offer });
+    trimmed = reply.sent !== plain.trim();
+    delivered = reply.text;
+  }
+  return { own, delivered, rewritten, trimmed, cost, model: first.model, routerModel, usage: first.usage, searches: first.searches, system };
+}
+
+async function runOne(c: Case, config: Config, rep: number, now: Date, providers: { chat: (id: SmsAdvisorId) => ChatProvider; router: () => ChatProvider }): Promise<RunResult> {
+  const system = config.system(c.advisor, now);
   const base = {
     key: `${c.id}|${config.id}|${rep}`,
     caseId: c.id,
     advisor: c.advisor,
+    kind: c.kind,
+    source: c.source,
     config: config.id,
+    family: config.family,
     rep,
     at: now.toISOString(),
     effort: process.env.CHAT_EFFORT || "high (default)",
@@ -101,60 +159,64 @@ async function runOne(c: Case, config: Config, rep: number, now: Date, providers
   };
   const began = Date.now();
   try {
-    const first = await complete(providers.chat(id), request);
-    let cost = costOf(first.model, first.usage, first.searches);
-    const { text, suggest } = readSuggestion(first.text, id);
-    const own = toSmsText(withoutLabel(text, id));
-    let delivered = own;
-    let rewritten = false;
-    let trimmed = false;
-    let routerModel: string | null = null;
-    if (config.textPipeline) {
-      // Production's text pipeline, as handler.ts runs it: label, the 450-character check, the rewrite, the trim.
-      const label = speakerLabel(id);
-      const offer = suggest ? offerText(suggest) : null;
-      const budget = answerBudget(label, null);
-      let plain = own;
-      if (!answerFits({ label, intro: null, answer: plain, offer })) {
-        const room = roomForAnswer(budget, offer);
-        const second = await complete(providers.router(), {
-          system: [{ label: "condense", title: "CONDENSE", body: condensePrompt(companion.name, room) }],
-          messages: [{ role: "user", content: [{ type: "text", text: plain }] }],
-          webSearch: false,
-        });
-        routerModel = second.model;
-        cost += costOf(second.model, second.usage, 0);
-        const candidate = toSmsText(withoutLabel(readSuggestion(second.text, id).text, id));
-        if (candidate.trim() && answerFits({ label, intro: null, answer: candidate, offer })) {
-          plain = candidate;
-          rewritten = true;
-        }
-      }
-      const reply = shortAnswerText({ label, intro: null, answer: plain, offer });
-      trimmed = reply.sent !== plain.trim();
-      delivered = reply.text;
+    // The same earlier messages and context for every configuration, the general-purpose one included.
+    const conversation: AskTurn[] = [...(c.history ?? []).map(toAsk), { role: "user", text: c.question, images: c.photos?.map(loadPhoto) }];
+    let result = await answer(c, config, conversation, now, providers);
+    let cost = result.cost;
+    let first: RunResult["first"];
+    if (c.followUp) {
+      // The second turn sees the first answer as the person did: production keeps the text as sent.
+      first = { own: result.own, delivered: result.delivered, rewritten: result.rewritten };
+      const seen = config.textPipeline ? result.delivered.replace(new RegExp(`^${speakerLabel(c.advisor as SmsAdvisorId)}`), "") : result.own;
+      result = await answer(c, config, [...conversation, { role: "assistant", text: seen }, { role: "user", text: c.followUp.text }], now, providers);
+      cost += result.cost;
     }
-    return { ...base, model: first.model, routerModel, ms: Date.now() - began, usage: first.usage, searches: first.searches, costUsd: cost, own, delivered, rewritten, trimmed, error: null };
+    return {
+      ...base,
+      model: result.model,
+      routerModel: result.routerModel,
+      ms: Date.now() - began,
+      usage: result.usage,
+      searches: result.searches,
+      costUsd: cost,
+      own: result.own,
+      delivered: result.delivered,
+      rewritten: result.rewritten,
+      trimmed: result.trimmed,
+      ...(first ? { first, followUp: c.followUp } : {}),
+      error: null,
+    };
   } catch (err) {
     return { ...base, model: null, routerModel: null, ms: Date.now() - began, usage: {}, searches: 0, costUsd: 0, own: "", delivered: "", rewritten: false, trimmed: false, error: err instanceof Error ? err.name : "error" };
   }
+}
+
+/** Word overlap between two answers (0 = nothing shared, 1 = the same words). */
+function overlap(a: string, b: string): number {
+  const words = (s: string) => new Set(s.toLowerCase().match(/[a-z']{3,}/g) ?? []);
+  const x = words(a);
+  const y = words(b);
+  const shared = [...x].filter((w) => y.has(w)).length;
+  return x.size + y.size ? Number(((2 * shared) / (x.size + y.size)).toFixed(2)) : 1;
 }
 
 const list = (v: string | undefined) => (v ? v.split(",").map((s) => s.trim()).filter(Boolean) : null);
 
 it.skipIf(!process.env.RUN_CREATIVE_EXPERIMENT)("runs the creative comparison", async () => {
   mkdirSync(OUT, { recursive: true });
-  const reps = Number(process.env.REPS) || 3;
+  const pilot = !!process.env.PILOT;
+  const reps = pilot ? 1 : Number(process.env.REPS) || 2;
   const budget = Number(process.env.BUDGET_USD) || 30;
   const caseIds = list(process.env.CASES);
   const configIds = list(process.env.CONFIGS);
-  const cases = CASES.filter((c) => !caseIds || caseIds.includes(c.id));
-  const configs = CONFIGS.filter((c) => !configIds || configIds.includes(c.id));
+  const all = loadCases();
+  const cases = all.filter((c) => (pilot ? PILOT_CASE_IDS.includes(c.id) : !caseIds || caseIds.includes(c.id)));
+  const jobsFor = (rep: number) => cases.flatMap((c) => configsFor(c.advisor, configIds).map((cfg) => ({ c, cfg, rep })));
   const now = new Date();
 
   if (process.env.DRY_RUN) {
-    const lines = cases.flatMap((c) => configs.map((cfg) => `${c.id.padEnd(20)} ${cfg.id}  ${String(instructionSize(cfg, c.advisor, now)).padStart(6)} chars of instructions`));
-    const calls = cases.length * configs.length * reps;
+    const lines = jobsFor(1).map(({ c, cfg }) => `${c.id.padEnd(26)} ${cfg.id.padEnd(3)} ${String(instructionSize(cfg, c.advisor, now)).padStart(6)} chars of instructions${c.followUp ? "  (two turns)" : ""}`);
+    const calls = jobsFor(1).reduce((n, { c }) => n + (c.followUp ? 2 : 1), 0) * reps;
     writeFileSync(`${OUT}dry-run.txt`, [...lines, "", `${calls} answer calls (${reps} repetitions), plus a rewrite call where a text-pipeline answer runs long.`].join("\n"));
     return;
   }
@@ -172,7 +234,7 @@ it.skipIf(!process.env.RUN_CREATIVE_EXPERIMENT)("runs the creative comparison", 
   }
   // Round robin by repetition, so a budget stop leaves every configuration with the same number of runs.
   for (let rep = 1; rep <= reps; rep++) {
-    const jobs = cases.flatMap((c) => configs.map((cfg) => ({ c, cfg }))).filter(({ c, cfg }) => !done.has(`${c.id}|${cfg.id}|${rep}`));
+    const jobs = jobsFor(rep).filter(({ c, cfg }) => !done.has(`${c.id}|${cfg.id}|${rep}`));
     for (let i = 0; i < jobs.length; i += 4) {
       if (spent >= budget) break;
       const batch = await Promise.all(jobs.slice(i, i + 4).map(({ c, cfg }) => runOne(c, cfg, rep, now, providers)));
@@ -184,5 +246,22 @@ it.skipIf(!process.env.RUN_CREATIVE_EXPERIMENT)("runs the creative comparison", 
     if (spent >= budget) break;
   }
   writeFileSync(`${OUT}spent.txt`, `$${spent.toFixed(2)} of $${budget}\n`);
+  if (pilot) {
+    // Does the experiment draw real distinctions? Overlap between configurations on the same question, and cost.
+    const rs = readFileSync(RESULTS, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as RunResult).filter((r) => !r.error && r.rep === 1);
+    const byCase = cases.map((c) => {
+      const mine = rs.filter((r) => r.caseId === c.id);
+      const pairs: Record<string, number> = {};
+      for (const a of mine) for (const b of mine) if (a.config < b.config) pairs[`${a.config}~${b.config}`] = overlap(a.delivered, b.delivered);
+      return { case: c.id, lengths: Object.fromEntries(mine.map((r) => [r.config, r.delivered.length])), rewritten: mine.filter((r) => r.rewritten).map((r) => r.config), overlap: pairs };
+    });
+    const perCall = rs.length ? rs.reduce((n, r) => n + r.costUsd, 0) / rs.length : 0;
+    const full = loadCases().flatMap((c) => configsFor(c.advisor, null).map(() => c)).length;
+    writeFileSync(
+      `${OUT}pilot.json`,
+      JSON.stringify({ costPerRun: Number(perCall.toFixed(4)), fullRunPerRepetitionUsd: Number((perCall * full).toFixed(2)), cases: byCase }, null, 2),
+    );
+    return;
+  }
   render(OUT);
 });
