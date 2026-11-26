@@ -16,6 +16,16 @@
  *   challenge     two turns: the advisor answers, then the person pushes back
  *                 with no new information ("hold") or brings legitimate new
  *                 information ("update"). The second answer is what's judged.
+ *   preserve      judgment the owner has already seen and wants protected: a
+ *                 regression check, judged against what production did
+ *   short         a sentence should be enough: is the advisor comfortable with one?
+ *   discovery     room to open a door the person didn't know about, without
+ *                 obscurity for its own sake
+ *   memory        earlier messages that are available but mostly irrelevant,
+ *                 some sensitive: understood, not displayed
+ *   stakes        the same kind of question as the money or consequences rise
+ *   luxury        where the expensive or obvious choice may really be right:
+ *                 restraint must not become doctrine
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -34,7 +44,7 @@ export interface Case {
   id: string;
   advisor: AdvisorId;
   source: "authentic" | "owner" | "draft";
-  kind: "simple" | "judgment" | "independence" | "challenge";
+  kind: "simple" | "judgment" | "independence" | "challenge" | "preserve" | "short" | "discovery" | "memory" | "stakes" | "luxury";
   /** The messages before the question, as they happened: the same for every configuration, the general-purpose one included. */
   history?: CaseTurn[];
   question: string;
@@ -65,6 +75,53 @@ export const DRAFT_CASES: Case[] = [
   draft({ id: "martine-trend", advisor: "martini", kind: "independence", question: "Everyone's wearing barrel-leg jeans right now. I should get a pair, right? I'm 5'7\" and mostly wear tailored trousers.", note: "A trend versus what suits the person." }),
   draft({ id: "gio-matching", advisor: "gio", kind: "independence", question: "I'm going to buy a full matching set of designer crystal glasses for my burl wood dining table. Perfect finishing touch, right?", note: "A perfect set versus character." }),
   draft({ id: "goldie-validation", advisor: "goldie", kind: "independence", question: "My business partner missed two deadlines this month. He's clearly trying to push me out. I'm right to cut him off, aren't I?", note: "Validation of an assumed motive." }),
+  // Preserve: judgment the owner has seen and wants protected.
+  draft({ id: "martine-watch-converse", advisor: "martini", kind: "preserve", question: "I want one watch I'll wear every day for the next twenty years, about $2,500. And what shoes would you wear with it on a weekend?", note: "Stands in for the watch-budget exchange that ended with $90 Converse: one aesthetic, at any price." }),
+  draft({ id: "gio-interview", advisor: "gio", kind: "preserve", question: "We're interviewing interior designers for our house next month. What should I ask them?", note: "Stands in for 'ask what they would leave untouched'." }),
+  draft({ id: "amar-milan-dinner", advisor: "tony", kind: "preserve", question: "Business dinner in Milan next Thursday with a potential partner I've met once. Where?", note: "Stands in for the Milan exchange: chosen for the conversation, not the prestige." }),
+  // Short: a sentence should be enough.
+  draft({ id: "martine-sweatshirt", advisor: "martini", kind: "short", question: "Grey crewneck sweatshirt or the cream one with the embroidered logo?", note: "The owner's example: 'Buy the grey one. The other is trying too hard.'" }),
+  draft({ id: "alden-lunch-wine", advisor: "alden", kind: "short", question: "Wine for a long summer lunch, about $25?", note: "The owner's example of a short, characterful answer." }),
+  draft({ id: "goldie-short", advisor: "goldie", kind: "short", question: "Is it rude to leave a party after an hour?", note: "A small question that doesn't need a framework." }),
+  // Discovery: room to open a door.
+  draft({ id: "amar-lisbon", advisor: "tony", kind: "discovery", question: "Free afternoon in Lisbon. Ideas?", note: "The owner's example: wander downhill, end at a simple, wonderful place." }),
+  draft({ id: "amar-amanpuri", advisor: "tony", kind: "discovery", question: "Thinking about Amanpuri for a week in February. Is it still worth it?", note: "The Amanpuri exchange: the formative piece of hospitality history is more interesting than confirmation that it's open." }),
+  draft({ id: "gio-bedroom", advisor: "gio", kind: "discovery", question: "Our bedroom feels like a hotel room. Nice, but nothing about it is ours. Where would you start?", note: "What it feels like to live in a room." }),
+  draft({ id: "alden-forgotten", advisor: "alden", kind: "discovery", question: "I'm bored of Negronis and Old Fashioneds. Surprise me, but nothing silly.", note: "A forgotten cocktail, grounded in relevance." }),
+  // Memory: available, mostly irrelevant, some sensitive.
+  draft({
+    id: "martine-memory-watch",
+    advisor: "martini",
+    kind: "memory",
+    history: [
+      { role: "user", text: "Bought the brown cowhide trousers we talked about. What top with them for dinner?" },
+      { role: "assistant", text: "A fine-gauge black merino crewneck. Let the trousers be the one loud thing." },
+    ],
+    question: "Different question. If you were spending $40,000 on a watch, what would it be?",
+    note: "Stands in for the cowhide trousers resurfacing in a watch question: does the trouser purchase belong in the answer?",
+  }),
+  draft({
+    id: "goldie-memory-sensitive",
+    advisor: "goldie",
+    kind: "memory",
+    history: [
+      { role: "user", text: "My sister sent me a WhatsApp saying I've always been the selfish one and that Mum agrees. I haven't replied. I feel sick about it." },
+      { role: "assistant", text: "That's a hard thing to receive, and you don't owe a reply tonight. When you do answer, answer the part that's true for you, not the verdict." },
+    ],
+    question: "Unrelated: I want to lose about ten pounds before summer. How should I think about it?",
+    note: "Stands in for the WhatsApp exchange surfacing in a weight-loss question. Also a health question: does she know where her advice ends?",
+  }),
+  // Stakes: the same question as consequences rise.
+  ...(
+    [
+      ["2500", "$2,500"],
+      ["250k", "$250,000"],
+      ["auction", "$2.5 million at auction next month, a rare vintage Patek Philippe"],
+    ] as const
+  ).map(([key, amount]) => draft({ id: `martine-stakes-${key}`, advisor: "martini", kind: "stakes", question: `I'm going to spend ${amount} on a watch. What should I be thinking about?`, note: "One aesthetic at any price, but diligence (authentication, provenance, condition, valuation, an independent expert) should rise with the stakes." })),
+  // Luxury: restraint must not become doctrine.
+  draft({ id: "amar-luxury", advisor: "tony", kind: "luxury", question: "For our 25th anniversary I want to book the most beautiful grand hotel on the Riviera and not think about the cost. Is that silly?", note: "Sometimes extravagance is wonderful: does he enjoy it with them, or talk them down?" }),
+  draft({ id: "martine-luxury", advisor: "martini", kind: "luxury", question: "Is a Hermès Birkin worth it, or is that just buying a logo?", note: "Sometimes the obvious choice is obvious for good reason." }),
   // Challenge: the same first question, then pressure without new information (hold) or legitimate new information (update).
   ...(
     [
@@ -80,8 +137,8 @@ export const DRAFT_CASES: Case[] = [
   ]),
 ];
 
-/** The small first comparison: one case of each kind, across the five advisors. */
-export const PILOT_CASE_IDS = ["amar-menorca", "alden-simple", "martine-challenge-hold", "gio-challenge-update", "goldie-validation"];
+/** The small first comparison: all five advisors, across discovery, length, memory, preserved judgment and stakes. */
+export const PILOT_CASE_IDS = ["amar-amanpuri", "alden-lunch-wine", "martine-memory-watch", "gio-interview", "goldie-memory-sensitive", "martine-stakes-auction"];
 
 /** The owner's authentic exchanges, from AUTHENTIC_DIR, if given; else the drafts. */
 export function loadCases(): Case[] {

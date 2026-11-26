@@ -12,21 +12,32 @@ Twilio, no deployment. It only makes model calls from this machine.
 factual-integrity, privacy and safety instructions and date. Differences come
 only from the instructions around the brief.
 
+Production is frozen at the benchmark in `BASELINE.md`.
+
 | | |
 |---|---|
-| A0 | Production's instructions by text, without the date (the control for the date line) |
 | A | Production's instructions by text |
 | B | A's own answer, before production's rewrite and trim (no extra call) |
 | C | A without the shared voice instruction |
+| V | A with the shared voice ("a well-informed friend with good taste") replaced by the advisor's own |
 | L | A without the short-text block (no shared voice, no length limit, no rewrite) |
+| F | A without the optional closing "The call" |
+| K | A without Gio's per-piece purchase checklist (Gio only) |
+| R | A with research as the advisor's resource: what was checked is mentioned only when it changes the advice (Amar, Alden) |
+| M | A with discretion about earlier messages: understanding, not display; sensitive things stay out of unrelated questions |
+| S | A with diligence that rises with the stakes (authentication, provenance, condition, valuation, an independent expert) |
 | I | A with Amar's identity clarification (Amar only) |
-| AN | A with the owner's chosen influences in each brief (PR #76; `influenced-briefs.json`) |
+| AF | A with Cinq's philosophy right after the brief |
+| X | A with I, V, F, K, R, M and S together, and the philosophy if given |
 | D | The brief with only essential supporting instructions |
+| DF | D with Cinq's philosophy right after the brief |
 | E | The brief, minimally instructed |
 | G | A general-purpose assistant with no brief, given the same context |
 
-| AF | A with Cinq's philosophy right after the brief |
-| DF | D with Cinq's philosophy right after the brief |
+V, F, K, R, M, S and I each change one thing, so each is judged on its own
+before X combines them. None tells an advisor to be more romantic, curious
+or intriguing: the hypothesis is that those qualities are in the briefs
+already and are being diluted.
 
 AF and DF run only when `PHILOSOPHY_FILE` points at the owner's approved
 philosophy, kept outside the repository. It is never written into the code.
@@ -38,13 +49,20 @@ instructions.
 | | |
 |---|---|
 | P | Production by text, exactly as today |
+| RS | P with R's change, research on (Amar, Alden) |
 | DS | D with production web search |
 
 ## The questions (`cases.ts`)
 
-Simple, judgment, independence, and two-turn challenges. In a challenge the
-person pushes back with no new information (a good answer holds its view)
-or brings legitimate new information (a good answer changes where it should).
+Simple, judgment, independence and two-turn challenges; judgment already
+seen and worth protecting (preserve); questions where a sentence is enough
+(short); room to open a door (discovery); earlier messages that are
+available but mostly irrelevant, some sensitive (memory); the same watch
+question at $2,500, $250,000 and $2.5 million at auction (stakes); and
+places where the expensive or obvious choice may really be right (luxury).
+In a challenge the person pushes back with no new information (a good answer
+holds its view) or brings legitimate new information (a good answer changes
+where it should).
 
 The owner's authentic exchanges replace the drafts. Put them **outside the
 repository** (it is public), in a folder with `cases.json`. Each entry has an
@@ -64,14 +82,18 @@ X="RUN_CREATIVE_EXPERIMENT=1 npx vitest run --config experiments/creative/vitest
 # 1. What it would send, with no model calls
 DRY_RUN=1 $X
 
-# 2. The small first comparison: 5 questions, every configuration, one run (64 calls).
+# 2. The small first comparison: 6 questions, every configuration, one run (84 calls; 96 with the philosophy).
 #    Writes out/pilot.json: lengths, word overlap between configurations, which ones
 #    were rewritten, cost per run, and what a full repetition would cost.
 #    Check it draws real distinctions before committing the budget.
 PILOT=1 $X
 
-# 3. The full run, once the owner approves the projected cost.
-REPS=2 BUDGET_USD=30 $X
+# 3. Then in stages, each approved on its projected cost (the full grid is
+#    about 1,700 calls, far beyond one $30 budget):
+#    a. each single change against production and the general baseline
+CONFIGS=A,V,F,K,R,M,S,I,AF,G REPS=2 BUDGET_USD=30 $X
+#    b. the changes that helped, combined, against production end to end
+CONFIGS=A,X,P,RS,D,G REPS=2 BUDGET_USD=30 $X
 ```
 
 It stops before the budget, resumes where it stopped, and records with every
