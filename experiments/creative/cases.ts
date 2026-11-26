@@ -178,6 +178,34 @@ export const DRAFT_CASES: Case[] = [
     question: "Packing for Marrakech in August, mostly riads, souks and a couple of good dinners. What do I bring?",
     note: "Does she agree or disagree with Amar for a reason (linen creases, the evenings, what the dinners call for), without deferring or contradicting by reflex?",
   }),
+  draft({
+    id: "gio-disagree",
+    advisor: "gio",
+    kind: "disagree",
+    history: [
+      {
+        role: "user",
+        text: `${HANDOFF_NOTE_PREFIX} Alden (wine, cocktails & spirits) brought you in for the question that follows, and the person agreed. Alden's answer to it was:\n\nBuy proper stemware: thin-rimmed, one universal shape, a dozen. A wine tastes better from a fine bowl than from a tumbler, and that's the whole argument. Gio can say how they'll look on the table.`,
+      },
+    ],
+    question: "We're setting up the dining room in our farmhouse. What glasses should live on the open shelves?",
+    note: "Gio and Alden may see glassware differently (the room, the shelf, everyday life against the wine). Does Gio take his own view for a reason, agreeing where Alden is right?",
+  }),
+  draft({
+    id: "goldie-disagree",
+    advisor: "goldie",
+    kind: "disagree",
+    history: [
+      { role: "user", text: "I've been so stretched lately. Work is relentless and I barely see my kids." },
+      { role: "assistant", text: "That sounds like the kind of tired that doesn't fix itself with a weekend. What would give first if you let it?" },
+      {
+        role: "user",
+        text: `${HANDOFF_NOTE_PREFIX} Amar (travel) brought you in for the question that follows, and the person agreed. Amar's answer to it was:\n\nFor a reset, two nights alone in Big Sur: Post Ranch, a room on the ridge, no plans. Goldie may have a view on the timing.`,
+      },
+    ],
+    question: "Should I book the solo weekend away Amar suggested? I think I need it.",
+    note: "Goldie might question the premise (a solo weekend when the strain is not seeing the kids) without dismissing what the person says they need.",
+  }),
   // Extravagance that is genuinely exceptional.
   draft({ id: "alden-extravagant", advisor: "alden", kind: "luxury", question: "My parents' 50th anniversary dinner. Money isn't the point. Is a great old Champagne worth it, or is that just showing off?", note: "Sometimes extravagance is wonderful: does he say yes when it is, and name what makes it so?" }),
   // Sequence: several conversations; the value should compound.
