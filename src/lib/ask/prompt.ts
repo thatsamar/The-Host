@@ -8,7 +8,9 @@
 //
 // 1–2 are system blocks; 3 is the messages array. A channel other than the
 // website (Cinq by text) may add one more system block after 2, with notes
-// that apply only there (CHANNEL_BLOCK); the website never has one. Nothing is stored: the
+// that apply only there (CHANNEL_BLOCK); the website never has one. Last
+// comes today's date (DATE_BLOCK), on every channel, so what is current is
+// a fact the advisor has rather than a guess. Nothing is stored: the
 // browser sends the whole conversation with each question. This module is
 // pure: no I/O, fully covered by tests.
 
@@ -29,6 +31,27 @@ export interface AskTurn {
 export const BLOCK_ORDER = ["system_prompt", "app_capabilities"] as const;
 /** The label of the optional third block a channel such as Cinq by text adds. */
 export const CHANNEL_BLOCK = "channel_notes";
+/** The label of the last block: today's date, so an advisor can tell what is current. */
+export const DATE_BLOCK = "current_date";
+/** Cinq's home time zone (Austin), used for the date line; the person may be elsewhere. */
+export const CINQ_TIME_ZONE = "America/Chicago";
+
+/**
+ * Today's date and time, so an advisor can tell this year's events, seasons,
+ * openings and prices from earlier years'. Factual grounding only: it says
+ * nothing about how to advise. Its own block, last and never cached, so the
+ * blocks before it stay identical (and cached) all day.
+ */
+export function dateBlock(now: Date, timeZone = CINQ_TIME_ZONE): ContextBlock {
+  const day = new Intl.DateTimeFormat("en-US", { timeZone, weekday: "long", year: "numeric", month: "long", day: "numeric" }).format(now);
+  const time = new Intl.DateTimeFormat("en-US", { timeZone, hour: "numeric", minute: "2-digit" }).format(now);
+  return {
+    label: DATE_BLOCK,
+    title: "TODAY",
+    body: `Today is ${day}, ${time} in Austin, Texas (US Central time). The person may be in another time zone. Something dated in an earlier year, such as an event, a season's schedule, an opening or a price, is not evidence of what is happening now.`,
+    cacheable: false,
+  };
+}
 
 /** Most photos in one question. */
 export const MAX_PHOTOS_PER_TURN = 10;
@@ -108,6 +131,8 @@ export function assemblePrompt(input: {
   maxTurns?: number;
   /** Notes for this channel only (label CHANNEL_BLOCK), placed after the capabilities. */
   channel?: ContextBlock;
+  /** The time now: adds today's date as the last block (DATE_BLOCK). */
+  now?: Date;
 }): Omit<ChatRequest, "signal"> {
   const { companion } = input;
   const webSearch = input.webSearch ?? true;
@@ -116,6 +141,7 @@ export function assemblePrompt(input: {
       { label: "system_prompt", title: "SYSTEM PROMPT", body: companion.systemPrompt, cacheable: true },
       capabilitiesBlock(companion, webSearch),
       ...(input.channel ? [{ ...input.channel, label: CHANNEL_BLOCK }] : []),
+      ...(input.now ? [dateBlock(input.now)] : []),
     ],
     messages: toChatTurns(input.turns, companion.photosOnly, input.maxTurns),
     webSearch,
