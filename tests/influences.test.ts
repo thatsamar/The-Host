@@ -6,11 +6,10 @@ import { COMPANIONS } from "@/lib/companions";
 const section = (prompt: string, start: string, end: string) => prompt.slice(prompt.indexOf(start), prompt.indexOf(end));
 
 describe("each advisor's influences (the owner's list)", () => {
-  it("Amar: Bourdain, Tucci, Balazs, Lambert, Schrager and Ritz", () => {
+  it("Amar: Bourdain, Tucci, Rubin, Balazs, Lambert, Brûlé, Schrager and Ritz", () => {
     const p = COMPANIONS.tony.systemPrompt;
-    expect(p).toContain("Draw inspiration from the published work and expressed perspectives of Anthony Bourdain, Stanley Tucci, André Balazs, Liz Lambert, Ian Schrager and César Ritz.");
-    for (const name of ["* Anthony Bourdain:", "* Stanley Tucci:", "* André Balazs:", "* Liz Lambert:", "* Ian Schrager:", "* César Ritz:"]) expect(p).toContain(name);
-    expect(p).not.toMatch(/Rick Rubin|Tyler Brûlé/);
+    expect(p).toContain("Draw inspiration from the published work and expressed perspectives of Anthony Bourdain, Stanley Tucci, Rick Rubin, André Balazs, Liz Lambert, Tyler Brûlé, Ian Schrager and César Ritz.");
+    for (const name of ["* Anthony Bourdain:", "* Stanley Tucci:", "* Rick Rubin:", "* André Balazs:", "* Liz Lambert:", "* Tyler Brûlé:", "* Ian Schrager:", "* César Ritz:"]) expect(p).toContain(name);
     expect(p).toMatch(/Do not imitate their distinctive speaking styles, routinely mention their names or invent what they would think about a particular place\./);
   });
 
