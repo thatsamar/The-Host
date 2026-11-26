@@ -615,3 +615,122 @@ alter table public.chats add column extraction_next int not null default 0;
 alter table public.chats add column extraction_error text;
 alter table public.chats add column extraction_lease_until timestamptz;
 create index chats_extraction_idx on public.chats (extraction_status) where extraction_status in ('pending', 'running');
+
+-- ===== 20261006000001_ephemeral_messages.sql =====
+
+-- Ephemeral advisor session messages for generation persistence.
+-- Anonymous visitors (no user_id) can have responses continue server-side
+-- even if they leave the page, switch apps, or browser suspends the tab.
+
+create table public.ephemeral_messages (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid not null,
+  role text not null check (role in ('user', 'assistant')),
+  -- pending: generation in progress
+  -- completed: generation finished successfully
+  -- failed: generation failed
+  status text not null default 'pending'
+    check (status in ('pending', 'completed', 'failed')),
+  content text not null default '',
+  error text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index ephemeral_messages_session_idx on public.ephemeral_messages (session_id, created_at);
+create index ephemeral_messages_status_idx on public.ephemeral_messages (session_id, status);
+
+-- Auto-update updated_at
+create trigger ephemeral_messages_updated_at before update on public.ephemeral_messages
+  for each row execute function public.set_updated_at();
+
+-- Clean up old sessions (older than 7 days)
+create or replace function public.cleanup_ephemeral_messages()
+returns void
+language plpgsql
+as $$
+begin
+  delete from public.ephemeral_messages
+  where created_at < now() - interval '7 days';
+end;
+$$;
+
+-- ===== 20261028000001_sms.sql =====
+
+-- SMS sessions and processed-message dedup for Ask Cinq by text.
+-- Apply in the Supabase dashboard before the Twilio number goes live.
+-- Only the service-role key touches these tables: no grants to anon or
+-- authenticated, so no signed-in user is needed and no visitor can read
+-- another number's conversation.
+create table public.sms_sessions (
+  phone_number text primary key,
+  opted_in boolean not null default false,
+  advisor_id text,
+  turns_by_advisor jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create trigger sms_sessions_updated_at before update on public.sms_sessions
+  for each row execute function public.set_updated_at();
+
+create table public.sms_processed_messages (
+  message_sid text primary key,
+  phone_number text not null,
+  created_at timestamptz not null default now()
+);
+
+create index sms_processed_messages_phone_idx on public.sms_processed_messages (phone_number, created_at);
+
+-- ===== 20261126000001_sms_metrics.sql =====
+
+-- Operational measurements for Cinq by text: one row per incoming text and
+-- one per text Cinq sends. Timings, counts, kinds and statuses only: never a
+-- message's words, a photo, a phone number or an error message. A number is
+-- stored as a keyed hash (number_key), so requests from one number can be
+-- grouped (bursts, overlaps, active numbers) without storing the number.
+-- Like the other SMS tables, only the service-role key touches these.
+create table public.sms_requests (
+  message_sid text primary key,
+  number_key text not null,
+  received_at timestamptz not null,
+  -- Filled in when the request ends; still null after a few minutes means it ended in silence.
+  finished_at timestamptz,
+  has_text boolean not null default false,
+  photo_count integer not null default 0,
+  -- answered | fallback | stalled | system | duplicate | opted_out | error
+  outcome text,
+  advisor_id text,
+  ack_ms integer,
+  still_thinking_ms integer,
+  answer_ms integer,
+  texts_sent integer not null default 0,
+  segments_sent integer not null default 0,
+  send_failures integer not null default 0,
+  save_failures integer not null default 0,
+  -- Model use: one entry per call, {purpose, model, ms, input, output, cache_read, cache_write, searches}.
+  model_calls jsonb not null default '[]'::jsonb,
+  error_class text
+);
+
+create index sms_requests_received_idx on public.sms_requests (received_at);
+create index sms_requests_number_idx on public.sms_requests (number_key, received_at);
+
+-- Written when Twilio accepts a text, and again by Twilio's delivery reports,
+-- which can arrive first: so only the sid is required.
+create table public.sms_outbound (
+  sid text primary key,
+  request_sid text,
+  -- ack | still_thinking | answer | fallback | stalled | system
+  kind text,
+  segments integer,
+  submitted_at timestamptz,
+  -- Twilio's latest status: queued | sent | delivered | undelivered | failed …
+  status text,
+  error_code text,
+  status_at timestamptz,
+  delivered_at timestamptz
+);
+
+create index sms_outbound_submitted_idx on public.sms_outbound (submitted_at);
+create index sms_outbound_request_idx on public.sms_outbound (request_sid);

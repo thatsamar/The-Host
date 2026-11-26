@@ -52,6 +52,8 @@ export function createTwilioSender(opts: {
   accountSid: string;
   authToken: string;
   from: string;
+  /** Where Twilio reports each text's delivery (sent, delivered, failed…). */
+  statusCallback?: string;
 }): TwilioSender {
   return {
     async send(to: string, body: string): Promise<SentMessage> {
@@ -62,7 +64,7 @@ export function createTwilioSender(opts: {
           Authorization: basicAuth(opts.accountSid, opts.authToken),
           "Content-Type": "application/x-www-form-urlencoded",
         },
-        body: new URLSearchParams({ From: opts.from, To: to, Body: body }),
+        body: new URLSearchParams({ From: opts.from, To: to, Body: body, ...(opts.statusCallback ? { StatusCallback: opts.statusCallback } : {}) }),
       });
       if (!res.ok) throw new Error(`twilio_send_${res.status}`);
       const message = (await res.json().catch(() => null)) as { sid?: unknown; num_segments?: unknown } | null;

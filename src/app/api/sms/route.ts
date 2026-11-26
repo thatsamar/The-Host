@@ -16,7 +16,9 @@ import {
   validTwilioSignature,
 } from "@/lib/sms/twilio";
 import type { SmsTurn } from "@/lib/sms/store";
-import { errorClass } from "@/lib/diagnostics";
+import { errorClass, safeToken } from "@/lib/diagnostics";
+import { numberKey, RequestMeasure, usageCounts, type ModelCall, type ModelPurpose } from "@/lib/sms/metrics";
+import { SupabaseMetricsSink } from "@/lib/sms/supabase-metrics";
 
 // Answers can take a while; the webhook itself answers immediately (below)
 // and the replies go out through the REST API after the handler finishes.
@@ -36,6 +38,8 @@ function emptyTwiml(): Response {
  * Logs carry error classes only, never message content or phone numbers.
  */
 export async function POST(request: Request): Promise<Response> {
+  // Every timing in the baseline is measured from here: the moment the webhook reached us.
+  const receivedAt = Date.now();
   try {
     const form = await request.formData();
     const params: Record<string, string> = {};
@@ -73,74 +77,140 @@ export async function POST(request: Request): Promise<Response> {
       messageSid: sid,
     };
 
+    // The baseline record (metrics.ts): timings, counts and kinds only. Recording
+    // runs alongside the work and never delays or changes a reply.
+    const measure = new RequestMeasure({
+      messageSid: sid,
+      numberKey: numberKey(from, process.env.SMS_METRICS_KEY || authToken),
+      receivedAt,
+      hasText: !!inbound.body.trim(),
+      photoCount: media.length,
+    });
+    let metricsFailed = false;
+    const sink = new SupabaseMetricsSink(admin, () => (metricsFailed = true));
+    // Twilio reports each text's delivery here.
+    const statusCallback = new URL("/api/sms/status", request.url).toString();
+
     after(async () => {
+      const recordStart = sink.started(measure.row);
+      const recordings: Promise<void>[] = [];
+      let failure: string | undefined;
       try {
         const accountSid = process.env.TWILIO_ACCOUNT_SID ?? "";
-        const sender = createTwilioSender({
+        const twilio = createTwilioSender({
           accountSid,
           authToken,
           from: process.env.TWILIO_PHONE_NUMBER ?? "",
+          statusCallback,
         });
+        // Every text sent is recorded by kind (never its words) once Twilio accepts it.
+        const send = async (text: string) => {
+          try {
+            const sent = await twilio.send(from, text);
+            const out = measure.sent(text, sent.sid, sent.segments);
+            if (out) recordings.push(recordStart.then(() => sink.outbound(out)));
+            return sent;
+          } catch (err) {
+            measure.sendFailed(text);
+            throw err;
+          }
+        };
+        // A model call, timed, with its token counts.
+        const timed = async <T>(purpose: ModelPurpose, run: (onUsage: (usage: Record<string, unknown>, model?: string) => void) => Promise<T>) => {
+          const began = Date.now();
+          const call: ModelCall = { purpose, ms: 0 };
+          try {
+            return await run((usage, model) => Object.assign(call, usageCounts(usage), model ? { model: safeToken(model) } : {}));
+          } catch (err) {
+            call.failed = true;
+            throw err;
+          } finally {
+            call.ms = Date.now() - began;
+            measure.model(call);
+          }
+        };
+        const claimingStore = {
+          getSession: store.getSession.bind(store),
+          saveSession: store.saveSession.bind(store),
+          claimMessageSid: async (messageSid: string, phone: string) => {
+            const claimed = await store.claimMessageSid(messageSid, phone);
+            if (!claimed) measure.duplicate = true;
+            return claimed;
+          },
+        };
         const replies = await processSms(inbound, {
-          store,
+          store: claimingStore,
           // On text, each advisor also gets the text-only notes: how to suggest
           // another advisor, and the previous advisor's answer on a handoff.
-          ask: async (advisorId, turns, context) => {
-            const companion = COMPANIONS[advisorId as CompanionId];
-            const provider = getChatProvider(companion);
-            let text = "";
-            for await (const event of ask(
-              { provider, companion, channel: textChannelNotes(advisorId, context?.handoff, context?.met, context?.budget), signal: context?.signal },
-              turns.map(
-                (turn: SmsTurn) => ({
-                  role: turn.role,
-                  text: turn.text,
-                  images: turn.images,
-                }),
-              ),
-            )) {
-              if (event.type === "text") text += event.text;
-              else if (event.type === "error") throw new Error("ask_error");
-            }
-            if (!text.trim()) throw new Error("ask_empty");
-            return text;
-          },
+          ask: (advisorId, turns, context) =>
+            timed("answer", async (onUsage) => {
+              measure.row.advisor_id = advisorId;
+              const companion = COMPANIONS[advisorId as CompanionId];
+              const provider = getChatProvider(companion);
+              let text = "";
+              for await (const event of ask(
+                {
+                  provider,
+                  companion,
+                  channel: textChannelNotes(advisorId, context?.handoff, context?.met, context?.budget),
+                  signal: context?.signal,
+                  onUsage,
+                },
+                turns.map(
+                  (turn: SmsTurn) => ({
+                    role: turn.role,
+                    text: turn.text,
+                    images: turn.images,
+                  }),
+                ),
+              )) {
+                if (event.type === "text") text += event.text;
+                else if (event.type === "error") throw new Error("ask_error");
+              }
+              if (!text.trim()) throw new Error("ask_empty");
+              return text;
+            }),
           // Which advisor a question goes to when none is picked: one short, low-effort call.
-          route: async (question) => {
-            let reply = "";
-            for await (const event of getRouterProvider().streamChat({
-              system: [{ label: "router", title: "ROUTER", body: ROUTER_PROMPT, cacheable: true }],
-              messages: [{ role: "user", content: [{ type: "text", text: question }] }],
-              webSearch: false,
-              signal: AbortSignal.timeout(ROUTE_TIMEOUT_MS),
-            })) {
-              if (event.type === "text") reply += event.text;
-            }
-            return reply;
-          },
+          route: (question) =>
+            timed("router", async (onUsage) => {
+              let reply = "";
+              for await (const event of getRouterProvider().streamChat({
+                system: [{ label: "router", title: "ROUTER", body: ROUTER_PROMPT, cacheable: true }],
+                messages: [{ role: "user", content: [{ type: "text", text: question }] }],
+                webSearch: false,
+                signal: AbortSignal.timeout(ROUTE_TIMEOUT_MS),
+              })) {
+                if (event.type === "text") reply += event.text;
+                else if (event.type === "done") onUsage(event.usage, event.model);
+              }
+              return reply;
+            }),
           // An answer longer than one text is rewritten to fit as one complete text: one quick, low-effort call.
-          condense: async (advisorId, answer, room) => {
-            let reply = "";
-            const name = COMPANIONS[advisorId as CompanionId].name;
-            for await (const event of getRouterProvider().streamChat({
-              system: [{ label: "condense", title: "CONDENSE", body: condensePrompt(name, room) }],
-              messages: [{ role: "user", content: [{ type: "text", text: answer }] }],
-              webSearch: false,
-              signal: AbortSignal.timeout(ROUTE_TIMEOUT_MS),
-            })) {
-              if (event.type === "text") reply += event.text;
-            }
-            return reply;
-          },
+          condense: (advisorId, answer, room) =>
+            timed("condense", async (onUsage) => {
+              let reply = "";
+              const name = COMPANIONS[advisorId as CompanionId].name;
+              for await (const event of getRouterProvider().streamChat({
+                system: [{ label: "condense", title: "CONDENSE", body: condensePrompt(name, room) }],
+                messages: [{ role: "user", content: [{ type: "text", text: answer }] }],
+                webSearch: false,
+                signal: AbortSignal.timeout(ROUTE_TIMEOUT_MS),
+              })) {
+                if (event.type === "text") reply += event.text;
+                else if (event.type === "done") onUsage(event.usage, event.model);
+              }
+              return reply;
+            }),
           downloadMedia: async (url: string) =>
             downloadTwilioMedia({ accountSid, authToken, url }),
           // A failed save never holds back a reply; the log names its class only.
           onSaveError: (err) => {
+            measure.row.save_failures += 1;
             console.error("SMS session save failed", JSON.stringify({ error: errorClass(err) }));
           },
           // "Give me a second…" goes out while the answer is still being written.
           acknowledge: async (text) => {
-            const sent = await sender.send(from, text);
+            const sent = await send(text);
             console.info("SMS ack sent", JSON.stringify({ sid: sent.sid ?? null }));
           },
         });
@@ -149,7 +219,7 @@ export async function POST(request: Request): Promise<Response> {
         const parts: Record<string, unknown>[] = [];
         try {
           for (const reply of replies) {
-            const sent = await sender.send(from, reply);
+            const sent = await send(reply);
             parts.push({
               chars: reply.length,
               encoding: smsEncoding(reply),
@@ -164,8 +234,19 @@ export async function POST(request: Request): Promise<Response> {
             console.info("SMS replies sent", JSON.stringify({ texts: replies.length, chars, sent: parts.length, parts }));
           }
         }
-      } catch {
+      } catch (err) {
+        failure = errorClass(err);
         console.error("sms processing failed");
+      } finally {
+        const row = measure.finish(failure);
+        // A redelivered MessageSid is the same request: its first record stands.
+        if (!measure.duplicate) recordings.push(recordStart.then(() => sink.finished(row)));
+        await Promise.all(recordings);
+        // The log line carries neither the number's key nor the message id.
+        const summary: Partial<typeof row> = { ...row };
+        delete summary.number_key;
+        delete summary.message_sid;
+        console.info("SMS request finished", JSON.stringify({ ...summary, recorded: !metricsFailed }));
       }
     });
 
