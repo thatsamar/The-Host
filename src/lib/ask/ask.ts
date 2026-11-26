@@ -42,6 +42,8 @@ export async function* ask(
     channel?: ContextBlock;
     signal?: AbortSignal;
     onFinish?: (info: AnswerInfo) => void;
+    /** The time now, for the date line (tests set it); the real time otherwise. */
+    now?: () => Date;
     /** The model's token usage for the answer, as the API reports it (counts only). */
     onUsage?: (usage: Record<string, unknown>, model: string | undefined) => void;
     /** A failed model call, as the log records it. */
@@ -49,7 +51,7 @@ export async function* ask(
   },
   turns: AskTurn[],
 ): AsyncGenerator<AskEvent> {
-  const request = assemblePrompt({ companion: deps.companion, turns, webSearch: deps.webSearch, channel: deps.channel });
+  const request = assemblePrompt({ companion: deps.companion, turns, webSearch: deps.webSearch, channel: deps.channel, now: deps.now?.() ?? new Date() });
   if (request.messages.at(-1)?.role !== "user") {
     yield { type: "error", message: "Add a photo or a question." };
     return;
