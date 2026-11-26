@@ -152,7 +152,7 @@ export async function POST(request: Request): Promise<Response> {
                 {
                   provider,
                   companion,
-                  channel: textChannelNotes(advisorId, context?.handoff, context?.met, context?.budget),
+                  channel: textChannelNotes(advisorId, context?.handoff, context?.met, context?.budget, context?.region),
                   signal: context?.signal,
                   onUsage,
                 },

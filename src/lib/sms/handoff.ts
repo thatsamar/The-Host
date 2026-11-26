@@ -132,7 +132,14 @@ export function shortTextVoice(budget: number): string {
   ].join(" ");
 }
 
-export function textChannelNotes(self: SmsAdvisorId, handoff?: HandoffContext, met?: string[], budget?: number): ContextBlock {
+/** Where a texter is, as far as their number says: "+1" is the US or Canada. */
+export type TextRegion = "us-canada";
+
+export function regionOf(phone: string): TextRegion | undefined {
+  return phone.startsWith("+1") ? "us-canada" : undefined;
+}
+
+export function textChannelNotes(self: SmsAdvisorId, handoff?: HandoffContext, met?: string[], budget?: number, region?: TextRegion): ContextBlock {
   const lines = [
     "You are answering by text message on Cinq by text. Here Cinq works as one collective: when a question is clearly better suited to another advisor, Cinq can bring that advisor in, with the person's agreement, and hand them the person's question together with your answer. On text this replaces the earlier note that you cannot transfer the conversation or share anything with the other advisors.",
     "If the question is clearly better suited to another advisor, give whatever genuinely useful help is yours to give (briefly, if the question is mostly theirs), then offer in your own words, in one sentence, to bring that advisor in, naming them. Then end the reply with a last line containing only the marker [[suggest:ID]] with their id. Cinq removes the marker and asks the person; never mention or explain the marker, and never say you have already brought them in.",
@@ -142,6 +149,8 @@ export function textChannelNotes(self: SmsAdvisorId, handoff?: HandoffContext, m
     ...(budget ? [shortTextVoice(budget)] : []),
     "Only the last day of this conversation is shown to you. Don't assume details from earlier days; if the person refers to something you can't see, ask briefly or work from what they tell you now.",
   ];
+  // Only Goldie is told where the person is, for the emergency numbers in her safety boundary.
+  if (self === "goldie" && region === "us-canada") lines.push("This person is texting from a US or Canadian number.");
   if (met?.length) {
     lines.push(`This person has met these Cinq advisors before: ${met.map((id) => (isAdvisorId(id) ? nameOf(id) : null)).filter(Boolean).join(", ")}.`);
   }
