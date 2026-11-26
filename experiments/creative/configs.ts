@@ -37,7 +37,7 @@ import { answerBudget } from "@/lib/sms/short";
 import { speakerLabel } from "@/lib/sms/handler";
 import type { AdvisorId } from "./cases";
 
-export type ConfigId = "A0" | "A" | "C" | "L" | "I" | "D" | "E" | "G" | "AF" | "DF" | "P" | "DS";
+export type ConfigId = "A0" | "A" | "C" | "L" | "I" | "AN" | "D" | "E" | "G" | "AF" | "DF" | "P" | "DS";
 
 export interface Config {
   id: ConfigId;
@@ -112,6 +112,9 @@ function productionText(id: AdvisorId, opts: { channel?: ContextBlock; webSearch
   return assemblePrompt({ companion: opts.companion ?? COMPANIONS[id], turns: turn, webSearch: opts.webSearch, channel: opts.channel ?? textChannelNotes(id, undefined, [], budget(id)) }).system;
 }
 
+/** Each brief as PR #76 would make it, with the owner's chosen influences (copied from that branch). */
+const INFLUENCED = JSON.parse(readFileSync(new URL("./influenced-briefs.json", import.meta.url), "utf8")) as Record<AdvisorId, string>;
+
 const brief = (id: AdvisorId) => block("system_prompt", "SYSTEM PROMPT", COMPANIONS[id].systemPrompt);
 
 /**
@@ -139,6 +142,14 @@ export const CONFIGS: Config[] = [
     webSearch: false,
     advisors: ["tony"],
     system: (id, now) => [...productionText(id, { webSearch: false, companion: { ...COMPANIONS[id], systemPrompt: amarClarified(COMPANIONS[id].systemPrompt) } }), constants(), dateBlock(now)],
+  },
+  {
+    id: "AN",
+    name: "A with the owner's chosen influences in each brief (PR #76)",
+    family: "controlled",
+    textPipeline: true,
+    webSearch: false,
+    system: (id, now) => [...productionText(id, { webSearch: false, companion: { ...COMPANIONS[id], systemPrompt: INFLUENCED[id] } }), constants(), dateBlock(now)],
   },
   { id: "D", name: "The brief with essential supporting instructions", family: "controlled", textPipeline: false, webSearch: false, system: (id, now) => [brief(id), block("essentials", "ESSENTIALS", ESSENTIALS), constants(), dateBlock(now)] },
   { id: "E", name: "The brief, minimally instructed", family: "controlled", textPipeline: false, webSearch: false, system: (id, now) => [brief(id), constants(), dateBlock(now)] },

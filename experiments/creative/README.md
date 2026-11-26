@@ -20,6 +20,7 @@ only from the instructions around the brief.
 | C | A without the shared voice instruction |
 | L | A without the short-text block (no shared voice, no length limit, no rewrite) |
 | I | A with Amar's identity clarification (Amar only) |
+| AN | A with the owner's chosen influences in each brief (PR #76; `influenced-briefs.json`) |
 | D | The brief with only essential supporting instructions |
 | E | The brief, minimally instructed |
 | G | A general-purpose assistant with no brief, given the same context |
