@@ -81,7 +81,16 @@ export function handoffNote(handoff: HandoffContext): SmsTurn {
 
 /** The one line Cinq adds after an answer that suggests another advisor. */
 export function offerText(to: SmsAdvisorId): string {
-  return `Reply YES to bring in ${nameOf(to)}, or carry on with me.`;
+  return `Want me to bring in ${nameOf(to)}?`;
+}
+
+/**
+ * Whether the advisor's own words already make the offer: they name the
+ * advisor and ask. Then Cinq adds nothing; otherwise it adds offerText, so
+ * the person is always asked before anyone is brought in.
+ */
+export function offersInOwnWords(answer: string, to: SmsAdvisorId): boolean {
+  return new RegExp(String.raw`\b${nameOf(to)}\b`, "i").test(answer) && answer.includes("?");
 }
 
 const YES = new Set([
@@ -111,7 +120,7 @@ function lineup(): string {
  * suggest another advisor, and, when this question was handed over, what
  * the previous advisor said.
  */
-/** The longest "Reply YES to bring in ..." line, which Cinq adds after an offer. */
+/** The longest "Want me to bring in ...?" line, which Cinq adds when the advisor's own words don't make the offer. */
 const OFFER_CHARS = Math.max(...SMS_ADVISORS.map((a) => offerText(a.id).length)) + 1;
 
 /**
@@ -124,7 +133,7 @@ export function shortTextVoice(budget: number): string {
   // Roughly six characters a word in a text like this.
   const words = Math.max(6, Math.floor(budget / 6));
   return [
-    `Here every answer is one short text: your words must fit in ${budget} characters, about ${words} words, after the name and any introduction Cinq adds (${offerBudget} characters if you offer to bring in another advisor, since Cinq adds a line asking the person).`,
+    `Here every answer is one short text: your words must fit in ${budget} characters, about ${words} words, after the name and any introduction Cinq adds (${offerBudget} characters if you offer to bring in another advisor, to leave room for the offer).`,
     "Design the text for that length; don't shorten a longer answer. Lead with the answer itself, as one complete thought that stands on its own and ends cleanly. Never start a list, a sequence or a \"first\" you can't finish in the text, and never trail off; if there is more worth knowing, it belongs in their next text.",
     "Write like a well-informed friend with good taste texting a friend: natural, warm, and opinionated where you have a real view. Give the single most useful thing, specific (a name, a detail, a clear call) rather than a list or an overview; if they ask for a list, give the top one or two that fit.",
     "End with a hook only when one fits naturally: a specific recommendation, a real opinion, a detail worth knowing. Ask a question only when the answer honestly depends on something; never a forced question or a tacked-on offer to say more.",
@@ -142,10 +151,10 @@ export function regionOf(phone: string): TextRegion | undefined {
 export function textChannelNotes(self: SmsAdvisorId, handoff?: HandoffContext, met?: string[], budget?: number, region?: TextRegion): ContextBlock {
   const lines = [
     "You are answering by text message on Cinq by text. Here Cinq works as one collective: when a question is clearly better suited to another advisor, Cinq can bring that advisor in, with the person's agreement, and hand them the person's question together with your answer. On text this replaces the earlier note that you cannot transfer the conversation or share anything with the other advisors.",
-    "If the question is clearly better suited to another advisor, give whatever genuinely useful help is yours to give (briefly, if the question is mostly theirs), then offer in your own words, in one sentence, to bring that advisor in, naming them. Then end the reply with a last line containing only the marker [[suggest:ID]] with their id. Cinq removes the marker and asks the person; never mention or explain the marker, and never say you have already brought them in.",
+    "If the question is clearly better suited to another advisor, give whatever genuinely useful help is yours to give (briefly, if the question is mostly theirs), then ask in your own words, in one short question, whether they would like you to bring that advisor in, naming them, the way you would introduce two people who should meet. Then end the reply with a last line containing only the marker [[suggest:ID]] with their id. Cinq removes the marker, and your question is the offer; never mention or explain the marker, and never say you have already brought them in.",
     `Suggest only when another advisor is clearly the better fit; when in doubt, answer it yourself and add no marker. At most one suggestion, never yourself, and never as a routine closing line. The ids: ${lineup()}.`,
     `A message in the conversation that begins ${HANDOFF_NOTE_PREFIX} is from Cinq, not the person: it records that another advisor brought you in, and what they said. Treat it as part of this conversation's history: you know who brought you in and why.`,
-    "Cinq shows your name before each of your texts and, when you first answer this person or are brought in, a one-line introduction; never write your own name as a label, and don't introduce yourself again.",
+    "Cinq shows your name before each of your texts and, the first time you answer this person, a one-line introduction; never write your own name as a label, and don't introduce yourself again.",
     ...(budget ? [shortTextVoice(budget)] : []),
     "Only the last day of this conversation is shown to you. Don't assume details from earlier days; if the person refers to something you can't see, ask briefly or work from what they tell you now.",
   ];

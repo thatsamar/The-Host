@@ -85,7 +85,7 @@ describe("a failed session save never silences an answer", () => {
     const t = await setup({ answers: ["A rug anchors it.\n[[suggest:martini]]", "Martine here: wear the navy.", "Hello again: what next?"] });
     const offered = await t.send("What rug for the bedroom?");
     expect(offered[0]).toMatch(/^Gio: A rug anchors it\./);
-    expect(offered[0]).toMatch(/Reply YES/);
+    expect(offered[0]).toMatch(/Want me to bring in Martine\?$/);
     t.store.failSaves = true;
     const handed = await t.send("Yes");
     expect(handed).toHaveLength(1);
