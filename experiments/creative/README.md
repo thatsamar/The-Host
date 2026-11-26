@@ -24,6 +24,12 @@ only from the instructions around the brief.
 | E | The brief, minimally instructed |
 | G | A general-purpose assistant with no brief, given the same context |
 
+| AF | A with Cinq's philosophy right after the brief |
+| DF | D with Cinq's philosophy right after the brief |
+
+AF and DF run only when `PHILOSOPHY_FILE` points at the owner's approved
+philosophy, kept outside the repository. It is never written into the code.
+
 **End-to-end.** With research, as a person would actually get the answer. Kept
 separate, so a difference caused by research is never put down to the
 instructions.

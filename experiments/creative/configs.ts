@@ -27,6 +27,7 @@
  * advisor's own answer, as plain text.
  */
 
+import { existsSync, readFileSync } from "node:fs";
 import type { ContextBlock } from "@/lib/ai/types";
 import { assemblePrompt, dateBlock, type AskTurn } from "@/lib/ask/prompt";
 import { COMPANIONS } from "@/lib/companions";
@@ -36,7 +37,7 @@ import { answerBudget } from "@/lib/sms/short";
 import { speakerLabel } from "@/lib/sms/handler";
 import type { AdvisorId } from "./cases";
 
-export type ConfigId = "A0" | "A" | "C" | "L" | "I" | "D" | "E" | "G" | "P" | "DS";
+export type ConfigId = "A0" | "A" | "C" | "L" | "I" | "D" | "E" | "G" | "AF" | "DF" | "P" | "DS";
 
 export interface Config {
   id: ConfigId;
@@ -113,6 +114,18 @@ function productionText(id: AdvisorId, opts: { channel?: ContextBlock; webSearch
 
 const brief = (id: AdvisorId) => block("system_prompt", "SYSTEM PROMPT", COMPANIONS[id].systemPrompt);
 
+/**
+ * Cinq's philosophy, the owner's, as he approves it: read from a private file
+ * (PHILOSOPHY_FILE, outside the repository), never written into the code. It
+ * comes right after the brief, as a shared way of seeing, not a shared voice.
+ * Without the file, AF and DF don't run.
+ */
+function philosophy(): ContextBlock | null {
+  const file = process.env.PHILOSOPHY_FILE;
+  if (!file || !existsSync(file)) return null;
+  return block("philosophy", "CINQ'S PHILOSOPHY", readFileSync(file, "utf8").trim());
+}
+
 export const CONFIGS: Config[] = [
   { id: "A0", name: "Production's instructions by text, without the date", family: "controlled", textPipeline: true, webSearch: false, system: (id) => [...productionText(id, { webSearch: false }), constants()] },
   { id: "A", name: "Production's instructions by text", family: "controlled", textPipeline: true, webSearch: false, system: (id, now) => [...productionText(id, { webSearch: false }), constants(), dateBlock(now)] },
@@ -130,12 +143,25 @@ export const CONFIGS: Config[] = [
   { id: "D", name: "The brief with essential supporting instructions", family: "controlled", textPipeline: false, webSearch: false, system: (id, now) => [brief(id), block("essentials", "ESSENTIALS", ESSENTIALS), constants(), dateBlock(now)] },
   { id: "E", name: "The brief, minimally instructed", family: "controlled", textPipeline: false, webSearch: false, system: (id, now) => [brief(id), constants(), dateBlock(now)] },
   { id: "G", name: "A general-purpose assistant, no brief", family: "controlled", textPipeline: false, webSearch: false, system: (_id, now) => [block("system_prompt", "SYSTEM PROMPT", "You are a helpful assistant."), block("essentials", "ESSENTIALS", TEXT_NOTE), constants(), dateBlock(now)] },
+  {
+    id: "AF",
+    name: "A with Cinq's philosophy after the brief",
+    family: "controlled",
+    textPipeline: true,
+    webSearch: false,
+    system: (id, now) => {
+      const [first, ...rest] = productionText(id, { webSearch: false });
+      return [first, philosophy()!, ...rest, constants(), dateBlock(now)];
+    },
+  },
+  { id: "DF", name: "D with Cinq's philosophy after the brief", family: "controlled", textPipeline: false, webSearch: false, system: (id, now) => [brief(id), philosophy()!, block("essentials", "ESSENTIALS", ESSENTIALS), constants(), dateBlock(now)] },
   { id: "P", name: "Production by text, exactly as today (web search on, no date)", family: "end-to-end", textPipeline: true, webSearch: true, system: (id) => productionText(id, { webSearch: true }) },
   { id: "DS", name: "D with production web search", family: "end-to-end", textPipeline: false, webSearch: true, system: (id, now) => [brief(id), block("essentials", "ESSENTIALS", ESSENTIALS), constants(), dateBlock(now)] },
 ];
 
 export function configsFor(advisor: AdvisorId, ids?: string[] | null): Config[] {
-  return CONFIGS.filter((c) => (!ids || ids.includes(c.id)) && (!c.advisors || c.advisors.includes(advisor)));
+  const hasPhilosophy = !!philosophy();
+  return CONFIGS.filter((c) => (!ids || ids.includes(c.id)) && (!c.advisors || c.advisors.includes(advisor)) && (hasPhilosophy || !["AF", "DF"].includes(c.id)));
 }
 
 export function instructionSize(config: Config, id: AdvisorId, now: Date): number {
