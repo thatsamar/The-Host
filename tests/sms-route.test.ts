@@ -8,6 +8,10 @@ const state = vi.hoisted(() => ({
   sent: [] as string[],
   channels: [] as ({ label: string; body: string } | undefined)[],
   failSaves: false,
+  senderOpts: [] as Record<string, unknown>[],
+  started: [] as Record<string, unknown>[],
+  finished: [] as Record<string, unknown>[],
+  outbound: [] as Record<string, unknown>[],
 }));
 
 vi.mock("next/server", () => ({ after: (fn: () => Promise<unknown>) => state.pending.push(fn()) }));
@@ -26,12 +30,27 @@ vi.mock("@/lib/sms/supabase-store", async () => {
 vi.mock("@/lib/sms/twilio", () => ({
   validTwilioSignature: () => true,
   downloadTwilioMedia: async () => null,
-  createTwilioSender: () => ({
+  createTwilioSender: (opts: Record<string, unknown>) => (state.senderOpts.push(opts), {
     send: async (_to: string, body: string) => {
       state.sent.push(body);
       return { sid: `SM${state.sent.length}`, segments: 1 };
     },
   }),
+}));
+vi.mock("@/lib/sms/supabase-metrics", () => ({
+  SupabaseMetricsSink: class {
+    async started(row: Record<string, unknown>) {
+      state.started.push(JSON.parse(JSON.stringify(row)));
+    }
+    async finished(row: Record<string, unknown>) {
+      state.finished.push(JSON.parse(JSON.stringify(row)));
+    }
+    async outbound(row: Record<string, unknown>) {
+      state.outbound.push(row);
+    }
+    async delivery() {}
+    async prune() {}
+  },
 }));
 vi.mock("@/lib/ai", () => ({ getChatProvider: () => ({}), getRouterProvider: () => ({}) }));
 vi.mock("@/lib/ask/ask", () => ({
@@ -134,5 +153,44 @@ describe("Twilio webhook: Give me a second…", () => {
       state.failSaves = false;
       errors.mockRestore();
     }
+  });
+
+  it("records each request for the baseline: timings, counts and kinds, never the words or the number", async () => {
+    const logs = vi.spyOn(console, "info").mockImplementation(() => {});
+    state.finished = [];
+    state.outbound = [];
+    try {
+      await text("Which lamp for the reading chair?");
+      await vi.waitFor(() => expect(state.releaseAnswer).not.toBeNull());
+      state.releaseAnswer!();
+      await settle();
+      const row = state.finished.at(-1)!;
+      expect(row).toMatchObject({ outcome: "answered", has_text: true, photo_count: 0, texts_sent: 2, send_failures: 0 });
+      expect(typeof row.ack_ms).toBe("number");
+      expect(typeof row.answer_ms).toBe("number");
+      expect((row.model_calls as { purpose: string }[]).map((c) => c.purpose)).toEqual(["answer"]);
+      expect(state.outbound.slice(-2).map((o) => o.kind)).toEqual(["ack", "answer"]);
+      // Twilio is asked to report each text's delivery to our status endpoint.
+      expect(state.senderOpts.at(-1)!.statusCallback).toBe("https://cinq.example/api/sms/status");
+      // Nothing personal in the record or the log line.
+      const finishedLog = logs.mock.calls.map((c) => c.join(" ")).find((l) => l.startsWith("SMS request finished"))!;
+      for (const out of [JSON.stringify(row), finishedLog]) {
+        expect(out).not.toMatch(/5551234567|lamp|reading chair|smaller sofa/);
+      }
+      expect(finishedLog).not.toContain("number_key");
+      expect(finishedLog).not.toContain("SMroute");
+    } finally {
+      logs.mockRestore();
+    }
+  });
+
+  it("records a redelivered text once", async () => {
+    const before = state.finished.length;
+    const form = new URLSearchParams({ From: "+15551234567", Body: "HELP", MessageSid: "SMrepeat1", NumMedia: "0" });
+    for (let i = 0; i < 2; i++) {
+      await POST(new Request("https://cinq.example/api/sms", { method: "POST", body: form, headers: { "Content-Type": "application/x-www-form-urlencoded" } }));
+    }
+    await settle();
+    expect(state.finished.slice(before).map((r) => r.outcome)).toEqual(["system"]);
   });
 });

@@ -42,6 +42,8 @@ export async function* ask(
     channel?: ContextBlock;
     signal?: AbortSignal;
     onFinish?: (info: AnswerInfo) => void;
+    /** The model's token usage for the answer, as the API reports it (counts only). */
+    onUsage?: (usage: Record<string, unknown>, model: string | undefined) => void;
     /** A failed model call, as the log records it. */
     onFailure?: (failure: FailureInfo) => void;
   },
@@ -64,6 +66,7 @@ export async function* ask(
       else if (event.type === "web_results") yield { type: "sources", sources: event.sources };
       else if (event.type === "done") {
         const outputTokens = event.usage.output_tokens;
+        deps.onUsage?.(event.usage, event.model);
         deps.onFinish?.({
           stopReason: event.stopReason,
           outputTokens: typeof outputTokens === "number" ? outputTokens : undefined,
