@@ -12,7 +12,7 @@
  */
 
 import { advisorList, isAdvisorId, readNavigation, SMS_ADVISORS, type SmsAdvisorId } from "./navigation";
-import { agreesToHandoff, handoffNote, offerText, readSuggestion, type HandoffContext } from "./handoff";
+import { agreesToHandoff, handoffNote, offerText, readSuggestion, regionOf, type HandoffContext, type TextRegion } from "./handoff";
 import { recentTurns } from "./context";
 import { compactSession } from "./compact";
 import { answerBudget, answerFits, roomForAnswer, shortAnswerText } from "./short";
@@ -267,7 +267,7 @@ export interface SmsDeps {
   ask: (
     advisorId: SmsAdvisorId,
     turns: SmsTurn[],
-    context?: { handoff?: HandoffContext; met?: string[]; budget?: number; signal?: AbortSignal },
+    context?: { handoff?: HandoffContext; met?: string[]; budget?: number; signal?: AbortSignal; region?: TextRegion },
   ) => Promise<string>;
   /**
    * Rewrites an answer that came back longer than one text into one complete
@@ -438,7 +438,7 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
     try {
       ({ text: answer, suggest } = readSuggestion(
         await Promise.race([
-          deps.ask(advisorId, recentTurns(turns, now), { ...context, ...(met.length ? { met } : {}), budget, signal: controller.signal }),
+          deps.ask(advisorId, recentTurns(turns, now), { ...context, ...(met.length ? { met } : {}), budget, signal: controller.signal, ...(regionOf(inbound.from) ? { region: regionOf(inbound.from) } : {}) }),
           stall,
         ]),
         advisorId,
