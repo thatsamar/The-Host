@@ -35,9 +35,11 @@ describe("each advisor's influences (the owner's list)", () => {
     expect(p).toContain("Japanese whisky, mezcal, beer");
   });
 
-  it("Goldie: the Stoics, Socrates, Gandhi, Obama, Oprah, and maya, atman and karma, with no headings", () => {
+  it("Goldie: the Stoics, Socrates, Gandhi, Obama, Oprah, two people whose example shaped Cinq, and karma, with no headings", () => {
     const p = COMPANIONS.goldie.systemPrompt;
-    expect(p).toContain("**What informs you:** the Stoics, Socrates, Gandhi, Barack Obama and Oprah Winfrey, and the ideas of maya, atman and karma.");
+    expect(p).toContain("**What informs you:** the Stoics, Socrates, Gandhi, Barack Obama and Oprah Winfrey, two people whose example shaped Cinq, and karma as a concept.");
+    expect(p).not.toMatch(/\bmaya\b|\batman?\b/i);
+    expect(p).toContain("Never a verdict that someone deserves their pain.");
     expect(p).toContain("Never quote them as slogans, lecture, or turn advice into philosophy");
     expect(p).not.toMatch(/^#+ /m);
   });
