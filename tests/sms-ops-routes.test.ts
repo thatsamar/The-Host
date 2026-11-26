@@ -30,7 +30,8 @@ vi.mock("@/lib/supabase/admin", () => ({
 }));
 
 const { POST: status } = await import("@/app/api/sms/status/route");
-const { GET: ops } = await import("@/app/ops/route");
+const { GET: ops, POST: signIn } = await import("@/app/ops/route");
+const { newSession, validSession } = await import("@/lib/ops/session");
 
 const report = (fields: Record<string, string>) =>
   status(new Request("https://cinq.example/api/sms/status", { method: "POST", body: new URLSearchParams(fields), headers: { "Content-Type": "application/x-www-form-urlencoded" } }));
@@ -72,12 +73,38 @@ describe("the operations dashboard", () => {
     expect((await get("x:anything")).status).toBe(404);
   });
 
-  it("asks for the password, and refuses a wrong one", async () => {
+  it("shows a sign-in page a phone's password manager can fill, and refuses a wrong password", async () => {
     process.env.OPS_PASSWORD = "right-horse";
     const missing = await get();
     expect(missing.status).toBe(401);
-    expect(missing.headers.get("WWW-Authenticate")).toContain("Basic");
+    const page = await missing.text();
+    expect(page).toContain('autocomplete="current-password"');
+    expect(page).toContain('rel="apple-touch-icon"');
     expect((await get("ops:wrong")).status).toBe(401);
+    const wrong = await signIn(new Request("https://cinq.example/ops", { method: "POST", body: new URLSearchParams({ password: "nope" }) }));
+    expect(wrong.status).toBe(401);
+    expect(wrong.headers.get("Set-Cookie")).toBeNull();
+    expect(await wrong.text()).toContain("isn't right");
+  });
+
+  it("keeps a device signed in for 30 days after one sign-in, and signs out on request", async () => {
+    process.env.OPS_PASSWORD = "right-horse";
+    state.requests = [];
+    const ok = await signIn(new Request("https://cinq.example/ops", { method: "POST", body: new URLSearchParams({ password: "right-horse" }) }));
+    expect(ok.status).toBe(303);
+    const cookie = ok.headers.get("Set-Cookie")!;
+    expect(cookie).toMatch(/^cinq_ops=\d+\.[\w-]+; Path=\/ops; Max-Age=2592000; HttpOnly; Secure; SameSite=Strict$/);
+    const value = cookie.split(";")[0];
+    const res = await ops(new Request("https://cinq.example/ops", { headers: { Cookie: value } }));
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("Sign out");
+    // A forged or expired cookie, or one from before the password changed, isn't accepted.
+    expect((await ops(new Request("https://cinq.example/ops", { headers: { Cookie: "cinq_ops=9999999999.forged" } }))).status).toBe(401);
+    const old = newSession("right-horse", Date.now() - 31 * 86_400_000);
+    expect(validSession(old.value, "right-horse")).toBe(false);
+    expect(validSession(newSession("old-password").value, "right-horse")).toBe(false);
+    const out = await ops(new Request("https://cinq.example/ops?signout=1", { headers: { Cookie: value } }));
+    expect(out.headers.get("Set-Cookie")).toContain("Max-Age=0");
   });
 
   it("shows aggregates to the right password, never stored or indexed", async () => {
