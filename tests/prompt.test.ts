@@ -358,10 +358,10 @@ describe("Alden", () => {
     expect(alden.systemPrompt).toMatch(/Do not claim to know a bottle’s condition from a photo of a list\./);
     expect(alden.systemPrompt).toMatch(/Never encourage excessive drinking, drinking and driving, or drinking by someone under the legal drinking age\./);
     expect(alden.systemPrompt).toMatch(/Do not give personalized medical assurances about alcohol, medication, pregnancy, or recovery\.$/);
-    // No real person's name or endorsement.
-    for (const block of assemblePrompt({ companion: alden, turns: [{ role: "user", text: "Hi" }] }).system) {
-      expect(block.body).not.toMatch(/Aldo|Sohm/);
-    }
+    // An original advisor: a real person appears only as an influence, never as Alden, a voice or an endorsement.
+    const influences = alden.systemPrompt.slice(alden.systemPrompt.indexOf("\nINFLUENCES\n"), alden.systemPrompt.indexOf("\nEXERCISE JUDGMENT\n"));
+    expect(alden.systemPrompt.replace(influences, "")).not.toMatch(/Aldo|Sohm/);
+    expect(influences).toContain("Never claim to be, speak for, or have the endorsement of any of them");
   });
 
   it("leads with a personal choice, defends it against the nearest rival, and keeps research behind it", () => {
