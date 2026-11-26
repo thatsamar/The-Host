@@ -87,7 +87,7 @@ describe("START, STOP, HELP", () => {
     const store = new MemorySmsStore();
     expect(await processSms(inbound("3"), { store, ask: makeAsk().ask })).toEqual([
       WELCOME_TEXT,
-      "You're with Gio (design). Send your question as a text or a photo.",
+      "Gio: I'm Gio, design at Cinq. What's on your mind?",
     ]);
     expect((await store.getSession(FROM))?.advisorId).toBe("gio");
   });
@@ -126,7 +126,7 @@ describe("advisor choice, questions, history, switching", () => {
 
   it("asks the chosen advisor and keeps follow-up context", async () => {
     expect(await processSms(inbound("3"), { store, ask: ask.ask })).toEqual([
-      "You're with Gio (design). Send your question as a text or a photo.",
+      "Gio: I'm Gio, design at Cinq. What's on your mind?",
     ]);
     ask.setAnswer("Gio's answer.");
     expect(await processSms(inbound("What sofa fits a small room?"), { store, ask: ask.ask })).toEqual([
@@ -180,10 +180,10 @@ describe("advisor choice, questions, history, switching", () => {
 
   it("accepts names and switch phrases, not just numbers", async () => {
     expect(await processSms(inbound("Martine"), { store, ask: ask.ask })).toEqual([
-      "You're with Martine (style). Send your question as a text or a photo.",
+      "Martine: I'm Martine, style at Cinq. What's on your mind?",
     ]);
     expect(await processSms(inbound("switch to alden"), { store, ask: ask.ask })).toEqual([
-      "You're with Alden (wine, cocktails & spirits). Send your question as a text or a photo.",
+      "Alden: I'm Alden, wine & spirits at Cinq. What's on your mind?",
     ]);
   });
 });
@@ -646,7 +646,7 @@ describe("speaker labels", () => {
     expect((await store.getSession(FROM))?.turnsByAdvisor.gio?.at(-1)?.text).toBe("Lower the lamp.");
   });
 
-  it("never appear on system texts: ack, welcome, list, confirmation, HELP, STOP", async () => {
+  it("never appear on system texts: ack, welcome, list, HELP, STOP (a pick is answered by the advisor, labelled)", async () => {
     const store = new MemorySmsStore();
     const ask = makeAsk();
     const acks: string[] = [];
@@ -654,12 +654,13 @@ describe("speaker labels", () => {
     const system = [
       ...(await processSms(inbound("START"), deps)),
       ...(await processSms(inbound("SWITCH"), deps)),
-      ...(await processSms(inbound("2"), deps)),
       ...(await processSms(inbound("HELP"), deps)),
     ];
+    // A pick is the advisor's own reply, so it carries their label.
+    expect(await processSms(inbound("2"), deps)).toEqual(["Martine: I'm Martine, style at Cinq. What's on your mind?"]);
     await processSms(inbound("What shoes?"), deps);
     system.push(...acks, ...(await processSms(inbound("STOP"), deps)));
-    expect(system).toEqual([WELCOME_TEXT, ADVISOR_LIST_TEXT, "You're with Martine (style). Send your question as a text or a photo.", HELP_TEXT, ACK_TEXTS[0], OPT_OUT_TEXT]);
+    expect(system).toEqual([WELCOME_TEXT, ADVISOR_LIST_TEXT, HELP_TEXT, ACK_TEXTS[0], OPT_OUT_TEXT]);
     for (const t of system) for (const l of labels) expect(t.startsWith(l)).toBe(false);
   });
 });
