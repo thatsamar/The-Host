@@ -100,7 +100,7 @@ describe("a slow answer is never a silent one", () => {
       if (calls === 1) return "A rug anchors it.\n[[suggest:martini]]";
       return new Promise((_, reject) => signal?.addEventListener("abort", () => reject(new Error("aborted"))));
     });
-    expect((await t.send("What rug?"))[0]).toMatch(/Reply YES/);
+    expect((await t.send("What rug?"))[0]).toMatch(/Want me to bring in Martine\?$/);
     expect(await t.send("Yes")).toEqual([STALLED_TEXT]);
     expect((await t.store.getSession("+15558880000"))!.pendingHandoff).toEqual({ from: "gio", to: "martini" });
   });

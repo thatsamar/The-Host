@@ -1,3 +1,4 @@
+import { fitsAnswerCap } from "@/lib/sms/segments";
 import { beforeEach, describe, expect, it } from "vitest";
 import { assemblePrompt, BLOCK_ORDER, CHANNEL_BLOCK } from "@/lib/ask/prompt";
 import { COMPANIONS } from "@/lib/companions";
@@ -27,7 +28,7 @@ describe("the suggestion marker", () => {
   });
 
   it("is offered with one short line", () => {
-    expect(offerText("martini")).toBe("Reply YES to bring in Martine, or carry on with me.");
+    expect(offerText("martini")).toBe("Want me to bring in Martine?");
   });
 });
 
@@ -115,7 +116,9 @@ describe("handoffs in the conversation", () => {
     const replies = await send(QUESTION);
     expect(replies.join("\n")).not.toContain("[[");
     expect(replies.join("\n")).toContain("want me to bring her in?");
-    expect(replies.at(-1)!.endsWith("Reply YES to bring in Martine, or carry on with me.")).toBe(true);
+    // The advisor's own question is the offer: no fixed line is added.
+    expect(replies.at(-1)!.endsWith(SUGGESTED)).toBe(true);
+    expect(replies.join("\n")).not.toMatch(/Reply YES|Want me to bring in/);
     const session = await store.getSession(FROM);
     expect(session?.pendingHandoff).toEqual({ from: "alden", to: "martini" });
     // History keeps the answer without the marker or the offer line.
@@ -272,7 +275,7 @@ describe("handoffs in the conversation", () => {
     expect(await send("Which leather?")).toEqual(["Martine: Suede."]);
   });
 
-  it("introduces the handed-over advisor on every handoff, even one already met", async () => {
+  it("doesn't re-introduce a handed-over advisor the person already knows", async () => {
     // Martine was met earlier: picked, answered, then the person went back to Alden.
     await send("talk to Martine");
     await send("Navy or grey?");
@@ -280,9 +283,25 @@ describe("handoffs in the conversation", () => {
     answers.alden = [SUGGESTING];
     await offer();
     answers.martini = ["The linen works."];
-    expect(await send("yes")).toEqual(["Martine: I'm Martine, style at Cinq.\nThe linen works."]);
-    // Her next answer, not a handoff: the label only.
+    expect(await send("yes")).toEqual(["Martine: The linen works."]);
     expect(await send("And the shoes?")).toEqual(["Martine: martini answers."]);
+  });
+
+  it("asks in one short line when the advisor's own words don't make the offer", async () => {
+    answers.alden = ["A dry Vermentino suits the dinner.\n[[suggest:martini]]"];
+    const replies = await send(QUESTION);
+    expect(replies.at(-1)).toBe("Alden: A dry Vermentino suits the dinner.\nWant me to bring in Martine?");
+    expect((await store.getSession(FROM))?.pendingHandoff).toEqual({ from: "alden", to: "martini" });
+    // History keeps the advisor's answer, never Cinq's line.
+    expect((await store.getSession(FROM))?.turnsByAdvisor.alden?.at(-1)?.text).toBe("A dry Vermentino suits the dinner.");
+  });
+
+  it("still asks when trimming to one text cuts the advisor's own offer", async () => {
+    const long = Array.from({ length: 12 }, (_, i) => `Sentence ${i + 1} about the wine and the dinner by the sea.`).join(" ");
+    answers.alden = [`${long} The jacket is Martine's call; want me to bring her in?\n[[suggest:martini]]`];
+    const [reply] = await send(QUESTION);
+    expect(reply.endsWith("\nWant me to bring in Martine?")).toBe(true);
+    expect(fitsAnswerCap(reply)).toBe(true);
   });
 
   it("works for a routed first question too, and the welcome no longer says to pick first", async () => {
@@ -292,7 +311,7 @@ describe("handoffs in the conversation", () => {
     await processSms({ from: "+15550001111", body: "START", media: [], messageSid: "SMfresh1" }, d);
     const replies = await processSms({ from: "+15550001111", body: QUESTION, media: [], messageSid: "SMfresh2" }, d);
     expect(replies[0].startsWith("Alden: I'm Alden, wine & spirits at Cinq.")).toBe(true);
-    expect(replies.at(-1)!.endsWith("Reply YES to bring in Martine, or carry on with me.")).toBe(true);
+    expect(replies.at(-1)!.endsWith(SUGGESTED)).toBe(true);
     expect(WELCOME_TEXT).not.toContain("Pick any advisor");
   });
 });
