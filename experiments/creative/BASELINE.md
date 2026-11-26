@@ -16,5 +16,12 @@ against the same thing.
 - **Not preserved here:** real exchanges and photos. They stay outside the
   repository, which is public.
 
+- **Since then:** PR #77 (the handover, merged Nov 26 at `65b87bd`) changed
+  two lines of the text-only notes every advisor receives. The offer to
+  bring in another advisor is now asked in the advisor's own words, and the
+  introduction is described as first-time only. Runs on the experiment
+  branch now use that production. To compare with the frozen benchmark,
+  run from a checkout of `6314d99`.
+
 To reproduce production exactly: check out `6314d99` and run configuration P
 (text, research on) or A (text, controlled).
