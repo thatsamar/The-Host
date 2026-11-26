@@ -1,6 +1,7 @@
 import { RECOVERY_WINDOW_MS, SILENT_AFTER_MS, type Report, type Spread } from "./report";
 import { SMS_ADVISORS } from "@/lib/sms/navigation";
 import { RETENTION_DAYS } from "@/lib/sms/metrics";
+import { HOME_SCREEN_TAGS } from "./session";
 
 const esc = (v: unknown) =>
   String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
@@ -66,7 +67,7 @@ export function renderOpsPage(report: Report, opts: { days: number; recorded: bo
   const measurementOk = r.measurement.twilioReachable && missingIn === 0 && missingOut === 0 && r.measurement.deliveryReportsMissing === 0;
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex"><title>Cinq Operations</title>
+<meta name="robots" content="noindex"><title>Cinq Operations</title>${HOME_SCREEN_TAGS}
 <style>
 :root{--bg:#f5f6f4;--card:#fff;--fg:#1d2422;--muted:#5d6763;--line:#dce1de;--accent:#235f57;--ok:#2d6a3a;--warn:#8a5b10;--bad:#9a2f2c;color-scheme:light}
 @media (prefers-color-scheme:dark){:root{--bg:#121715;--card:#1a201e;--fg:#e3e8e5;--muted:#9aa5a0;--line:#2c3532;--accent:#7cc3b7;--ok:#8fd09c;--warn:#e3b56b;--bad:#ec9b96;color-scheme:dark}}
@@ -87,7 +88,7 @@ table{border-collapse:collapse;width:100%;min-width:520px;font-variant-numeric:t
 .bad-text{color:var(--bad);font-weight:600}.ok-text{color:var(--ok);font-weight:600}
 p{margin:6px 0;max-width:78ch}details{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 16px}summary{cursor:pointer;font-weight:600}
 </style></head><body><main>
-<div class="top"><div><h1>Cinq Operations</h1><div class="note">Cinq by text · ${esc(day(r.from))} to ${esc(day(r.to))} (UTC) · records since ${esc(day(r.recordsSince))} · aggregates only: no words, photos or phone numbers</div></div><nav class="tabs">${tabs}</nav></div>
+<div class="top"><div><h1>Cinq Operations</h1><div class="note">Cinq by text · ${esc(day(r.from))} to ${esc(day(r.to))} (UTC) · records since ${esc(day(r.recordsSince))} · aggregates only: no words, photos or phone numbers</div></div><nav class="tabs">${tabs}<a href="?signout=1">Sign out</a></nav></div>
 ${opts.recorded ? "" : `<div class="banner"><b>No records yet.</b> Either the measurement tables haven't been created, or no one texted in this period.</div>`}
 
 <section class="summary"><h2>In short</h2><ul>${summaryLines(r).map((l) => `<li>${esc(l)}</li>`).join("")}</ul></section>

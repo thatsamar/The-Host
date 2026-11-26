@@ -11,8 +11,8 @@
  * fabricated answer.
  */
 
-import { advisorList, isAdvisorId, readNavigation, SMS_ADVISORS, type SmsAdvisorId } from "./navigation";
-import { agreesToHandoff, handoffNote, offerText, readSuggestion, type HandoffContext } from "./handoff";
+import { addressedAdvisor, advisorList, isAdvisorId, readNavigation, SMS_ADVISORS, type SmsAdvisorId } from "./navigation";
+import { agreesToHandoff, handoffNote, offerText, readSuggestion, regionOf, type HandoffContext, type TextRegion } from "./handoff";
 import { recentTurns } from "./context";
 import { compactSession } from "./compact";
 import { answerBudget, answerFits, roomForAnswer, shortAnswerText } from "./short";
@@ -85,9 +85,14 @@ export function nextAck(last: number | undefined): number {
   return last === undefined || !Number.isInteger(last) || last < 0 ? 0 : (last + 1) % ACK_TEXTS.length;
 }
 
-function advisorConfirmText(id: SmsAdvisorId): string {
-  const advisor = SMS_ADVISORS.find((a) => a.id === id)!;
-  return `You're with ${advisor.name} (${advisor.category}). Send your question as a text or a photo.`;
+/**
+ * The advisor's own reply to being picked by name or number, in their voice
+ * and with their label: an introduction the first time, "I'm back" when the
+ * number has talked with them before, "Still here" when they're already on.
+ */
+export function advisorPickedText(session: SmsSession, id: SmsAdvisorId): string {
+  const opening = !hasMet(session, id) ? INTRODUCTIONS[id] : session.advisorId === id ? "Still here." : "I'm back.";
+  return `${speakerLabel(id)}${opening} What's on your mind?`;
 }
 
 function normalize(body: string): string {
@@ -267,7 +272,7 @@ export interface SmsDeps {
   ask: (
     advisorId: SmsAdvisorId,
     turns: SmsTurn[],
-    context?: { handoff?: HandoffContext; met?: string[]; budget?: number; signal?: AbortSignal },
+    context?: { handoff?: HandoffContext; met?: string[]; budget?: number; signal?: AbortSignal; region?: TextRegion },
   ) => Promise<string>;
   /**
    * Rewrites an answer that came back longer than one text into one complete
@@ -438,7 +443,7 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
     try {
       ({ text: answer, suggest } = readSuggestion(
         await Promise.race([
-          deps.ask(advisorId, recentTurns(turns, now), { ...context, ...(met.length ? { met } : {}), budget, signal: controller.signal }),
+          deps.ask(advisorId, recentTurns(turns, now), { ...context, ...(met.length ? { met } : {}), budget, signal: controller.signal, ...(regionOf(inbound.from) ? { region: regionOf(inbound.from) } : {}) }),
           stall,
         ]),
         advisorId,
@@ -528,10 +533,11 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
     session.optedIn = true;
     const nav = readNavigation(inbound.body);
     if (nav?.kind === "switch") {
+      const picked = advisorPickedText(session, nav.advisorId);
       session.advisorId = nav.advisorId;
       introduce(session, nav.advisorId);
       await save(session);
-      return [WELCOME_TEXT, advisorConfirmText(nav.advisorId)];
+      return [WELCOME_TEXT, picked];
     }
     if (START_WORDS.has(text) || nav?.kind === "list" || isGreeting(inbound.body) || (!inbound.body.trim() && !inbound.media.length)) {
       await save(session);
@@ -557,15 +563,20 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
 
     // Navigation: the advisor list, or a switch. Never stored as a turn, and
     // anything bundled into a switch ("talk to Gio about my sofa") isn't answered.
-    // The confirmation introduces the advisor, so no separate introduction follows.
+    // The advisor answers the pick themselves, introducing themselves if new.
     const nav = readNavigation(inbound.body);
     if (nav?.kind === "list") return [ADVISOR_LIST_TEXT];
     if (nav?.kind === "switch") {
+      const picked = advisorPickedText(session, nav.advisorId);
       session.advisorId = nav.advisorId;
       introduce(session, nav.advisorId);
       await save(session);
-      return [advisorConfirmText(nav.advisorId)];
+      return [picked];
     }
+    // A question that opens with an advisor's name ("Martine, what for dinner?")
+    // switches to them, and they answer it (introducing themselves if new).
+    const addressed = addressedAdvisor(inbound.body);
+    if (addressed) session.advisorId = addressed;
   }
 
   const question = inbound.body.trim();

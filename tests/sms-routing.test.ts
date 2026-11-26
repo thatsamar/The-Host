@@ -141,7 +141,7 @@ describe("routing and introductions in the conversation", () => {
   });
 
   it("gives an explicit pick the confirmation and no separate introduction", async () => {
-    expect(await send("talk to Gio")).toEqual(["You're with Gio (design). Send your question as a text or a photo."]);
+    expect(await send("talk to Gio")).toEqual(["Gio: I'm Gio, design at Cinq. What's on your mind?"]);
     expect(await send("Is this sofa too big for the room?")).toEqual(["Gio: gio answers."]);
     expect(routed).toEqual([]);
   });

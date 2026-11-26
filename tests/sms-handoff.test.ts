@@ -211,7 +211,7 @@ describe("handoffs in the conversation", () => {
 
   it("lapses when the person names a different advisor, who is switched to as usual", async () => {
     await offer();
-    expect(await send("Gio")).toEqual(["You're with Gio (design). Send your question as a text or a photo."]);
+    expect(await send("Gio")).toEqual(["Gio: I'm Gio, design at Cinq. What's on your mind?"]);
     const session = await store.getSession(FROM);
     expect(session?.advisorId).toBe("gio");
     expect(session?.pendingHandoff).toBeUndefined();
