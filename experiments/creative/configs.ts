@@ -16,18 +16,25 @@
  *   L  A without the short-text block: no shared voice, no length limit, no rewrite
  *   F  A without the optional closing "The call"
  *   K  A without Gio's per-piece purchase checklist (Gio only)
+ *   N  A without prescribed answer shapes, for all five: the question decides
+ *      the shape (one thing, two very different ones, nothing, or something
+ *      unexpected), and price appears when it is relevant
  *   R  A with research as the advisor's resource, not its voice
  *   M  A with discretion about what the person has said before
  *   S  A with diligence that rises with the stakes
  *   I  A with Amar's identity clarification (Amar's questions only)
  *   AF A with Cinq's philosophy after the brief (needs PHILOSOPHY_FILE)
- *   X  A with I, V, F, K, R, M and S together (and the philosophy, if given)
+ *   X  A with I, V, F, N, R, M and S together (and the philosophy, if given)
  *   D  the brief with only essential supporting instructions, no length limit
  *   DF D with Cinq's philosophy after the brief
  *   E  the brief, minimally instructed
- *   G  a general-purpose assistant, no brief, given the same context: the competitive baseline
+ *   O  the original brief (the earliest in this repository), with D's essentials
+ *   G  a general-purpose assistant, no brief, given the same personal context
+ *   G0 an ordinary general-purpose assistant: no brief and none of the person's
+ *      earlier messages. G against G0 is the value of memory; A against G is
+ *      the value of the advisor.
  *
- * Each of V, F, K, R, M, S and I changes one thing, so its effect can be
+ * Each of V, F, K, N, R, M, S and I changes one thing, so its effect can be
  * judged on its own before X combines them. None tells an advisor to be
  * more romantic, curious or intriguing: the hypothesis is that those
  * qualities are already in the briefs and are being diluted, so the
@@ -38,7 +45,7 @@
  *   RS P with research as the advisor's resource (R's change, web search on)
  *   DS D with the advisor's production web search
  *
- * A, C, V, F, K, R, M, S, I, AF, X, P and RS go through production's text
+ * A, C, V, F, K, N, R, M, S, I, AF, X, P and RS go through production's text
  * pipeline (label, the 450-character check, the rewrite, the trim); the
  * others are shown as the advisor's own answer, as plain text.
  */
@@ -53,7 +60,7 @@ import { answerBudget } from "@/lib/sms/short";
 import { speakerLabel } from "@/lib/sms/handler";
 import type { AdvisorId } from "./cases";
 
-export type ConfigId = "A" | "C" | "V" | "L" | "F" | "K" | "R" | "M" | "S" | "I" | "AF" | "X" | "D" | "DF" | "E" | "G" | "P" | "RS" | "DS";
+export type ConfigId = "A" | "C" | "V" | "L" | "F" | "K" | "N" | "R" | "M" | "S" | "I" | "AF" | "X" | "D" | "DF" | "E" | "O" | "G" | "G0" | "P" | "RS" | "DS";
 
 export interface Config {
   id: ConfigId;
@@ -63,6 +70,8 @@ export interface Config {
   webSearch: boolean;
   /** Only for some advisors (I is Amar's). */
   advisors?: AdvisorId[];
+  /** G0: an ordinary general-purpose assistant, without the person's earlier messages (the follow-ups in a sequence still happen). */
+  withoutHistory?: boolean;
   system: (advisor: AdvisorId, now: Date) => ContextBlock[];
 }
 
@@ -158,6 +167,25 @@ const editCall: Edit = (_id, blocks) => {
 export const GIO_CHECKLIST = "When the person is deciding what to buy, give for each piece: Dimensions; Material/color; Vintage vs. new; Approximate price (sourced, with where it came from, or marked as an estimate); Placement; Why it belongs; Invest / save / skip.";
 const editChecklist: Edit = (id, blocks) => (id === "gio" ? replaceIn(blocks, "app_capabilities", GIO_CHECKLIST + "\n", "") : blocks);
 
+/** N: no prescribed answer shape. The question decides it, for all five; price when relevant. */
+export const SHAPE = "Let the question decide the shape of the answer. Sometimes recommend one thing unequivocally; sometimes set out two genuinely different possibilities; sometimes say not to buy anything; sometimes introduce something the person hadn't considered. Give the details that decide it where they matter, and the price when it is relevant to the decision.";
+const SHAPES: Partial<Record<AdvisorId, [string, string][]>> = {
+  martini: [["Then give one strong recommendation and at most two meaningfully different alternatives.\n\nInclude:\nwhat to buy\nbrand or source\nnew vs. vintage\nmaterial\ncolor\nfit\napproximate price\nhow often it is likely to be worn, only from what the person has told you\nwhat it works with\nwhether to invest, save, or skip\nwhy it earns or does not earn the money", SHAPE]],
+  gio: [["Prefer one strong recommendation and at most two meaningfully different alternatives.\n\nInclude:\n- dimensions\n- material/color\n- vintage vs. new\n- approximate price\n- placement\n- why it belongs\n- whether the spend is justified\n- invest/save/skip", `${SHAPE} For a piece, the details that matter are usually dimensions, material, placement and why it belongs.`]],
+  alden: [
+    ["Open with what you would order, open, buy, or make, in the first person, and why it beats the nearest rival for this person, meal, moment, and price. If one ordering", "Say what you would order, open, buy, or make, in the first person, and why, in whatever shape the moment calls for. If one ordering"],
+  ],
+  goldie: [
+    ["Then offer the one practical move you would recommend,", "Then, when a move would help, offer the one practical move you would recommend,"],
+    ["End with the one move you would make.", "When a move would help, end with the one you would make; sometimes the better answer is a question, or to leave something alone."],
+  ],
+};
+const shapedBrief = (id: AdvisorId, prompt: string): string => (SHAPES[id] ?? []).reduce((out, [from, to]) => {
+  if (!out.includes(from)) throw new Error(`${id}'s brief no longer contains: ${from.slice(0, 60)}`);
+  return out.replace(from, to);
+}, prompt);
+const editShape: Edit = (id, blocks) => editChecklist(id, blocks.map((b) => (b.label === "system_prompt" ? { ...b, body: shapedBrief(id, b.body) } : b)));
+
 /** R: research is the advisor's resource, not its voice. */
 export const RESEARCH = {
   tonySearch: ["Say briefly what you checked. Anything you didn't check is from memory: say so when it matters.", "What you checked is for you: mention it only when it changes the advice, or when the person should confirm something themselves before relying on it."],
@@ -195,6 +223,11 @@ function variant(id: AdvisorId, now: Date, edits: Edit[], opts: { companion?: Co
   return [...blocks, constants(), dateBlock(now)];
 }
 
+/** The earliest version of each brief in this repository (configuration O). */
+const ORIGINAL = JSON.parse(readFileSync(new URL("./original-briefs.json", import.meta.url), "utf8")) as Record<AdvisorId, string>;
+
+const general = (now: Date) => [block("system_prompt", "SYSTEM PROMPT", "You are a helpful assistant."), block("essentials", "ESSENTIALS", TEXT_NOTE), constants(), dateBlock(now)];
+
 const brief = (id: AdvisorId) => block("system_prompt", "SYSTEM PROMPT", COMPANIONS[id].systemPrompt);
 
 /**
@@ -216,6 +249,7 @@ export const CONFIGS: Config[] = [
   { id: "L", name: "A without the short-text block (no shared voice, no length limit)", family: "controlled", textPipeline: false, webSearch: false, system: (id, now) => [...productionText(id, { webSearch: false, channel: channelWithout(id, isShortText) }), constants(), dateBlock(now)] },
   { id: "F", name: "A without the optional closing \"The call\"", family: "controlled", textPipeline: true, webSearch: false, system: (id, now) => variant(id, now, [editCall]) },
   { id: "K", name: "A without Gio's per-piece purchase checklist", family: "controlled", textPipeline: true, webSearch: false, advisors: ["gio"], system: (id, now) => variant(id, now, [editChecklist]) },
+  { id: "N", name: "A without prescribed answer shapes (the question decides; price when relevant)", family: "controlled", textPipeline: true, webSearch: false, system: (id, now) => variant(id, now, [editShape]) },
   { id: "R", name: "A with research as the advisor's resource, not its voice", family: "controlled", textPipeline: true, webSearch: false, advisors: ["tony", "alden"], system: (id, now) => variant(id, now, [editResearch]) },
   { id: "M", name: "A with discretion about what the person has said before", family: "controlled", textPipeline: true, webSearch: false, system: (id, now) => variant(id, now, [editDiscretion]) },
   { id: "S", name: "A with diligence that rises with the stakes", family: "controlled", textPipeline: true, webSearch: false, system: (id, now) => variant(id, now, [editStakes]) },
@@ -223,16 +257,18 @@ export const CONFIGS: Config[] = [
   { id: "AF", name: "A with Cinq's philosophy after the brief", family: "controlled", textPipeline: true, webSearch: false, system: (id, now) => variant(id, now, [], { withPhilosophy: true }) },
   {
     id: "X",
-    name: "A with every single change together (I, V, F, K, R, M, S, and the philosophy if given)",
+    name: "A with every single change together (I, V, F, N, R, M, S, and the philosophy if given)",
     family: "controlled",
     textPipeline: true,
     webSearch: false,
-    system: (id, now) => variant(id, now, [editVoice, editCall, editChecklist, editResearch, editDiscretion, editStakes], { companion: clarifiedAmar(id), withPhilosophy: true }),
+    system: (id, now) => variant(id, now, [editVoice, editCall, editShape, editResearch, editDiscretion, editStakes], { companion: clarifiedAmar(id), withPhilosophy: true }),
   },
   { id: "D", name: "The brief with essential supporting instructions", family: "controlled", textPipeline: false, webSearch: false, system: (id, now) => [brief(id), block("essentials", "ESSENTIALS", ESSENTIALS), constants(), dateBlock(now)] },
   { id: "DF", name: "D with Cinq's philosophy after the brief", family: "controlled", textPipeline: false, webSearch: false, system: (id, now) => [brief(id), philosophy()!, block("essentials", "ESSENTIALS", ESSENTIALS), constants(), dateBlock(now)] },
   { id: "E", name: "The brief, minimally instructed", family: "controlled", textPipeline: false, webSearch: false, system: (id, now) => [brief(id), constants(), dateBlock(now)] },
-  { id: "G", name: "A general-purpose assistant, no brief", family: "controlled", textPipeline: false, webSearch: false, system: (_id, now) => [block("system_prompt", "SYSTEM PROMPT", "You are a helpful assistant."), block("essentials", "ESSENTIALS", TEXT_NOTE), constants(), dateBlock(now)] },
+  { id: "O", name: "The original brief, with essential supporting instructions", family: "controlled", textPipeline: false, webSearch: false, system: (id, now) => [block("system_prompt", "SYSTEM PROMPT", ORIGINAL[id]), block("essentials", "ESSENTIALS", ESSENTIALS), constants(), dateBlock(now)] },
+  { id: "G", name: "A general-purpose assistant, no brief, with the person's earlier messages", family: "controlled", textPipeline: false, webSearch: false, system: (_id, now) => general(now) },
+  { id: "G0", name: "An ordinary general-purpose assistant: no brief, no earlier messages", family: "controlled", textPipeline: false, webSearch: false, withoutHistory: true, system: (_id, now) => general(now) },
   { id: "P", name: "Production by text, exactly as today (web search on)", family: "end-to-end", textPipeline: true, webSearch: true, system: (id, now) => productionText(id, { webSearch: true, now }) },
   { id: "RS", name: "P with research as the advisor's resource", family: "end-to-end", textPipeline: true, webSearch: true, advisors: ["tony", "alden"], system: (id, now) => editResearch(id, productionText(id, { webSearch: true, now })) },
   { id: "DS", name: "D with production web search", family: "end-to-end", textPipeline: false, webSearch: true, system: (id, now) => [brief(id), block("essentials", "ESSENTIALS", ESSENTIALS), constants(), dateBlock(now)] },

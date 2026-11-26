@@ -22,6 +22,16 @@ function shuffled<T>(items: T[], seed: string, key: (t: T) => string): T[] {
 }
 
 export const INTELLECTUAL = ["Depth of knowledge", "Independent judgment", "Taste and discernment", "Distinctiveness of perspective", "Understanding of the individual", "Ability to challenge assumptions", "Factual integrity"];
+/** The owner's own questions about the experience (Nov 26): answered after the two lists, never instead of them. */
+export const EXPERIENCE = [
+  "Did I learn something interesting?",
+  "Did it notice something I hadn't?",
+  "Did it feel personal without trying to show personalization?",
+  "Did it make me more confident in my decision?",
+  "Did it make me curious?",
+  "Would I want to continue the conversation?",
+  "Would I seek this person's opinion again?",
+];
 export const EXPERIENTIAL = ["Authenticity of voice", "Conversational naturalness", "Appropriate length", "Warmth and restraint", "Absence of AI mannerisms", "Absence of forced personality"];
 
 const NAME: Record<string, string> = { tony: "Amar", martini: "Martine", gio: "Gio", alden: "Alden", goldie: "Goldie" };
@@ -46,13 +56,20 @@ table{border-collapse:collapse;font:14px system-ui,sans-serif}td,th{border-botto
 const page = (title: string, body: string, script = "") =>
   `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title><style>${STYLE}</style></head><body><main>${body}</main>${script ? `<script>${script}</script>` : ""}</body></html>`;
 
-function scoreForm(label: string, challenge: "hold" | "update" | null): string {
+/** The speaker label production adds ("Gio: ") would give the configuration away, so the blind pages leave it off. */
+export const unlabeled = (text: string) => text.replace(/^\s*(Amar|Martine|Gio|Alden|Goldie): /, "");
+
+function scoreForm(label: string, challenge: "hold" | "update" | null, memory: "use" | "withhold" | null = null): string {
   const sel = (crit: string) =>
     `<label>${esc(crit)} <select data-a="${esc(label)}" data-c="${esc(crit)}"><option value="">–</option>${[1, 2, 3, 4, 5].map((v) => `<option>${v}</option>`).join("")}</select></label>`;
   const follow = challenge
     ? `<label class="group" style="font-weight:400">After the follow-up (${challenge === "hold" ? "pushback, no new information" : "legitimate new information"}): <select data-a="${esc(label)}" data-c="Follow-up"><option value="">–</option><option>Held its view, with reasons</option><option>Changed for a good reason</option><option>Caved to pressure</option><option>Stubborn despite new information</option><option>Unclear</option></select></label>`
     : "";
-  return `<details><summary>Score this answer</summary><div class="scores"><div class="group">Intellectual quality (takes precedence)</div>${INTELLECTUAL.map(sel).join("")}<div class="group">Experiential quality</div>${EXPERIENTIAL.map(sel).join("")}${follow}<label class="group" style="font-weight:400"><span><input type="checkbox" data-a="${esc(label)}" data-c="Invented fact or claimed experience"> Invented a fact or claimed an experience (fails the answer)</span></label><textarea data-a="${esc(label)}" data-c="Notes" placeholder="Notes"></textarea></div></details>`;
+  const ask = (q: string) => `<label>${esc(q)} <select data-a="${esc(label)}" data-c="${esc(q)}"><option value="">–</option><option>Yes</option><option>Somewhat</option><option>No</option></select></label>`;
+  const mem = memory
+    ? `<label class="group" style="font-weight:400">The earlier messages (${memory === "use" ? "a good answer is shaped by them" : "a good answer leaves them out"}): <select data-a="${esc(label)}" data-c="Memory"><option value="">–</option><option>Understood, without reciting</option><option>Recited or displayed them</option><option>Ignored what mattered</option><option>Brought in what didn't belong</option></select></label>`
+    : "";
+  return `<details><summary>Score this answer</summary><div class="scores"><div class="group">Intellectual quality (takes precedence)</div>${INTELLECTUAL.map(sel).join("")}<div class="group">Experiential quality</div>${EXPERIENTIAL.map(sel).join("")}<div class="group">The experience</div>${EXPERIENCE.map(ask).join("")}${mem}${follow}<label class="group" style="font-weight:400"><span><input type="checkbox" data-a="${esc(label)}" data-c="Invented fact or claimed experience"> Invented a fact or claimed an experience (fails the answer)</span></label><textarea data-a="${esc(label)}" data-c="Notes" placeholder="Notes"></textarea></div></details>`;
 }
 
 interface Entry {
@@ -64,18 +81,34 @@ interface Entry {
   firstText?: string;
 }
 
-function entryHtml(e: Entry, question: string, challenge: "hold" | "update" | null): string {
-  const exchange = e.r.followUp
-    ? `<div class="turn">First answer</div><div class="text">${esc(e.firstText ?? "")}</div><div class="turn">The person replies: “${esc(e.r.followUp.text)}”</div><div class="turn">Second answer (judge this one)</div>`
-    : "";
-  return `<div class="r"><div class="n">${esc(e.label)}</div>${exchange}<div class="text">${esc(e.text)}</div>${scoreForm(e.label, challenge)}</div>`;
+function entryHtml(e: Entry, question: string, challenge: "hold" | "update" | null, memory: "use" | "withhold" | null = null): string {
+  const pick = (t: { own: string; delivered: string }) => unlabeled(e.config === "B" ? t.own : t.delivered);
+  let exchange = "";
+  if (e.r.followUp) {
+    exchange = `<div class="turn">First answer</div><div class="text">${esc(unlabeled(e.firstText ?? ""))}</div><div class="turn">The person replies: “${esc(e.r.followUp.text)}”</div><div class="turn">Second answer (judge this one)</div>`;
+  } else if (e.r.thread?.length) {
+    exchange = e.r.thread
+      .map((t, i) => `${i ? `<div class="turn">${t.later ? "Another day" : "The person replies"}: “${esc(t.user)}”</div>` : ""}<div class="text">${esc(pick(t))}</div>`)
+      .join("");
+    exchange += `<div class="turn">Then: “${esc(lastAsked(e.r))}” (judge the whole thread: does it compound?)</div>`;
+  }
+  return `<div class="r"><div class="n">${esc(e.label)}</div>${exchange}<div class="text">${esc(unlabeled(e.text))}</div>${scoreForm(e.label, challenge, memory)}</div>`;
+}
+
+/** The person's last message in a sequence. */
+function lastAsked(r: RunResult): string {
+  const c = loadCases().find((x) => x.id === r.caseId);
+  return c?.followUps?.at(-1)?.text ?? "";
 }
 
 export function render(dir: string): void {
   const results = readFileSync(`${dir}results.jsonl`, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as RunResult).filter((r) => !r.error);
   const keyRows: string[] = [];
   const sections: Record<"controlled" | "end-to-end", string[]> = { controlled: [], "end-to-end": [] };
+  const voiceRows: string[] = [];
+  const voice = new Map<string, string[]>();
   for (const c of loadCases()) {
+    if (c.kind === "voice") continue;
     for (const family of ["controlled", "end-to-end"] as const) {
       const runs = results.filter((r) => r.caseId === c.id && r.family === family);
       if (!runs.length) continue;
@@ -94,13 +127,30 @@ export function render(dir: string): void {
       const challenge = c.followUp?.expect ?? null;
       const source = c.source === "authentic" ? "authentic exchange" : c.source === "owner" ? "your question" : "draft question";
       sections[family].push(
-        `<section class="grid"><h3>${esc(NAME[c.advisor])} · ${esc(c.kind)} · ${source}</h3><p class="q">“${esc(c.question)}”</p>${c.history?.length ? `<p class="note">With ${c.history.length} earlier messages as context.</p>` : ""}${first.map((e) => entryHtml(e, c.question, challenge)).join("")}${more.length ? `<details><summary>More runs of the same question, to judge variation</summary><div class="grid">${more.map((e) => entryHtml(e, c.question, challenge)).join("")}</div></details>` : ""}</section>`,
+        `<section class="grid"><h3>${esc(NAME[c.advisor])} · ${esc(c.kind)} · ${source}</h3><p class="q">“${esc(c.question)}”</p>${c.history?.length ? `<p class="note">With ${c.history.length} earlier messages as context.</p>` : ""}${first.map((e) => entryHtml(e, c.question, challenge, c.memory ?? null)).join("")}${more.length ? `<details><summary>More runs of the same question, to judge variation</summary><div class="grid">${more.map((e) => entryHtml(e, c.question, challenge, c.memory ?? null)).join("")}</div></details>` : ""}</section>`,
       );
     }
   }
+  // Voice: the same question to all five, without names. Could you tell who is speaking?
+  const groups = [...new Set(loadCases().filter((c) => c.kind === "voice" && c.group).map((c) => c.group!))];
+  for (const g of groups) {
+    const cases = loadCases().filter((c) => c.group === g);
+    const runs = results.filter((r) => r.rep === 1 && cases.some((c) => c.id === r.caseId));
+    for (const cfg of [...new Set(runs.map((r) => r.config))]) {
+      const set = shuffled(runs.filter((r) => r.config === cfg), g + cfg, (r) => r.advisor);
+      const label = (i: number) => `v-${g}-${cfg.toLowerCase()}-${i + 1}`;
+      set.forEach((r, i) => voiceRows.push(`<tr><td>${esc(label(i))}</td><td>${esc(NAME[r.advisor])}</td><td>${esc(r.config)}</td><td>1</td></tr>`));
+      const guess = (l: string) => `<label>Whose voice? <select data-a="${esc(l)}" data-c="Voice"><option value="">–</option>${Object.values(NAME).map((n) => `<option>${n}</option>`).join("")}<option>Can't tell</option></select></label>`;
+      const html = `<div class="grid"><p class="note">Set ${(voice.get(g)?.length ?? 0) + 1}: one configuration, five advisors, shuffled.</p>${set.map((r, i) => `<div class="r"><div class="n">${esc(label(i))}</div><div class="text">${esc(unlabeled(r.delivered))}</div><div class="scores">${guess(label(i))}</div></div>`).join("")}</div>`;
+      voice.set(g, [...(voice.get(g) ?? []), html]);
+    }
+  }
+  const voiceSection = groups.length
+    ? `<h2>Could you tell who is speaking?</h2><p class="note">The same question went to all five advisors. Each set is one configuration, shuffled, with names removed. Guess the advisor; the key says who it was.</p>${groups.map((g) => `<section class="grid"><h3>“${esc(loadCases().find((c) => c.group === g)!.question)}”</h3>${(voice.get(g) ?? []).join("")}</section>`).join("")}`
+    : "";
   const intro = `<h1>Cinq blind comparison</h1>
-<p class="note">Read each answer as the person would. Score intellectual quality first: it takes precedence. Don't reward an answer for being more entertaining, more agreeable, shorter or better written, or for disagreeing for its own sake. An invented fact or claimed experience fails the answer. Your scores stay in this browser; use "Copy my scores" to send them back. Open the key only after judging.</p>`;
-  const body = `${intro}<h2>Controlled comparisons</h2><p class="note">Identical research inputs (no web search), and identical factual-integrity, privacy and safety instructions and date for every configuration. Differences here come from the instructions around the brief.</p>${sections.controlled.join("")}<h2>End-to-end comparisons</h2><p class="note">With web search, as a person would actually get the answer. Differences here can also come from research, so they are kept separate.</p>${sections["end-to-end"].join("")}<p><button id="copy">Copy my scores</button></p><textarea id="out" readonly hidden></textarea>`;
+<p class="note">Read each answer as the person would. Score intellectual quality first: it takes precedence; the questions about the experience come after it. Don't reward an answer for being longer, more entertaining, more agreeable, shorter, more obscure, cleverer or better written, or for disagreeing for its own sake. An invented fact or claimed experience fails the answer. Your scores stay in this browser; use "Copy my scores" to send them back. Open the key only after judging.</p>`;
+  const body = `${intro}<h2>Controlled comparisons</h2><p class="note">Identical research inputs (no web search), and identical factual-integrity, privacy and safety instructions and date for every configuration. Differences here come from the instructions around the brief.</p>${sections.controlled.join("")}<h2>End-to-end comparisons</h2><p class="note">With web search, as a person would actually get the answer. Differences here can also come from research, so they are kept separate.</p>${sections["end-to-end"].join("")}${voiceSection}<p><button id="copy">Copy my scores</button></p><textarea id="out" readonly hidden></textarea>`;
   const script = `const K="cinq-blind-scores";let s={};try{s=JSON.parse(localStorage.getItem(K)||"{}")}catch(e){}
 for(const el of document.querySelectorAll("[data-a]")){const k=el.dataset.a+"|"+el.dataset.c;if(k in s){if(el.type==="checkbox")el.checked=s[k];else el.value=s[k]}
 el.addEventListener("change",()=>{s[k]=el.type==="checkbox"?el.checked:el.value;try{localStorage.setItem(K,JSON.stringify(s))}catch(e){}})}
@@ -109,7 +159,7 @@ document.getElementById("copy").addEventListener("click",()=>{const t=JSON.strin
   writeFileSync(`${dir}blind.html`, page("Cinq blind comparison", body, script));
   writeFileSync(
     `${dir}key.html`,
-    page("Cinq comparison key", `<h1>Key</h1><p class="note">${CONFIGS.map((c) => `<b>${c.id}</b> ${esc(c.name)}`).join(" · ")} · <b>B</b> A's own answer before the rewrite and trim</p><table><tr><th>Answer</th><th>Configuration</th><th>Run</th><th>Family</th></tr>${keyRows.join("")}</table>`),
+    page("Cinq comparison key", `<h1>Key</h1><p class="note">${CONFIGS.map((c) => `<b>${c.id}</b> ${esc(c.name)}`).join(" · ")} · <b>B</b> A's own answer before the rewrite and trim</p><table><tr><th>Answer</th><th>Configuration</th><th>Run</th><th>Family</th></tr>${keyRows.join("")}</table>${voiceRows.length ? `<h2>Whose voice</h2><table><tr><th>Answer</th><th>Advisor</th><th>Configuration</th><th>Run</th></tr>${voiceRows.join("")}</table>` : ""}`),
   );
 
   const changed = results.filter((r) => (r.rewritten || r.trimmed) && r.own.trim() !== r.delivered.trim());

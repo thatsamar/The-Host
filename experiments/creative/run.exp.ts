@@ -62,6 +62,8 @@ export interface RunResult {
   /** For a challenge: the first exchange, before the follow-up (the answers above are the second). */
   first?: { own: string; delivered: string; rewritten: boolean };
   followUp?: { text: string; expect: string };
+  /** For a sequence: every earlier exchange, in order (the answers above are the last). */
+  thread?: { user: string; own: string; delivered: string; later?: boolean }[];
   error: string | null;
 }
 
@@ -159,17 +161,27 @@ async function runOne(c: Case, config: Config, rep: number, now: Date, providers
   };
   const began = Date.now();
   try {
-    // The same earlier messages and context for every configuration, the general-purpose one included.
-    const conversation: AskTurn[] = [...(c.history ?? []).map(toAsk), { role: "user", text: c.question, images: c.photos?.map(loadPhoto) }];
+    // The same earlier messages and context for every configuration, the general-purpose one included; G0 is the ordinary assistant without them.
+    let conversation: AskTurn[] = [...(config.withoutHistory ? [] : (c.history ?? []).map(toAsk)), { role: "user", text: c.question, images: c.photos?.map(loadPhoto) }];
     let result = await answer(c, config, conversation, now, providers);
     let cost = result.cost;
     let first: RunResult["first"];
+    // Each later turn sees the earlier answers as the person did: production keeps the text as sent.
+    const seen = (r: typeof result) => (config.textPipeline ? r.delivered.replace(new RegExp(`^${speakerLabel(c.advisor as SmsAdvisorId)}`), "") : r.own);
     if (c.followUp) {
-      // The second turn sees the first answer as the person did: production keeps the text as sent.
       first = { own: result.own, delivered: result.delivered, rewritten: result.rewritten };
-      const seen = config.textPipeline ? result.delivered.replace(new RegExp(`^${speakerLabel(c.advisor as SmsAdvisorId)}`), "") : result.own;
-      result = await answer(c, config, [...conversation, { role: "assistant", text: seen }, { role: "user", text: c.followUp.text }], now, providers);
+      result = await answer(c, config, [...conversation, { role: "assistant", text: seen(result) }, { role: "user", text: c.followUp.text }], now, providers);
       cost += result.cost;
+    }
+    const thread: NonNullable<RunResult["thread"]> = [];
+    let asked = c.question;
+    for (const next of c.followUps ?? []) {
+      thread.push({ user: asked, own: result.own, delivered: result.delivered, later: thread.length ? (c.followUps ?? [])[thread.length - 1]?.later : undefined });
+      // A new conversation on another day: the advisor keeps what came before (as Cinq would within its window); the ordinary assistant starts fresh.
+      conversation = next.later && config.withoutHistory ? [{ role: "user", text: next.text }] : [...conversation, { role: "assistant", text: seen(result) }, { role: "user", text: next.text }];
+      result = await answer(c, config, conversation, now, providers);
+      cost += result.cost;
+      asked = next.text;
     }
     return {
       ...base,
@@ -184,6 +196,7 @@ async function runOne(c: Case, config: Config, rep: number, now: Date, providers
       rewritten: result.rewritten,
       trimmed: result.trimmed,
       ...(first ? { first, followUp: c.followUp } : {}),
+      ...(thread.length ? { thread } : {}),
       error: null,
     };
   } catch (err) {
@@ -215,8 +228,8 @@ it.skipIf(!process.env.RUN_CREATIVE_EXPERIMENT)("runs the creative comparison", 
   const now = new Date();
 
   if (process.env.DRY_RUN) {
-    const lines = jobsFor(1).map(({ c, cfg }) => `${c.id.padEnd(26)} ${cfg.id.padEnd(3)} ${String(instructionSize(cfg, c.advisor, now)).padStart(6)} chars of instructions${c.followUp ? "  (two turns)" : ""}`);
-    const calls = jobsFor(1).reduce((n, { c }) => n + (c.followUp ? 2 : 1), 0) * reps;
+    const lines = jobsFor(1).map(({ c, cfg }) => `${c.id.padEnd(26)} ${cfg.id.padEnd(3)} ${String(instructionSize(cfg, c.advisor, now)).padStart(6)} chars of instructions${c.followUp ? "  (two turns)" : ""}${c.followUps ? `  (${c.followUps.length + 1} turns)` : ""}`);
+    const calls = jobsFor(1).reduce((n, { c }) => n + 1 + (c.followUp ? 1 : 0) + (c.followUps?.length ?? 0), 0) * reps;
     writeFileSync(`${OUT}dry-run.txt`, [...lines, "", `${calls} answer calls (${reps} repetitions), plus a rewrite call where a text-pipeline answer runs long.`].join("\n"));
     return;
   }

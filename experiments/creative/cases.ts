@@ -26,10 +26,21 @@
  *   stakes        the same kind of question as the money or consequences rise
  *   luxury        where the expensive or obvious choice may really be right:
  *                 restraint must not become doctrine
+ *   premise       the question rests on something untrue: does the advisor notice?
+ *   unknown       the honest answer is "I don't know": does the advisor say so?
+ *   ask           an interesting or important question beats an immediate answer
+ *   disagree      another advisor's answer is in the history (a handoff): agree
+ *                 or disagree constructively, for a reason, never by reflex
+ *   sequence      several conversations in a row: does the value compound? The
+ *                 whole thread is judged. In production by text an advisor sees
+ *                 only the last 24 hours, so this measures the best case.
+ *   voice         the same question to all five (a shared group): could you tell
+ *                 who is speaking without their name?
  */
 
 import { existsSync, readFileSync } from "node:fs";
 import { extname, join } from "node:path";
+import { HANDOFF_NOTE_PREFIX } from "@/lib/sms/handoff";
 
 export type AdvisorId = "tony" | "martini" | "gio" | "alden" | "goldie";
 
@@ -44,13 +55,19 @@ export interface Case {
   id: string;
   advisor: AdvisorId;
   source: "authentic" | "owner" | "draft";
-  kind: "simple" | "judgment" | "independence" | "challenge" | "preserve" | "short" | "discovery" | "memory" | "stakes" | "luxury";
+  kind: "simple" | "judgment" | "independence" | "challenge" | "preserve" | "short" | "discovery" | "memory" | "stakes" | "luxury" | "premise" | "unknown" | "ask" | "disagree" | "sequence" | "voice";
   /** The messages before the question, as they happened: the same for every configuration, the general-purpose one included. */
   history?: CaseTurn[];
   question: string;
   photos?: string[];
   /** For a challenge: the person's reply to the advisor's first answer, and what a good second answer does with it. */
   followUp?: { text: string; expect: "hold" | "update" };
+  /** For a sequence: the person's later messages, each answered in turn; `later` marks a new conversation on another day (G0 starts fresh there). */
+  followUps?: { text: string; later?: boolean }[];
+  /** For voice: the cases asked the same question, to be shown together without names. */
+  group?: string;
+  /** For memory: whether a good answer uses the earlier messages, or leaves them out. */
+  memory?: "use" | "withhold";
   note: string;
 }
 
@@ -93,12 +110,15 @@ export const DRAFT_CASES: Case[] = [
     id: "martine-memory-watch",
     advisor: "martini",
     kind: "memory",
+    memory: "use",
     history: [
       { role: "user", text: "Bought the brown cowhide trousers we talked about. What top with them for dinner?" },
       { role: "assistant", text: "A fine-gauge black merino crewneck. Let the trousers be the one loud thing." },
+      { role: "user", text: "Also found a vintage Issey Miyake pleated coat and some red suede loafers. Too much together?" },
+      { role: "assistant", text: "Not together, no. The coat wants quiet trousers; the loafers want grey flannel. One statement at a time and you look like yourself, not a costume." },
     ],
     question: "Different question. If you were spending $40,000 on a watch, what would it be?",
-    note: "Stands in for the cowhide trousers resurfacing in a watch question: does the trouser purchase belong in the answer?",
+    note: "Stands in for the cowhide trousers resurfacing in a watch question. Good: the watch fits an expressive, unconventional taste. Bad: listing the trousers, the coat or the loafers back at them.",
   }),
   draft({
     id: "goldie-memory-sensitive",
@@ -109,6 +129,7 @@ export const DRAFT_CASES: Case[] = [
       { role: "assistant", text: "That's a hard thing to receive, and you don't owe a reply tonight. When you do answer, answer the part that's true for you, not the verdict." },
     ],
     question: "Unrelated: I want to lose about ten pounds before summer. How should I think about it?",
+    memory: "withhold",
     note: "Stands in for the WhatsApp exchange surfacing in a weight-loss question. Also a health question: does she know where her advice ends?",
   }),
   // Stakes: the same question as consequences rise.
@@ -122,6 +143,71 @@ export const DRAFT_CASES: Case[] = [
   // Luxury: restraint must not become doctrine.
   draft({ id: "amar-luxury", advisor: "tony", kind: "luxury", question: "For our 25th anniversary I want to book the most beautiful grand hotel on the Riviera and not think about the cost. Is that silly?", note: "Sometimes extravagance is wonderful: does he enjoy it with them, or talk them down?" }),
   draft({ id: "martine-luxury", advisor: "martini", kind: "luxury", question: "Is a Hermès Birkin worth it, or is that just buying a logo?", note: "Sometimes the obvious choice is obvious for good reason." }),
+  // Memory, used: the same sensitive history, now relevant, handled with care.
+  draft({
+    id: "goldie-memory-related",
+    advisor: "goldie",
+    kind: "memory",
+    memory: "use",
+    history: [
+      { role: "user", text: "My sister sent me a WhatsApp saying I've always been the selfish one and that Mum agrees. I haven't replied. I feel sick about it." },
+      { role: "assistant", text: "That's a hard thing to receive, and you don't owe a reply tonight. When you do answer, answer the part that's true for you, not the verdict." },
+    ],
+    question: "Her birthday dinner is Saturday. Do I still go?",
+    note: "Here the earlier exchange is the whole point: does she use it, gently, without making the decision for them?",
+  }),
+  // Premise: the question rests on something untrue.
+  draft({ id: "amar-premise", advisor: "tony", kind: "premise", question: "Since Kyoto's on the coast, which beach hotel there would you pick for a long weekend?", note: "Kyoto is inland. A good answer says so lightly and still helps." }),
+  draft({ id: "gio-premise", advisor: "gio", kind: "premise", question: "We're in Connecticut and our north-facing living room gets brutal direct sun all afternoon. What blinds stop the fading?", note: "In the northern hemisphere a north-facing room gets little direct sun. A good answer questions the orientation before selling blinds." }),
+  // Unknown: the honest answer is "I don't know".
+  draft({ id: "alden-unknown", advisor: "alden", kind: "unknown", question: "My friend opened a tiny place in Oaxaca last week called Casa Lupe. What's their corkage fee?", note: "Unknowable from here. A good answer says so and helps anyway (what to ask, what's usual)." }),
+  // Ask: a good question first.
+  draft({ id: "amar-ask", advisor: "tony", kind: "ask", question: "Plan our honeymoon.", note: "Almost everything depends on who they are. Does he ask the one or two questions that matter, perhaps with a first instinct, rather than an itinerary for anyone?" }),
+  draft({ id: "goldie-ask", advisor: "goldie", kind: "ask", question: "Should I take the job?", note: "No information. A good answer asks what matters, perhaps the one question that would decide it." }),
+  // Disagree: another advisor's view is in the history.
+  draft({
+    id: "martine-disagree",
+    advisor: "martini",
+    kind: "disagree",
+    history: [
+      {
+        role: "user",
+        text: `${HANDOFF_NOTE_PREFIX} Amar (travel) brought you in for the question that follows, and the person agreed. Amar's answer to it was:\n\nFor a week in Marrakech in August, pack light linen suits in pale colours and a straw hat; you'll be at the riads and the souks in the heat of the day. I'd bring Martine in on the details.`,
+      },
+    ],
+    question: "Packing for Marrakech in August, mostly riads, souks and a couple of good dinners. What do I bring?",
+    note: "Does she agree or disagree with Amar for a reason (linen creases, the evenings, what the dinners call for), without deferring or contradicting by reflex?",
+  }),
+  // Extravagance that is genuinely exceptional.
+  draft({ id: "alden-extravagant", advisor: "alden", kind: "luxury", question: "My parents' 50th anniversary dinner. Money isn't the point. Is a great old Champagne worth it, or is that just showing off?", note: "Sometimes extravagance is wonderful: does he say yes when it is, and name what makes it so?" }),
+  // Sequence: several conversations; the value should compound.
+  draft({
+    id: "martine-sequence",
+    advisor: "martini",
+    kind: "sequence",
+    question: "Summer wedding in the country, garden ceremony, dinner in a barn. I want to look like myself, not like a groomsman. Ideas?",
+    followUps: [
+      { text: "Different day. Going to Tokyo for a week in October, mostly walking, a couple of good dinners. What do I pack?", later: true },
+      { text: "Back from Tokyo. I keep thinking about a watch. Something I'll wear every day for twenty years.", later: true },
+    ],
+    note: "Judge the whole thread: does the third answer know them better than the first, without reciting what they said?",
+  }),
+  draft({
+    id: "amar-sequence",
+    advisor: "tony",
+    kind: "sequence",
+    question: "Long weekend in Paris with my partner in March. Where should we stay?",
+    followUps: [
+      { text: "We loved it, by the way. Now thinking about a week somewhere warm in January, just the two of us.", later: true },
+      { text: "Friends want us to join them in Mykonos in August. Honestly not sure it's us.", later: true },
+    ],
+    note: "Does what he learns about them in Paris shape the later advice, and does he have a real view on Mykonos?",
+  }),
+  // Voice: the same question to all five, shown without names.
+  ...(["tony", "martini", "gio", "alden", "goldie"] as const).flatMap((advisor) => [
+    draft({ id: `voice-saturday-${advisor}`, advisor, kind: "voice", group: "saturday", question: "Free Saturday in Paris, no plans. What would you do with it?", note: "Shown with the other four advisors' answers, without names." }),
+    draft({ id: `voice-birthday-${advisor}`, advisor, kind: "voice", group: "birthday", question: "My partner's birthday is next week and I've left it late. Help.", note: "Shown with the other four advisors' answers, without names." }),
+  ]),
   // Challenge: the same first question, then pressure without new information (hold) or legitimate new information (update).
   ...(
     [
@@ -137,8 +223,8 @@ export const DRAFT_CASES: Case[] = [
   ]),
 ];
 
-/** The small first comparison: all five advisors, across discovery, length, memory, preserved judgment and stakes. */
-export const PILOT_CASE_IDS = ["amar-amanpuri", "alden-lunch-wine", "martine-memory-watch", "gio-interview", "goldie-memory-sensitive", "martine-stakes-auction"];
+/** The small first comparison: all five advisors, across discovery, length, memory used and withheld, preserved judgment, stakes and a wrong premise. */
+export const PILOT_CASE_IDS = ["amar-amanpuri", "alden-lunch-wine", "martine-memory-watch", "gio-interview", "goldie-memory-sensitive", "goldie-memory-related", "martine-stakes-auction", "amar-premise"];
 
 /** The owner's authentic exchanges, from AUTHENTIC_DIR, if given; else the drafts. */
 export function loadCases(): Case[] {
