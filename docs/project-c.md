@@ -133,9 +133,9 @@ what the last day can't carry.
   - "FORGET ME" removes everything, for every advisor.
 - **Corrections in passing:** an ordinary correction in conversation ("I
   don't drink anymore") revises the understanding at the next update.
-- **Deletion:** the person's number already ends everything with STOP. The
-  understanding goes with it, after a short grace period stated in the
-  HELP text.
+- **Deletion:** today STOP only opts out; the conversation stays stored
+  (see the audit). Project C would make deletion real: FORGET ME at once,
+  and STOP after a short grace period stated in the HELP text.
 
 ### The website
 

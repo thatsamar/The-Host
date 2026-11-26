@@ -91,7 +91,8 @@ memory and which on the one-day window.
 - **Missing:**
   - any understanding beyond raw text;
   - any judgment about relevance or sensitivity;
-  - any way for a person to see, correct or remove what is kept;
+  - any way for a person to see, correct or remove what is kept (STOP
+    opts out but leaves the stored conversation in place);
   - anything on the website at all.
 - **Regressed:**
   - **Nov 14:** cross-day memory by text, when the window was cut to a day.
