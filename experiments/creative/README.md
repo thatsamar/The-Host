@@ -33,7 +33,8 @@ Production is frozen at the benchmark in `BASELINE.md`.
 | D | The brief with only essential supporting instructions |
 | DF | D with Cinq's philosophy right after the brief |
 | E | The brief, minimally instructed |
-| O | The original brief (the earliest in the repository, `original-briefs.json`), with D's essentials |
+| O | The original brief as of October 3 (Alden's first, October 14), with D's essentials |
+| H | Any earlier brief (`BRIEF_VERSION=2026-10-15` or a commit), with D's essentials. With D and O, shows what each revision improved or lost |
 | G | A general-purpose assistant with no brief, given the same personal context |
 | G0 | An ordinary general-purpose assistant: no brief and none of the person's earlier messages |
 
@@ -84,6 +85,14 @@ repository** (it is public), in a folder with `cases.json`. Each entry has an
 folder), `history` (the earlier messages, with their photos) and `followUp`.
 Then set `AUTHENTIC_DIR` to that folder. Every configuration, the
 general-purpose one included, gets the same earlier messages and context.
+
+## Every version of the briefs
+
+`brief-versions.json` holds every committed version of each brief on main,
+oldest first (Sep 28 to today, 32 in all), with commit, date and subject.
+Regenerate it after a brief changes by walking `git log --follow` for each
+`src/lib/companions/*-prompt.ts` (the clone needs full history:
+`git fetch --unshallow`).
 
 ## Running it
 

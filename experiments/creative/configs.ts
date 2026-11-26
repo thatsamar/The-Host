@@ -28,7 +28,10 @@
  *   D  the brief with only essential supporting instructions, no length limit
  *   DF D with Cinq's philosophy after the brief
  *   E  the brief, minimally instructed
- *   O  the original brief (the earliest in this repository), with D's essentials
+ *   O  the original brief (as of October 3; Alden's first, October 14), with D's essentials
+ *   H  any earlier brief (BRIEF_VERSION: a date or commit), with D's essentials;
+ *      only with BRIEF_VERSION set. With D (today's brief, same essentials),
+ *      O and H show what each revision improved or lost
  *   G  a general-purpose assistant, no brief, given the same personal context
  *   G0 an ordinary general-purpose assistant: no brief and none of the person's
  *      earlier messages. G against G0 is the value of memory; A against G is
@@ -60,7 +63,7 @@ import { answerBudget } from "@/lib/sms/short";
 import { speakerLabel } from "@/lib/sms/handler";
 import type { AdvisorId } from "./cases";
 
-export type ConfigId = "A" | "C" | "V" | "L" | "F" | "K" | "N" | "R" | "M" | "S" | "I" | "AF" | "X" | "D" | "DF" | "E" | "O" | "G" | "G0" | "P" | "RS" | "DS";
+export type ConfigId = "A" | "C" | "V" | "L" | "F" | "K" | "N" | "R" | "M" | "S" | "I" | "AF" | "X" | "D" | "DF" | "E" | "O" | "H" | "G" | "G0" | "P" | "RS" | "DS";
 
 export interface Config {
   id: ConfigId;
@@ -223,8 +226,20 @@ function variant(id: AdvisorId, now: Date, edits: Edit[], opts: { companion?: Co
   return [...blocks, constants(), dateBlock(now)];
 }
 
-/** The earliest version of each brief in this repository (configuration O). */
-const ORIGINAL = JSON.parse(readFileSync(new URL("./original-briefs.json", import.meta.url), "utf8")) as Record<AdvisorId, string>;
+/** Every committed version of each brief, oldest first (brief-versions.json, from git history). */
+interface BriefVersion { commit: string; date: string; subject: string; text: string }
+const VERSIONS = JSON.parse(readFileSync(new URL("./brief-versions.json", import.meta.url), "utf8")) as Record<AdvisorId, BriefVersion[]>;
+
+/** The brief as it stood at a date (YYYY-MM-DD: the last version on or before it, else the first) or at an exact commit. */
+export function briefAt(id: AdvisorId, at: string): BriefVersion {
+  const versions = VERSIONS[id];
+  const exact = versions.find((v) => v.commit.startsWith(at));
+  if (exact) return exact;
+  return [...versions].reverse().find((v) => v.date <= at) ?? versions[0];
+}
+
+/** O: the original briefs, as they stood on October 3 (Alden's first version is October 14). */
+export const ORIGINAL_DATE = "2026-10-03";
 
 const general = (now: Date) => [block("system_prompt", "SYSTEM PROMPT", "You are a helpful assistant."), block("essentials", "ESSENTIALS", TEXT_NOTE), constants(), dateBlock(now)];
 
@@ -266,7 +281,15 @@ export const CONFIGS: Config[] = [
   { id: "D", name: "The brief with essential supporting instructions", family: "controlled", textPipeline: false, webSearch: false, system: (id, now) => [brief(id), block("essentials", "ESSENTIALS", ESSENTIALS), constants(), dateBlock(now)] },
   { id: "DF", name: "D with Cinq's philosophy after the brief", family: "controlled", textPipeline: false, webSearch: false, system: (id, now) => [brief(id), philosophy()!, block("essentials", "ESSENTIALS", ESSENTIALS), constants(), dateBlock(now)] },
   { id: "E", name: "The brief, minimally instructed", family: "controlled", textPipeline: false, webSearch: false, system: (id, now) => [brief(id), constants(), dateBlock(now)] },
-  { id: "O", name: "The original brief, with essential supporting instructions", family: "controlled", textPipeline: false, webSearch: false, system: (id, now) => [block("system_prompt", "SYSTEM PROMPT", ORIGINAL[id]), block("essentials", "ESSENTIALS", ESSENTIALS), constants(), dateBlock(now)] },
+  { id: "O", name: "The original brief, with essential supporting instructions", family: "controlled", textPipeline: false, webSearch: false, system: (id, now) => [block("system_prompt", "SYSTEM PROMPT", briefAt(id, ORIGINAL_DATE).text), block("essentials", "ESSENTIALS", ESSENTIALS), constants(), dateBlock(now)] },
+  {
+    id: "H",
+    name: "A brief from history (BRIEF_VERSION: a date or commit), with essential supporting instructions",
+    family: "controlled",
+    textPipeline: false,
+    webSearch: false,
+    system: (id, now) => [block("system_prompt", "SYSTEM PROMPT", briefAt(id, process.env.BRIEF_VERSION ?? ORIGINAL_DATE).text), block("essentials", "ESSENTIALS", ESSENTIALS), constants(), dateBlock(now)],
+  },
   { id: "G", name: "A general-purpose assistant, no brief, with the person's earlier messages", family: "controlled", textPipeline: false, webSearch: false, system: (_id, now) => general(now) },
   { id: "G0", name: "An ordinary general-purpose assistant: no brief, no earlier messages", family: "controlled", textPipeline: false, webSearch: false, withoutHistory: true, system: (_id, now) => general(now) },
   { id: "P", name: "Production by text, exactly as today (web search on)", family: "end-to-end", textPipeline: true, webSearch: true, system: (id, now) => productionText(id, { webSearch: true, now }) },
@@ -276,7 +299,7 @@ export const CONFIGS: Config[] = [
 
 export function configsFor(advisor: AdvisorId, ids?: string[] | null): Config[] {
   const hasPhilosophy = !!philosophy();
-  return CONFIGS.filter((c) => (!ids || ids.includes(c.id)) && (!c.advisors || c.advisors.includes(advisor)) && (hasPhilosophy || !["AF", "DF"].includes(c.id)));
+  return CONFIGS.filter((c) => (!ids || ids.includes(c.id)) && (!c.advisors || c.advisors.includes(advisor)) && (hasPhilosophy || !["AF", "DF"].includes(c.id)) && (c.id !== "H" || !!process.env.BRIEF_VERSION));
 }
 
 export function instructionSize(config: Config, id: AdvisorId, now: Date): number {
