@@ -11,7 +11,7 @@ const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 
 describe("Goldie's safety boundary (an approved narrow exception)", () => {
   it("leaves her brief exactly as written", () => {
-    // The fingerprint of her brief as approved; any change to it must be deliberate.
+    // The fingerprint of her brief as approved (with her influences); any change to it must be deliberate.
     expect(sha(UNTANGLED_SYSTEM_PROMPT)).toBe(SHA_OF_BRIEF);
     expect(UNTANGLED_SYSTEM_PROMPT).not.toContain("988");
   });
@@ -65,4 +65,4 @@ describe("Goldie's safety boundary (an approved narrow exception)", () => {
   });
 });
 
-const SHA_OF_BRIEF = "f0160e0f2bcc69f3ba6eee29032fc00a64602e4372aee7521740b6707e59db66";
+const SHA_OF_BRIEF = "1d29cbab2bb8e98df2f3343729febc2881e7d6075cb1b5df0d1754b42af57574";
