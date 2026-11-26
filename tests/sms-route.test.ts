@@ -49,6 +49,7 @@ vi.mock("@/lib/sms/supabase-metrics", () => ({
       state.outbound.push(row);
     }
     async delivery() {}
+    async prune() {}
   },
 }));
 vi.mock("@/lib/ai", () => ({ getChatProvider: () => ({}), getRouterProvider: () => ({}) }));

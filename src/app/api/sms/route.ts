@@ -17,7 +17,7 @@ import {
 } from "@/lib/sms/twilio";
 import type { SmsTurn } from "@/lib/sms/store";
 import { errorClass, safeToken } from "@/lib/diagnostics";
-import { numberKey, RequestMeasure, usageCounts, type ModelCall, type ModelPurpose } from "@/lib/sms/metrics";
+import { numberKey, PRUNE_ONE_IN, RequestMeasure, usageCounts, type ModelCall, type ModelPurpose } from "@/lib/sms/metrics";
 import { SupabaseMetricsSink } from "@/lib/sms/supabase-metrics";
 
 // Answers can take a while; the webhook itself answers immediately (below)
@@ -241,7 +241,10 @@ export async function POST(request: Request): Promise<Response> {
         const row = measure.finish(failure);
         // A redelivered MessageSid is the same request: its first record stands.
         if (!measure.duplicate) recordings.push(recordStart.then(() => sink.finished(row)));
+        // Retention: now and then, expired records go (RETENTION_DAYS).
+        if (Math.random() < 1 / PRUNE_ONE_IN) recordings.push(Promise.resolve().then(() => sink.prune()).catch(() => {}));
         await Promise.all(recordings);
+        if (metricsFailed) console.error("SMS metrics write failed");
         // The log line carries neither the number's key nor the message id.
         const summary: Partial<typeof row> = { ...row };
         delete summary.number_key;

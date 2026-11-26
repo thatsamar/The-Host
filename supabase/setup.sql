@@ -689,8 +689,14 @@ create index sms_processed_messages_phone_idx on public.sms_processed_messages (
 -- message's words, a photo, a phone number or an error message. A number is
 -- stored as a keyed hash (number_key), so requests from one number can be
 -- grouped (bursts, overlaps, active numbers) without storing the number.
--- Like the other SMS tables, only the service-role key touches these.
-create table public.sms_requests (
+-- Only the service-role key touches these: row level security is on with no
+-- policies, and the public API roles have no grants, so the publishable key
+-- can't read them. Rows are deleted after 90 days (src/lib/ops/retention.ts).
+--
+-- Additive and safe to run again: it only creates what doesn't exist yet and
+-- never touches sms_sessions or sms_processed_messages. To undo it, run
+-- supabase/rollback/20261126000001_sms_metrics.down.sql.
+create table if not exists public.sms_requests (
   message_sid text primary key,
   number_key text not null,
   received_at timestamptz not null,
@@ -713,12 +719,12 @@ create table public.sms_requests (
   error_class text
 );
 
-create index sms_requests_received_idx on public.sms_requests (received_at);
-create index sms_requests_number_idx on public.sms_requests (number_key, received_at);
+create index if not exists sms_requests_received_idx on public.sms_requests (received_at);
+create index if not exists sms_requests_number_idx on public.sms_requests (number_key, received_at);
 
 -- Written when Twilio accepts a text, and again by Twilio's delivery reports,
 -- which can arrive first: so only the sid is required.
-create table public.sms_outbound (
+create table if not exists public.sms_outbound (
   sid text primary key,
   request_sid text,
   -- ack | still_thinking | answer | fallback | stalled | system
@@ -732,5 +738,24 @@ create table public.sms_outbound (
   delivered_at timestamptz
 );
 
-create index sms_outbound_submitted_idx on public.sms_outbound (submitted_at);
-create index sms_outbound_request_idx on public.sms_outbound (request_sid);
+create index if not exists sms_outbound_submitted_idx on public.sms_outbound (submitted_at);
+create index if not exists sms_outbound_request_idx on public.sms_outbound (request_sid);
+
+alter table public.sms_requests enable row level security;
+alter table public.sms_outbound enable row level security;
+revoke all on table public.sms_requests, public.sms_outbound from anon, authenticated;
+
+-- ===== 20261126000002_sms_lockdown.sql =====
+
+-- Lock the SMS tables to the server. sms_sessions holds conversations and
+-- phone numbers, and sms_processed_messages holds phone numbers; both were
+-- created without row level security, so with Supabase's default grants the
+-- public (anon / publishable) key could read them through the Data API.
+-- The app only ever uses the service-role key, which bypasses row level
+-- security, so nothing Cinq does changes.
+--
+-- Safe to run again (each statement is idempotent) and changes no data.
+-- To undo it, run supabase/rollback/20261126000002_sms_lockdown.down.sql.
+alter table public.sms_sessions enable row level security;
+alter table public.sms_processed_messages enable row level security;
+revoke all on table public.sms_sessions, public.sms_processed_messages from anon, authenticated;

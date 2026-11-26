@@ -16,6 +16,7 @@ vi.mock("@/lib/sms/supabase-metrics", () => ({
     async delivery(update: Record<string, unknown>) {
       state.deliveries.push(update);
     }
+    async prune() {}
   },
 }));
 vi.mock("@/lib/supabase/admin", () => ({

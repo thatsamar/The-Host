@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { newerStatus, type MetricsSink, type OutboundRow, type RequestRow } from "./metrics";
+import { newerStatus, RETENTION_DAYS, type MetricsSink, type OutboundRow, type RequestRow } from "./metrics";
 
 /**
  * Records in sms_requests and sms_outbound (migration 20261126000001).
@@ -11,15 +11,30 @@ export class SupabaseMetricsSink implements MetricsSink {
   constructor(
     private client: SupabaseClient,
     private onError: (where: string) => void = () => {},
+    private retryMs = 500,
   ) {}
 
+  /** One write, tried twice (half a second apart) before it counts as lost. */
   private async run(where: string, op: () => PromiseLike<{ error: unknown }>): Promise<void> {
-    try {
-      const { error } = await op();
-      if (error) this.onError(where);
-    } catch {
-      this.onError(where);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const { error } = await op();
+        if (!error) return;
+      } catch {
+        // Tried again below.
+      }
+      if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, this.retryMs));
     }
+    this.onError(where);
+  }
+
+  /** Deletes records older than the retention period (RETENTION_DAYS). */
+  prune(now = Date.now()): Promise<void> {
+    const cutoff = new Date(now - RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    return Promise.all([
+      this.run("prune", () => this.client.from("sms_outbound").delete().lt("submitted_at", cutoff)),
+      this.run("prune", () => this.client.from("sms_requests").delete().lt("received_at", cutoff)),
+    ]).then(() => undefined);
   }
 
   started(row: RequestRow): Promise<void> {
@@ -28,8 +43,8 @@ export class SupabaseMetricsSink implements MetricsSink {
   }
 
   finished(row: RequestRow): Promise<void> {
-    const { message_sid, ...rest } = row;
-    return this.run("finish", () => this.client.from("sms_requests").update(rest).eq("message_sid", message_sid));
+    // The whole record, so it lands even if the start was lost.
+    return this.run("finish", () => this.client.from("sms_requests").upsert(row, { onConflict: "message_sid" }));
   }
 
   outbound(row: OutboundRow): Promise<void> {

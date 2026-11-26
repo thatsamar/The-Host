@@ -6,6 +6,7 @@
 
 import type { ModelCall, OutboundKind, Outcome } from "@/lib/sms/metrics";
 import { callCost } from "./rates";
+import type { DayCount } from "./twilio-counts";
 
 export interface RequestRecord {
   message_sid: string;
@@ -67,9 +68,44 @@ export interface DayRow {
   modelCost: number;
 }
 
+export interface WeekRow {
+  week: string;
+  people: number;
+  newPeople: number;
+  returningPeople: number;
+  requests: number;
+}
+
+export interface MeasurementDay {
+  day: string;
+  twilioIn: number | null;
+  recordedIn: number;
+  twilioOut: number | null;
+  recordedOut: number;
+}
+
+/** The acknowledgment goal: submitted to Twilio within 2 s of the text reaching us. */
+export const ACK_TARGET_MS = 2_000;
+
+/** After something went wrong, the same person got an answer within this long. */
+export const RECOVERY_WINDOW_MS = 30 * 60 * 1000;
+
 export interface Report {
   from: string;
   to: string;
+  /** The earliest record kept: before it, nothing is known (records began, or expired). */
+  recordsSince: string | null;
+  adoption: {
+    people: number;
+    newPeople: number;
+    returningPeople: number;
+    repeatPeople: number;
+    medianRequestsPerPerson: number | null;
+    peopleByAdvisor: Record<string, number>;
+    weekly: WeekRow[];
+  };
+  recovery: { problems: number; recovered: number; byKind: Record<string, number> };
+  measurement: { days: MeasurementDay[]; twilioReachable: boolean; openRecords: number; deliveryReportsMissing: number };
   usage: {
     requests: number;
     activeNumbers: number;
@@ -83,6 +119,8 @@ export interface Report {
   reliability: {
     questions: number;
     acked: number;
+    /** Acks submitted within ACK_TARGET_MS of the text reaching us. */
+    ackedWithinTarget: number;
     stillThinkingSent: number;
     outcomes: Record<string, number>;
     silent: number;
@@ -125,6 +163,8 @@ export function buildReport(input: {
   to: Date;
   now?: number;
   smsSegmentUsd?: number | null;
+  /** Twilio's own daily counts, to check the records are complete (twilio-counts.ts). */
+  twilio?: Record<string, DayCount> | null;
 }): Report {
   const now = input.now ?? Date.now();
   const all = input.requests.filter((r) => {
@@ -249,9 +289,103 @@ export function buildReport(input: {
       modelCost: dayCost.get(day) ?? 0,
     }));
 
+  // Adoption: people are numbers (as keys); "before" means any earlier record kept.
+  const history = input.requests.filter((r) => r.outcome !== "duplicate" && r.outcome !== "opted_out");
+  const firstSeen = new Map<string, number>();
+  for (const r of history) {
+    const t = Date.parse(r.received_at);
+    if (t < (firstSeen.get(r.number_key) ?? Infinity)) firstSeen.set(r.number_key, t);
+  }
+  const people = new Set(real.map((r) => r.number_key));
+  const fromMs = input.from.getTime();
+  let newPeople = 0;
+  for (const p of people) if ((firstSeen.get(p) ?? Infinity) >= fromMs) newPeople += 1;
+  const daysPerPerson = new Map<string, Set<string>>();
+  const requestsPerPerson = new Map<string, number>();
+  const peopleByAdvisorSets: Record<string, Set<string>> = {};
+  for (const r of real) {
+    const days = daysPerPerson.get(r.number_key) ?? new Set<string>();
+    days.add(r.received_at.slice(0, 10));
+    daysPerPerson.set(r.number_key, days);
+    requestsPerPerson.set(r.number_key, (requestsPerPerson.get(r.number_key) ?? 0) + 1);
+    if (r.outcome === "answered" && r.advisor_id) (peopleByAdvisorSets[r.advisor_id] ??= new Set()).add(r.number_key);
+  }
+  const peopleByAdvisor = Object.fromEntries(Object.entries(peopleByAdvisorSets).map(([k, v]) => [k, v.size]));
+
+  // Weekly (weeks starting Monday, UTC), over every record kept, newest first.
+  const weekOf = (ms: number) => {
+    const d = new Date(ms);
+    const day = (d.getUTCDay() + 6) % 7;
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - day)).toISOString().slice(0, 10);
+  };
+  const weeks = new Map<string, RequestRecord[]>();
+  for (const r of history) {
+    const w = weekOf(Date.parse(r.received_at));
+    weeks.set(w, [...(weeks.get(w) ?? []), r]);
+  }
+  const weekly: WeekRow[] = [...weeks.entries()]
+    .sort(([a], [b]) => (a < b ? 1 : -1))
+    .slice(0, 12)
+    .map(([week, rows]) => {
+      const start = Date.parse(`${week}T00:00:00Z`);
+      const ppl = new Set(rows.map((r) => r.number_key));
+      let fresh = 0;
+      for (const p of ppl) if ((firstSeen.get(p) ?? Infinity) >= start) fresh += 1;
+      return { week, people: ppl.size, newPeople: fresh, returningPeople: ppl.size - fresh, requests: rows.length };
+    });
+
+  // Recovery: after a request that went wrong, did the same person get an answer soon after?
+  const problemKind = (r: RequestRecord): string | null =>
+    unfinished(r) ? "never finished" : r.outcome === "error" ? "failed before any reply" : r.outcome === "stalled" ? "took too long" : r.outcome === "fallback" ? "answer failed" : r.send_failures ? "a text Twilio refused" : null;
+  const problemsByKind: Record<string, number> = {};
+  let problems = 0;
+  let recovered = 0;
+  for (const r of real) {
+    const kind = problemKind(r);
+    if (!kind) continue;
+    problems += 1;
+    inc(problemsByKind, kind);
+    const t = Date.parse(r.received_at);
+    if (history.some((x) => x.number_key === r.number_key && x.outcome === "answered" && Date.parse(x.received_at) > t && Date.parse(x.received_at) - t <= RECOVERY_WINDOW_MS)) recovered += 1;
+  }
+
+  // Measurement health: our records against Twilio's own counts, day by day.
+  const recordedIn = new Map<string, number>();
+  for (const r of input.requests) recordedIn.set(r.received_at.slice(0, 10), (recordedIn.get(r.received_at.slice(0, 10)) ?? 0) + 1);
+  const recordedOut = new Map<string, number>();
+  for (const o of input.outbound) if (o.submitted_at) recordedOut.set(o.submitted_at.slice(0, 10), (recordedOut.get(o.submitted_at.slice(0, 10)) ?? 0) + 1);
+  const measurementDays: MeasurementDay[] = Object.keys(input.twilio ?? {})
+    .sort((a, b) => (a < b ? 1 : -1))
+    .map((day) => ({
+      day,
+      twilioIn: input.twilio?.[day]?.inbound ?? null,
+      recordedIn: recordedIn.get(day) ?? 0,
+      twilioOut: input.twilio?.[day]?.outbound ?? null,
+      recordedOut: recordedOut.get(day) ?? 0,
+    }));
+  const hourAgo = now - 60 * 60 * 1000;
+  const recordsSince = input.requests.reduce<string | null>((min, r) => (min === null || r.received_at < min ? r.received_at : min), null);
+
   return {
     from: input.from.toISOString(),
     to: input.to.toISOString(),
+    recordsSince,
+    adoption: {
+      people: people.size,
+      newPeople,
+      returningPeople: people.size - newPeople,
+      repeatPeople: [...daysPerPerson.values()].filter((d) => d.size >= 2).length,
+      medianRequestsPerPerson: spread([...requestsPerPerson.values()]).p50,
+      peopleByAdvisor,
+      weekly,
+    },
+    recovery: { problems, recovered, byKind: problemsByKind },
+    measurement: {
+      days: measurementDays,
+      twilioReachable: !!input.twilio,
+      openRecords: real.filter(unfinished).length,
+      deliveryReportsMissing: out.filter((o) => !o.status && o.submitted_at && Date.parse(o.submitted_at) < hourAgo).length,
+    },
     usage: {
       requests: real.length,
       activeNumbers: new Set(real.map((r) => r.number_key)).size,
@@ -270,6 +404,7 @@ export function buildReport(input: {
     reliability: {
       questions: questions.length,
       acked: questions.filter((r) => r.ack_ms !== null).length,
+      ackedWithinTarget: questions.filter((r) => r.ack_ms !== null && r.ack_ms <= ACK_TARGET_MS).length,
       stillThinkingSent: real.filter((r) => r.still_thinking_ms !== null).length,
       outcomes,
       silent: real.filter(silent).length,

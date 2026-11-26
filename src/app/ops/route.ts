@@ -2,6 +2,9 @@ import { timingSafeEqual } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildReport, type OutboundRecord, type RequestRecord } from "@/lib/ops/report";
 import { renderOpsPage } from "@/lib/ops/page";
+import { completeDays, twilioDailyCounts } from "@/lib/ops/twilio-counts";
+import { RETENTION_DAYS } from "@/lib/sms/metrics";
+import { SupabaseMetricsSink } from "@/lib/sms/supabase-metrics";
 
 export const dynamic = "force-dynamic";
 
@@ -39,11 +42,23 @@ export async function GET(request: Request): Promise<Response> {
   const to = new Date();
   const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
 
-  const [requests, outbound] = await Promise.all([
-    admin.from("sms_requests").select("*").gte("received_at", from.toISOString()).order("received_at", { ascending: true }).limit(MAX_ROWS),
+  // Every record kept (up to RETENTION_DAYS), so "returning" and "new" look past this period.
+  const since = new Date(to.getTime() - RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  // Twilio's own counts for the complete days in this period (at most a week), to check the records.
+  const checkDays = completeDays(to.getTime(), Math.min(days, 7));
+  const [requests, outbound, twilio] = await Promise.all([
+    admin.from("sms_requests").select("*").gte("received_at", since.toISOString()).order("received_at", { ascending: true }).limit(MAX_ROWS),
     admin.from("sms_outbound").select("sid, request_sid, kind, segments, submitted_at, status, error_code, delivered_at").gte("submitted_at", from.toISOString()).limit(MAX_ROWS * 3),
+    twilioDailyCounts({
+      accountSid: process.env.TWILIO_ACCOUNT_SID ?? "",
+      authToken: process.env.TWILIO_AUTH_TOKEN ?? "",
+      number: process.env.TWILIO_PHONE_NUMBER ?? "",
+      days: checkDays,
+    }),
+    // Retention: expired records go whenever the dashboard is opened, too.
+    new SupabaseMetricsSink(admin).prune(),
   ]);
-  const recorded = !requests.error && (requests.data?.length ?? 0) > 0;
+  const recorded = !requests.error && (requests.data ?? []).some((r) => (r as { received_at: string }).received_at >= from.toISOString());
   const segmentUsd = Number(process.env.OPS_SMS_SEGMENT_USD);
   const report = buildReport({
     requests: (requests.error ? [] : requests.data ?? []) as RequestRecord[],
@@ -51,6 +66,7 @@ export async function GET(request: Request): Promise<Response> {
     from,
     to,
     smsSegmentUsd: Number.isFinite(segmentUsd) && segmentUsd > 0 ? segmentUsd : null,
+    twilio,
   });
   return new Response(renderOpsPage(report, { days, recorded }), {
     headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex" },

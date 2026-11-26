@@ -13,6 +13,11 @@ import { createHmac } from "node:crypto";
 import { ACK_TEXTS, FALLBACK_TEXT, STALLED_TEXT, STILL_THINKING_TEXT } from "./handler";
 import { SMS_ADVISORS } from "./navigation";
 
+/** How long measurement records are kept, then deleted: long enough to see trends and returning people. */
+export const RETENTION_DAYS = 90;
+/** On average, one webhook in this many also deletes expired records, so retention needs no scheduler. */
+export const PRUNE_ONE_IN = 50;
+
 export type OutboundKind = "ack" | "still_thinking" | "answer" | "fallback" | "stalled" | "system";
 export type Outcome = "answered" | "fallback" | "stalled" | "system" | "duplicate" | "opted_out" | "error";
 export type ModelPurpose = "answer" | "router" | "condense";
@@ -170,6 +175,7 @@ export interface MetricsSink {
   finished(row: RequestRow): Promise<void>;
   outbound(row: OutboundRow): Promise<void>;
   delivery(update: { sid: string; status: string; errorCode: string | null; at: string }): Promise<void>;
+  prune?(now?: number): Promise<void>;
 }
 
 const STATUS_RANK: Record<string, number> = { accepted: 1, queued: 1, sending: 2, sent: 3, delivered: 4, undelivered: 4, failed: 4, read: 5 };
