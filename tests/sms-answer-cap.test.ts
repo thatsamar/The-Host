@@ -80,8 +80,8 @@ describe("the cap", () => {
     const answer =
       "Say the boundary out loud once, calmly, and don't relitigate it. Most of the tension is the waiting, not the conversation. " +
       "Martine can help you look the part when you do it.";
-    const { text } = shortAnswerText({ label: "Goldie: ", intro: INTRODUCTIONS.goldie, answer, offer: "Reply YES to bring in Martine, or carry on with me." });
-    expect(text).toBe(`Goldie: ${INTRODUCTIONS.goldie}\n${answer}\nReply YES to bring in Martine, or carry on with me.`);
+    const { text } = shortAnswerText({ label: "Goldie: ", intro: INTRODUCTIONS.goldie, answer, offer: "Want me to bring in Martine?" });
+    expect(text).toBe(`Goldie: ${INTRODUCTIONS.goldie}\n${answer}\nWant me to bring in Martine?`);
     expect(smsSegments(text)).toBeLessThanOrEqual(SMS_MAX_SEGMENTS);
   });
 
@@ -90,11 +90,11 @@ describe("the cap", () => {
       label: "Goldie: ",
       intro: INTRODUCTIONS.goldie,
       answer: LONG,
-      offer: "Reply YES to bring in Martine, or carry on with me.",
+      offer: "Want me to bring in Martine?",
     });
     expect(LONG.startsWith(sent)).toBe(true);
     expect(sent.endsWith(".")).toBe(true);
-    expect(text.endsWith("\nReply YES to bring in Martine, or carry on with me.")).toBe(true);
+    expect(text.endsWith("\nWant me to bring in Martine?")).toBe(true);
     expect(smsSegments(text)).toBeLessThanOrEqual(SMS_MAX_SEGMENTS);
   });
 });
@@ -235,7 +235,7 @@ describe("answers designed for the cap, not cut down", () => {
   });
 
   it("leaves room for the YES line when the answer offers a handoff", () => {
-    expect(roomForAnswer(400, "Reply YES to bring in Martine, or carry on with me.")).toBe(400 - 52);
+    expect(roomForAnswer(400, "Want me to bring in Martine?")).toBe(400 - 29);
     expect(roomForAnswer(400, null)).toBe(400);
   });
 

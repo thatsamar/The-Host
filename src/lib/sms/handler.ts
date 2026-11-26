@@ -12,7 +12,7 @@
  */
 
 import { addressedAdvisor, advisorList, isAdvisorId, readNavigation, SMS_ADVISORS, type SmsAdvisorId } from "./navigation";
-import { agreesToHandoff, handoffNote, offerText, readSuggestion, regionOf, type HandoffContext, type TextRegion } from "./handoff";
+import { agreesToHandoff, handoffNote, offersInOwnWords, offerText, readSuggestion, regionOf, type HandoffContext, type TextRegion } from "./handoff";
 import { recentTurns } from "./context";
 import { compactSession } from "./compact";
 import { answerBudget, answerFits, roomForAnswer, shortAnswerText } from "./short";
@@ -410,8 +410,8 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
     context?: { handoff?: HandoffContext },
     before: SmsTurn[] = [],
   ) => {
-    // A handoff always opens with the introduction; a routed answer only the first time.
-    const intro = context?.handoff || !hasMet(current, advisorId) ? INTRODUCTIONS[advisorId] : null;
+    // An advisor introduces themselves only to someone meeting them for the first time, handed over or not.
+    const intro = !hasMet(current, advisorId) ? INTRODUCTIONS[advisorId] : null;
     // One short text per answer: the advisor is told how many characters its own words have.
     const label = speakerLabel(advisorId);
     const budget = answerBudget(label, intro);
@@ -459,6 +459,7 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
       clearTimeout(stallTimer);
     }
     // One text, within SMS_MAX_SEGMENTS: label, introduction, answer and any offer line.
+    // Room is kept for the offer line; it is added only when the advisor's own words don't make the offer.
     const offer = suggest ? offerText(suggest) : null;
     let plain = toSmsText(answer);
     // Too long even so: rewritten as one complete text that fits, rather than cut.
@@ -474,7 +475,9 @@ export async function processSms(inbound: SmsInbound, deps: SmsDeps): Promise<st
     }
     await acked;
     await thinking;
-    const reply = shortAnswerText({ label, intro, answer: plain, offer });
+    let reply = shortAnswerText({ label, intro, answer: plain, offer: suggest && offersInOwnWords(plain, suggest) ? null : offer });
+    // The advisor's offer must survive the trim; if it didn't, Cinq asks in one short line instead.
+    if (suggest && !offersInOwnWords(reply.sent, suggest)) reply = shortAnswerText({ label, intro, answer: plain, offer });
     // History keeps the answer as sent, so a follow-up carries on from what the person saw.
     // The label, the introduction and the offer line are part of the text only, never of the stored answer.
     current.turnsByAdvisor[advisorId] = [...turns, { role: "assistant" as const, text: reply.sent, at: now }].slice(-MAX_STORED_TURNS);
