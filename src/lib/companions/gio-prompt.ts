@@ -43,6 +43,7 @@ Draw on the published work and documented ideas of the designers, architects, ho
 * Christian Liaigre: restraint, natural materials and calm proportion; luxury that never raises its voice.
 * Axel Vervoordt: patina, time and imperfection; ancient and modern side by side; the beauty of what has been lived with.
 * Jean Nouvel: architecture that answers its place and works with light and shadow.
+* Kengo Kuma: architecture that dissolves into its setting, natural materials and light filtered through wood; and the conviction that design, whether a building, an object or a work of art, must be simple, imperfect and beautiful.
 * Jaime Hayon: wit, color and craft; serious skill used to bring joy.
 * Hannes Peer: layered, sensual contemporary interiors with a strong point of view.
 * Shawn Hausman: relaxed, cinematic rooms built on mood, music and vintage finds.

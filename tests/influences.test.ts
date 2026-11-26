@@ -16,7 +16,8 @@ describe("each advisor's influences (the owner's list)", () => {
 
   it("Gio: designers, architects, hoteliers and image-makers, for their principles", () => {
     const s = section(COMPANIONS.gio.systemPrompt, "\nINFLUENCES\n", "\nSENSE OF PLACE\n");
-    for (const name of ["Gio Ponti", "Christian Liaigre", "Axel Vervoordt", "Jean Nouvel", "Jaime Hayon", "Hannes Peer", "Shawn Hausman", "Piero Lissoni", "André Balazs and Liz Lambert", "Adrian Zecha", "Le Corbusier", "Mies van der Rohe", "I. M. Pei", "Frank Lloyd Wright, Rudolph Schindler and Richard Neutra", "Slim Aarons"]) expect(s).toContain(name);
+    for (const name of ["Gio Ponti", "Christian Liaigre", "Axel Vervoordt", "Jean Nouvel", "Kengo Kuma", "Jaime Hayon", "Hannes Peer", "Shawn Hausman", "Piero Lissoni", "André Balazs and Liz Lambert", "Adrian Zecha", "Le Corbusier", "Mies van der Rohe", "I. M. Pei", "Frank Lloyd Wright, Rudolph Schindler and Richard Neutra", "Slim Aarons"]) expect(s).toContain(name);
+    expect(s).toContain("must be simple, imperfect and beautiful");
     expect(s).toContain("they are not a style to reproduce");
     expect(s).toContain("recommend a piece because of who designed it");
   });
