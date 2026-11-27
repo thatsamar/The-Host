@@ -22,6 +22,48 @@ const schema = z.object({
   WEB_SEARCH_MAX_USES: z.coerce.number().int().min(0).max(20).optional(),
 });
 
+/**
+ * The private intellectual foundations (docs/foundations.md). Server only:
+ * none of these is ever NEXT_PUBLIC_. Off unless FOUNDATIONS_ENABLED is set;
+ * until then nothing is read from the store at all. Parsed apart from the
+ * settings above, so a mistyped foundation key can only send C2 advisors to
+ * their fallback, never take the whole app down.
+ */
+function foundationsShape() {
+  const flag = z
+    .string()
+    .optional()
+    .transform((v) => v === "true" || v === "1");
+  // A 32-byte key, base64: what `openssl rand -base64 32` prints.
+  const key = z
+    .string()
+    .trim()
+    .refine((v) => Buffer.from(v, "base64").length === 32, "must be 32 random bytes, base64 (openssl rand -base64 32)")
+    .optional();
+  return {
+    FOUNDATIONS_ENABLED: flag,
+    FOUNDATION_KEY: key,
+    FOUNDATION_KEY_ID: z.string().trim().min(1).max(40).optional(),
+    // The key before the last rotation, so versions encrypted with it still load.
+    FOUNDATION_KEY_PREVIOUS: key,
+    FOUNDATION_KEY_PREVIOUS_ID: z.string().trim().min(1).max(40).optional(),
+    // How long a C2 advisor may run on its fallback before it counts as unavailable.
+    FOUNDATION_FALLBACK_MAX_MINUTES: z.coerce.number().int().min(1).max(24 * 60).default(60),
+    // The photo note (off until approved).
+    PHOTO_NOTE_ENABLED: flag,
+  };
+}
+
+/** The foundations settings alone, so they can be read where the model's settings aren't needed (and in tests). */
+export function foundationsEnv(): z.infer<z.ZodObject<ReturnType<typeof foundationsShape>>> {
+  const parsed = z.object(foundationsShape()).safeParse(process.env);
+  if (!parsed.success) {
+    const settings = [...new Set(parsed.error.issues.map((i) => i.path.join(".")))];
+    throw Object.assign(new Error(`Invalid foundation settings in Vercel: ${settings.join(", ")}.`), { settings });
+  }
+  return parsed.data;
+}
+
 export type ServerEnv = z.infer<typeof schema>;
 
 let cached: ServerEnv | undefined;

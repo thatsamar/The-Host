@@ -16,6 +16,7 @@ export const GOLDIE_SAFETY = [
 
 export const goldie: Companion = {
   id: "goldie",
+  safety: GOLDIE_SAFETY,
   name: "Goldie",
   tagline: "Untangle what's complicated.",
   subtitle: "Describe the situation, or add screenshots.",

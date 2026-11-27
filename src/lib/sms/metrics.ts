@@ -20,7 +20,7 @@ export const PRUNE_ONE_IN = 50;
 
 export type OutboundKind = "ack" | "still_thinking" | "answer" | "fallback" | "stalled" | "system";
 export type Outcome = "answered" | "fallback" | "stalled" | "system" | "duplicate" | "opted_out" | "error";
-export type ModelPurpose = "answer" | "router" | "condense";
+export type ModelPurpose = "answer" | "router" | "condense" | "leak_rewrite";
 
 export interface ModelCall {
   purpose: ModelPurpose;
@@ -32,6 +32,13 @@ export interface ModelCall {
   cache_write?: number;
   searches?: number;
   failed?: boolean;
+  /** For an answer: the advisor's architecture (docs/foundations.md), labels and timing only. */
+  architecture?: "legacy" | "c2";
+  foundation_ms?: number;
+  /** C2 fell back to the current architecture for this answer: the fixed reason code. */
+  foundation_fallback?: string;
+  /** The leak guard found the answer repeating its foundation. */
+  leak_guard?: boolean;
 }
 
 /** A number as a short keyed hash: the same number always gives the same key, and the key never gives the number back. */

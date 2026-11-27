@@ -12,6 +12,8 @@ import { MAX_PHOTOS_PER_TURN } from "@/lib/ask/prompt";
 import { createClient, getUserId } from "@/lib/supabase/server";
 import { errorClass, safeToken } from "@/lib/diagnostics";
 import type { FailureInfo } from "@/lib/ai/types";
+import { architectureLog, foundationLoader, photoNoteEnabled, recordLeakGuard } from "@/lib/foundations/loader";
+import { checkLeak } from "@/lib/foundations/leak-guard";
 
 // Long answers with web search can take a while.
 export const maxDuration = 300;
@@ -95,13 +97,22 @@ async function answer(request: Request): Promise<Response> {
     return Response.json({ error: unavailable(companion.name) }, { status: 503 });
   }
 
+  // The advisor's architecture, once per answer (docs/foundations.md). Off, or on the current architecture, this changes nothing.
+  const resolved = foundationLoader().quick() ?? (await foundationLoader().resolve(companion.id));
+  if (resolved.kind === "unavailable") return Response.json({ error: unavailable(companion.name) }, { status: 503 });
+  const shape = {
+    architecture: resolved.kind === "c2" ? resolved : undefined,
+    searchLimit: env.WEB_SEARCH_MAX_USES ?? companion.webSearchMaxUses,
+    photoNote: photoNoteEnabled(),
+  };
+
   const { id, turns } = parsed.data;
   const encoder = new TextEncoder();
   const encode = (event: StreamEvent) => encoder.encode(`${JSON.stringify(event)}\n`);
 
   if (!id) {
     // Without an answer id there's nothing to resume, so stop when the visitor goes.
-    const events = ask({ provider, companion, signal: request.signal }, turns);
+    const events = ask({ provider, companion, signal: request.signal, ...shape }, turns);
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
         try {
@@ -139,10 +150,13 @@ async function answer(request: Request): Promise<Response> {
     model: safeToken(env.CHAT_MODEL),
     effort: env.CHAT_EFFORT,
     webSearchMaxUses: env.WEB_SEARCH_MAX_USES ?? companion.webSearchMaxUses,
+    ...architectureLog(resolved),
   };
   // Where the time went, even when the answer never finishes: each phase and when it began.
   const phases: [string, number][] = [];
   let answerChars = 0;
+  // Kept in memory only for the leak check below; never logged or stored.
+  let answerText = "";
   let searchesRun = 0;
   let timedOut = false;
   const timeLimit = setTimeout(() => {
@@ -161,7 +175,7 @@ async function answer(request: Request): Promise<Response> {
   const generation = (async () => {
     let outcome = "answered";
     try {
-      for await (let event of ask({ provider, companion, signal: stop.signal, onFinish, onFailure }, turns)) {
+      for await (let event of ask({ provider, companion, signal: stop.signal, onFinish, onFailure, ...shape }, turns)) {
         if (event.type === "error") {
           outcome = timedOut ? "time-limit" : event.message === "Stopped." ? "stopped" : "error";
           if (timedOut) event = { type: "error", message: timeLimitMessage(companion.name) };
@@ -172,6 +186,7 @@ async function answer(request: Request): Promise<Response> {
         } else if (event.type === "text") {
           log.firstTextMs ??= Date.now() - receivedAt;
           answerChars += event.text.length;
+          if (resolved.kind === "c2") answerText += event.text;
         } else if (event.type === "searching") searchesRun++;
         relay.push(event);
         live.send?.(event);
@@ -184,6 +199,15 @@ async function answer(request: Request): Promise<Response> {
     } finally {
       clearTimeout(timeLimit);
       clearInterval(heartbeat);
+      // The leak guard on the website can only detect and count: the answer has already streamed.
+      if (resolved.kind === "c2" && answerText) {
+        const leak = checkLeak(answerText, resolved.foundation);
+        if (leak.leaked) {
+          log.leakGuard = { longestRun: leak.longestRun, phrases: leak.phrases };
+          recordLeakGuard(companion.id, "web");
+        }
+        answerText = "";
+      }
       await relay.finish();
       console.info(
         "Answer finished",

@@ -33,6 +33,12 @@ export interface Companion extends CompanionCopy {
   /** One-line description for the link preview and home screen. */
   description: string;
   /**
+   * On the C2 architecture, this advisor's own safety boundary in place of the
+   * shared one (Goldie's). Unused on the current architecture, where it lives
+   * in the capabilities.
+   */
+  safety?: string;
+  /**
    * No longer in Cinq's lineup. Kept, under its own name, so an old link shows
    * that this advisor has retired; it answers no new questions.
    */
