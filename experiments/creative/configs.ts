@@ -85,6 +85,8 @@ export type ConfigId =
   | "WE" | "WFE" | "GE" | "GSE" | "ACE"
   // The radical alternative (owner, Nov 27): a distilled brief (FOUNDATION_DIR/<id>-distilled.md), the foundation, the safeguards; and the brief with the foundation and nothing else.
   | "WR" | "AR" | "WBE"
+  // Refined C, the working experimental architecture (owner, Nov 27): see refined() below.
+  | "W1" | "W1L" | "W1T" | "W1N" | "W1V" | "W1S" | "W1X" | "WEX" | "A1" | "A1L" | "A1J"
   // Forced behaviour made conditional (FORCED-BEHAVIOUR.md): shared layers only, and with the owner's briefs too.
   | "WF" | "WFB" | "AC" | "ACB";
 
@@ -102,6 +104,8 @@ export interface Config {
   productionWindow?: boolean;
   /** The photo-only prompt, where a configuration changes it (each advisor's `photosOnly`). */
   photosOnly?: (advisor: AdvisorId) => ((count: number) => string) | undefined;
+  /** The number of web searches allowed per answer, where a configuration sets it (W1X, WEX: research exhausted on purpose). */
+  maxSearches?: number;
   /** Only where the case has earlier messages (A0, AW): elsewhere it would repeat A. */
   needsHistory?: boolean;
   system: (advisor: AdvisorId, now: Date) => ContextBlock[];
@@ -226,6 +230,59 @@ function foundation(id: AdvisorId): ContextBlock | null {
   return block("foundation", "WHAT INFORMS YOUR JUDGMENT", readFileSync(file, "utf8").trim());
 }
 const afterBrief = (blocks: ContextBlock[], extra: ContextBlock | null) => (extra ? [blocks[0], extra, ...blocks.slice(1)] : blocks);
+
+/** A file of the advisor's private material in FOUNDATION_DIR: `<id><suffix>.md`. */
+function privateFile(id: AdvisorId, suffix: string): string | null {
+  const dir = process.env.FOUNDATION_DIR;
+  const file = dir ? `${dir.replace(/\/$/, "")}/${id}${suffix}.md` : "";
+  return file && existsSync(file) ? readFileSync(file, "utf8").trim() : null;
+}
+
+/** The website conversation line the owner proposed (W1T), verbatim. */
+export const TALK_LINE = "Not every message is a request. Sometimes someone is simply sharing a thought, expressing curiosity or continuing a conversation. Respond to what is happening between you, rather than automatically turning it into a task.";
+
+/**
+ * Refined C (owner, Nov 27): the distilled identity (`<id>-core.md`), the
+ * foundation (`<id>.md`, or `<id>-l2.md` with the second layer), and only
+ * what earns its place: the safeguards, a factual search status from the
+ * system (available with its limit, or unavailable; what a used-up limit
+ * means), the planning check for real plans, photos, and on the website a
+ * preference for prose that doesn't forbid lists. By text, the one-text budget.
+ * Options are the isolated experiments: the shared standard of judgment,
+ * the owner's conversation line, the text voice, a length note, no search.
+ */
+function refined(id: AdvisorId, channel: "web" | "text", now: Date, o: { layer2?: boolean; judgment?: boolean; talk?: boolean; voice?: boolean; short?: boolean; search?: number } = {}): ContextBlock[] {
+  let core = privateFile(id, "-core")!;
+  if (channel === "text") core = core.replace(", and this app keeps nothing between visits, so don't claim to remember anything from before this conversation", "");
+  const found = privateFile(id, o.layer2 ? "-l2" : "")!;
+  const searches = o.search ?? 0;
+  const status = searches > 0
+    ? `Web search is available for this answer, up to ${searches} searches. Use it when a fact would change the advice; many messages need none. If the limit is reached, the search tool says so: this answer's searches are used up, and search is not broken. Say plainly what you couldn't check.${channel === "web" ? " On the website your sources are listed under your answer." : ""}`
+    : "Web search isn't available here. Anything about hours, closures or bookings is from memory: say so when it matters to the decision.";
+  const safeguards = [
+    "If there are photos, refer only to what you can actually see.",
+    "When someone wants a plan, make sure it works: opening hours, the time between stops, bookings.",
+  ];
+  const notes = productionText(id, { webSearch: false }).find((b) => b.label === "channel_notes")!;
+  const sentences = notes.body.split("\n").flatMap(splitSentences);
+  const web: string[] = ["In conversation, prefer prose. Use lists or headings when they genuinely help."];
+  if (o.talk) web.push(TALK_LINE);
+  if (o.voice) web.push(...sentences.filter((x) => /^Write like a well-informed friend/.test(x)));
+  if (o.short) web.push("Keep replies short, a few sentences, unless the person wants more.");
+  const channelBlock = channel === "text"
+    ? block("channel_notes", "CHANNEL NOTES", [TEXT_NOTE, sentences.find((x) => /^Here every answer is one short text/.test(x))].filter(Boolean).join("\n"))
+    : block("channel_notes", "CHANNEL NOTES", web.join("\n"));
+  return [
+    block("system_prompt", "SYSTEM PROMPT", core),
+    block("foundation", "WHAT INFORMS YOUR JUDGMENT", found),
+    ...(o.judgment ? [judgment()] : []),
+    block("search_status", "SEARCH STATUS", status),
+    channelBlock,
+    block("safeguards", "SAFEGUARDS", safeguards.join("\n")),
+    constants(),
+    dateBlock(now),
+  ];
+}
 
 /** The owner-requested distilled brief (FOUNDATION_DIR/<id>-distilled.md, private), with the foundation, the safeguards and, by text, only the length budget. */
 function distilledBrief(id: AdvisorId): string | null {
@@ -484,6 +541,17 @@ CONFIGS.push(
   { id: "WR", name: "Distilled brief, the foundation and the safeguards, on the website (web search on)", family: "end-to-end", textPipeline: false, webSearch: true, system: (id, now) => distilled(id, "web", now) },
   { id: "AR", name: "Distilled brief, the foundation and the safeguards, by text", family: "controlled", textPipeline: true, webSearch: false, system: (id, now) => distilled(id, "text", now) },
   { id: "WBE", name: "Production's brief with the foundation and nothing else, on the website (web search on)", family: "end-to-end", textPipeline: false, webSearch: true, system: (id, now) => [website(id, true, now)[0], foundation(id)!, constants(), dateBlock(now)] },
+  { id: "W1", name: "Refined C on the website (8 searches)", family: "end-to-end", textPipeline: false, webSearch: true, system: (id, now) => refined(id, "web", now, { search: 8 }) },
+  { id: "W1L", name: "W1 with the second layer of the foundation", family: "end-to-end", textPipeline: false, webSearch: true, system: (id, now) => refined(id, "web", now, { search: 8, layer2: true }) },
+  { id: "W1T", name: "W1 with the owner's line: not every message is a request", family: "end-to-end", textPipeline: false, webSearch: true, system: (id, now) => refined(id, "web", now, { search: 8, talk: true }) },
+  { id: "W1N", name: "W1 without web search (is research orchestration the difference?)", family: "controlled", textPipeline: false, webSearch: false, system: (id, now) => refined(id, "web", now, { search: 0 }) },
+  { id: "W1V", name: "W1 with the text channel's voice sentence (is the text voice the difference?)", family: "end-to-end", textPipeline: false, webSearch: true, system: (id, now) => refined(id, "web", now, { search: 8, voice: true }) },
+  { id: "W1S", name: "W1 with a short-reply note (is brevity the difference?)", family: "end-to-end", textPipeline: false, webSearch: true, system: (id, now) => refined(id, "web", now, { search: 8, short: true }) },
+  { id: "W1X", name: "W1 with only 2 searches (research exhausted)", family: "end-to-end", textPipeline: false, webSearch: true, maxSearches: 2, system: (id, now) => refined(id, "web", now, { search: 2 }) },
+  { id: "WEX", name: "WE (current Amar with the foundation) with only 2 searches", family: "end-to-end", textPipeline: false, webSearch: true, maxSearches: 2, system: (id, now) => afterBrief(website(id, true, now), foundation(id)) },
+  { id: "A1", name: "Refined C by text", family: "controlled", textPipeline: true, webSearch: false, system: (id, now) => refined(id, "text", now) },
+  { id: "A1L", name: "A1 with the second layer of the foundation", family: "controlled", textPipeline: true, webSearch: false, system: (id, now) => refined(id, "text", now, { layer2: true }) },
+  { id: "A1J", name: "A1 with the shared standard of judgment", family: "controlled", textPipeline: true, webSearch: false, system: (id, now) => refined(id, "text", now, { judgment: true }) },
 );
 
 export function configsFor(advisor: AdvisorId, ids?: string[] | null): Config[] {
@@ -496,6 +564,8 @@ export function configsFor(advisor: AdvisorId, ids?: string[] | null): Config[] 
       (hasPhilosophy || !["AF", "DF"].includes(c.id)) &&
       (hasFoundation || !["DE", "OE", "AE", "RF", "WE", "WFE", "GE", "GSE", "ACE", "WBE"].includes(c.id)) &&
       (!!distilledBrief(advisor) || !["WR", "AR"].includes(c.id)) &&
+      (!!privateFile(advisor, "-core") || !["W1", "W1L", "W1T", "W1N", "W1V", "W1S", "W1X", "A1", "A1L", "A1J"].includes(c.id)) &&
+      (hasFoundation || c.id !== "WEX") &&
       (c.id !== "H" || !!process.env.BRIEF_VERSION),
   );
 }

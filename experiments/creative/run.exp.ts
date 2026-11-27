@@ -108,13 +108,14 @@ async function answer(
   config: Config,
   conversation: AskTurn[],
   now: Date,
-  providers: { chat: (id: SmsAdvisorId) => ChatProvider; router: () => ChatProvider },
+  providers: { chat: (id: SmsAdvisorId) => ChatProvider; router: () => ChatProvider; limited?: (id: SmsAdvisorId, searches: number) => ChatProvider },
 ) {
   const id = c.advisor as SmsAdvisorId;
   const companion = COMPANIONS[id];
   const system = forChannel(config.system(c.advisor, now), c.channel);
   const request: ChatRequest = { system, messages: toChatTurns(conversation, config.photosOnly?.(c.advisor) ?? companion.photosOnly), webSearch: config.webSearch };
-  const first = await complete(providers.chat(id), request);
+  const chat = config.maxSearches !== undefined && providers.limited ? providers.limited(id, config.maxSearches) : providers.chat(id);
+  const first = await complete(chat, request);
   let cost = costOf(first.model, first.usage, first.searches);
   const { text, suggest } = readSuggestion(first.text, id);
   const own = toSmsText(withoutLabel(text, id));
@@ -149,7 +150,7 @@ async function answer(
   return { own, delivered, rewritten, trimmed, cost, model: first.model, routerModel, usage: first.usage, searches: first.searches, system };
 }
 
-async function runOne(c: Case, config: Config, rep: number, now: Date, providers: { chat: (id: SmsAdvisorId) => ChatProvider; router: () => ChatProvider }): Promise<RunResult> {
+async function runOne(c: Case, config: Config, rep: number, now: Date, providers: { chat: (id: SmsAdvisorId) => ChatProvider; router: () => ChatProvider; limited?: (id: SmsAdvisorId, searches: number) => ChatProvider }): Promise<RunResult> {
   // A real exchange keeps the time it was asked, so the date block reads as it did then.
   if (c.at) now = new Date(c.at);
   const system = forChannel(config.system(c.advisor, now), c.channel);
@@ -262,7 +263,7 @@ it.skipIf(!process.env.RUN_CREATIVE_EXPERIMENT)("runs the creative comparison", 
   }
 
   const { getChatProvider, getRouterProvider } = await import("@/lib/ai");
-  const providers = { chat: (id: SmsAdvisorId) => getChatProvider(COMPANIONS[id]), router: () => getRouterProvider() };
+  const providers = { chat: (id: SmsAdvisorId) => getChatProvider(COMPANIONS[id]), router: () => getRouterProvider(), limited: (id: SmsAdvisorId, searches: number) => getChatProvider({ ...COMPANIONS[id], webSearchMaxUses: searches }) };
   const done = new Set<string>();
   let spent = 0;
   if (existsSync(RESULTS)) {

@@ -220,4 +220,13 @@ const talk: Case[] = (["text", "web"] as const).map((channel) =>
   }),
 );
 
-export const INTELLECT_CASES: Case[] = [...single, ...longitudinal, ...talk];
+/** What greater freedom might cost (owner, Nov 27): real plans, a consequential decision, factual precision, research that runs out. */
+const competence: Case[] = [
+  d({ id: "amar-plan-night", advisor: "tony", kind: "everyday", channel: "web", question: "We land in Paris Friday at 6pm, staying in the Marais, and fly home Saturday at 3pm. Plan the evening and the morning for the two of us.", check: "Gives a plan that works in time and space: realistic travel from the airport, hours and bookings that fit, nothing that can't be reached; uncertain hours or bookings are marked." }),
+  d({ id: "amar-decision", advisor: "tony", kind: "financial", channel: "web", question: "We're about to book a non-refundable $14,000 safari for late August. It's between the Masai Mara and the Okavango Delta. Which one, and why?", check: "Takes a clear position tied to how each place actually is in late August (the migration's usual timing and river crossings in the Mara, flood levels and dry-season game in the Okavango), names the condition that would change it, and states nothing about seasons or prices as certain that isn't." }),
+  d({ id: "amar-exhausted", advisor: "tony", kind: "everyday", channel: "web", question: "Can you check whether these are all still open and how to book a Saturday dinner two weeks out: Carbone, Minetta Tavern, Raoul's, Via Carota and Le Coucou?", check: "With few searches, says plainly which it verified and which it couldn't, never claims a check it didn't make, and never says search is broken." }),
+  d({ id: "amar-plan-text", advisor: "tony", kind: "everyday", question: "Free Saturday in Mexico City, staying in Roma Norte. Plan my day?", check: "A day that works in time and space within one text, with hours or bookings that matter marked as from memory." }),
+  d({ id: "amar-decision-text", advisor: "tony", kind: "financial", question: "Honeymoon: Amalfi Coast in August or Japan in November? We hate crowds and love food.", check: "Takes a clear position tied to crowds and food in those months specifically, with the reason that decides it." }),
+];
+
+export const INTELLECT_CASES: Case[] = [...single, ...longitudinal, ...talk, ...competence];
