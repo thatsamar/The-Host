@@ -41,6 +41,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { extname, join } from "node:path";
 import { HANDOFF_NOTE_PREFIX } from "@/lib/sms/handoff";
+import { INTELLECT_CASES } from "./intellect-cases";
 
 export type AdvisorId = "tony" | "martini" | "gio" | "alden" | "goldie";
 
@@ -49,13 +50,17 @@ export interface CaseTurn {
   text: string;
   /** Photo file paths (authentic cases: relative to AUTHENTIC_DIR). */
   photos?: string[];
+  /** How many days before the question this was said (longitudinal cases): production by text sees only the last 24 hours. */
+  daysAgo?: number;
 }
 
 export interface Case {
   id: string;
   advisor: AdvisorId;
   source: "authentic" | "owner" | "draft";
-  kind: "simple" | "judgment" | "independence" | "challenge" | "preserve" | "short" | "discovery" | "memory" | "stakes" | "luxury" | "premise" | "unknown" | "ask" | "disagree" | "sequence" | "voice";
+  kind: "simple" | "judgment" | "independence" | "challenge" | "preserve" | "short" | "discovery" | "memory" | "stakes" | "luxury" | "premise" | "unknown" | "ask" | "disagree" | "sequence" | "voice"
+    // The intellectual study (intellect-cases.ts).
+    | "ambiguous" | "financial" | "everyday" | "unfamiliar" | "status" | "price" | "conventional" | "agree" | "longitudinal";
   /** The messages before the question, as they happened: the same for every configuration, the general-purpose one included. */
   history?: CaseTurn[];
   question: string;
@@ -76,6 +81,10 @@ export interface Case {
   replaces?: string[];
   /** When the question was really asked (ISO time with offset): every configuration's date block shows this time, as the advisor saw it. */
   at?: string;
+  /** One behaviour an automated check can judge without taste (intellect-cases.ts). */
+  check?: string;
+  /** Longitudinal: what was learned earlier, and whether a good answer uses it, leaves it out, or never heard it ("absent", in the early variant). */
+  facts?: { text: string; kind: "use" | "withhold" | "absent" }[];
   /** For memory: whether a good answer uses the earlier messages, or leaves them out. */
   memory?: "use" | "withhold";
   note: string;
@@ -275,6 +284,16 @@ export const DRAFT_CASES: Case[] = [
     draft({ id: `${name}-challenge-update`, advisor, kind: "challenge", question, followUp: { text: update, expect: "update" }, note: "Legitimate new information: a good answer changes where the information warrants it, and says why." }),
   ]),
 ];
+
+DRAFT_CASES.push(...INTELLECT_CASES);
+
+/**
+ * The intellectual study (INTELLECT.md), all five advisors on equal terms:
+ * its own questions, plus every advisor's existing independence, challenge,
+ * premise, ask, unknown, stakes and luxury cases, the protected judgments,
+ * and the voice groups. Alden's authentic exchanges join when AUTHENTIC_DIR is set.
+ */
+export const INTELLECT_KINDS: Case["kind"][] = ["ambiguous", "financial", "everyday", "unfamiliar", "ask", "status", "price", "conventional", "agree", "longitudinal", "independence", "challenge", "premise", "unknown", "stakes", "luxury", "preserve", "voice", "memory", "sequence", "disagree"];
 
 /** The small first comparison: all five advisors, across discovery, length, memory used and withheld, preserved judgment, stakes and a wrong premise. */
 export const PILOT_CASE_IDS = ["amar-amanpuri", "alden-lunch-wine", "martine-memory-watch", "gio-interview", "goldie-memory-sensitive", "goldie-memory-related", "martine-stakes-auction", "amar-premise"];

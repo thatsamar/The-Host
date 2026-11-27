@@ -21,25 +21,28 @@ import { fileURLToPath } from "node:url";
 import { it } from "vitest";
 import { toChatTurns, type AskTurn } from "@/lib/ask/prompt";
 import { COMPANIONS } from "@/lib/companions";
-import { callCost } from "@/lib/ops/rates";
 import { readSuggestion, offerText } from "@/lib/sms/handoff";
 import { speakerLabel, toSmsText } from "@/lib/sms/handler";
 import { SMS_ADVISORS, type SmsAdvisorId } from "@/lib/sms/navigation";
 import { answerBudget, answerFits, condensePrompt, roomForAnswer, shortAnswerText } from "@/lib/sms/short";
 import type { ChatProvider, ChatRequest } from "@/lib/ai/types";
-import { ALDEN_STUDY_IDS, loadCases, loadPhoto, PILOT_CASE_IDS, type Case, type CaseTurn } from "./cases";
+import { recentTurns } from "@/lib/sms/context";
+import type { SmsTurn } from "@/lib/sms/store";
+import { ALDEN_STUDY_IDS, INTELLECT_KINDS, loadCases, loadPhoto, PILOT_CASE_IDS, type Case, type CaseTurn } from "./cases";
+import { complete, costOf } from "./calls";
+import { judgeAll } from "./judges";
+import { renderIntellect } from "./report";
 import { configsFor, instructionSize, type Config } from "./configs";
 import { render } from "./render";
 
-const OUT = fileURLToPath(new URL("./out/", import.meta.url));
+// OUT_DIR keeps a study's results apart (e.g. out/intellect/); the default is out/.
+const OUT = process.env.OUT_DIR ? `${process.env.OUT_DIR.replace(/\/$/, "")}/` : fileURLToPath(new URL("./out/", import.meta.url));
 const RESULTS = `${OUT}results.jsonl`;
 const EXTRACTS = `${OUT}extracts.jsonl`;
 
 /** The neutral restatement: the judgment without the writing, for the substance page. */
 export const EXTRACT_PROMPT =
   "Restate the advice below as plain, neutral notes, in the same words for any writer: what is recommended (each thing, with any price given), the deciding reasons, what is rejected or advised against and why, and any question asked. Keep every specific name, number and condition exactly. Remove all style, voice, humor, warmth and flourish; add nothing, judge nothing, and keep it as short as the content allows. Plain lines starting with \"- \", no headings.";
-/** Assumed list price per web search, for the budget only (not in the rates table). */
-const SEARCH_USD = 0.01;
 
 export interface RunResult {
   key: string;
@@ -80,28 +83,24 @@ function withoutLabel(answer: string, advisorId: SmsAdvisorId): string {
   return answer.replace(new RegExp(String.raw`^\s*[*_]*${name}[*_]*\s*:[*_]*\s*`, "i"), "");
 }
 
-async function complete(provider: ChatProvider, request: ChatRequest): Promise<{ text: string; usage: Record<string, unknown>; model: string | null; searches: number }> {
-  let text = "";
-  let usage: Record<string, unknown> = {};
-  let model: string | null = null;
-  let searches = 0;
-  for await (const event of provider.streamChat(request)) {
-    if (event.type === "text") text += event.text;
-    else if (event.type === "done") {
-      usage = event.usage;
-      model = event.model;
-      searches = event.webSearches.length;
-    }
-  }
-  return { text, usage, model, searches };
-}
-
-const costOf = (model: string | null, usage: Record<string, unknown>, searches: number) => {
-  const n = (k: string) => (typeof usage[k] === "number" ? (usage[k] as number) : 0);
-  return (callCost({ model: model ?? undefined, input: n("input_tokens"), output: n("output_tokens"), cache_read: n("cache_read_input_tokens"), cache_write: n("cache_creation_input_tokens") }) ?? 0) + searches * SEARCH_USD;
-};
 
 const toAsk = (t: CaseTurn): AskTurn => ({ role: t.role, text: t.text, images: t.photos?.map(loadPhoto) });
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The earlier messages a configuration sees: all of them, none (G0, A0), or,
+ * for AW, what production by text really keeps: `recentTurns` over each
+ * turn's age. A turn with no `daysAgo` belongs to the same conversation.
+ */
+export function historyFor(c: Case, config: Config, now: Date): CaseTurn[] {
+  const history = c.history ?? [];
+  if (config.withoutHistory) return [];
+  if (!config.productionWindow) return history;
+  const stored: SmsTurn[] = history.map((t) => ({ role: t.role, text: t.text, at: now.getTime() - (t.daysAgo ?? 0) * DAY_MS }));
+  const kept = new Set(recentTurns(stored, now.getTime()).map((t) => t.text));
+  return history.filter((t) => kept.has(t.text));
+}
 
 /** One answer through the configuration: the advisor's own words, and what the person would receive. */
 async function answer(
@@ -173,7 +172,7 @@ async function runOne(c: Case, config: Config, rep: number, now: Date, providers
   try {
     // The same earlier messages and context for every configuration, the general-purpose one included; G0 is the ordinary assistant without them.
     const asked = c.material ? `${c.question}\n\n${c.material}` : c.question;
-    let conversation: AskTurn[] = [...(config.withoutHistory ? [] : (c.history ?? []).map(toAsk)), { role: "user", text: asked, images: c.photos?.map(loadPhoto) }];
+    let conversation: AskTurn[] = [...historyFor(c, config, now).map(toAsk), { role: "user", text: asked, images: c.photos?.map(loadPhoto) }];
     let result = await answer(c, config, conversation, now, providers);
     let cost = result.cost;
     let first: RunResult["first"];
@@ -234,15 +233,31 @@ it.skipIf(!process.env.RUN_CREATIVE_EXPERIMENT)("runs the creative comparison", 
   const caseIds = list(process.env.CASES);
   const configIds = list(process.env.CONFIGS);
   const all = loadCases();
-  const study = process.env.STUDY === "alden" ? ALDEN_STUDY_IDS : null;
-  const cases = all.filter((c) => (pilot ? PILOT_CASE_IDS.includes(c.id) : study ? study.includes(c.id) : !caseIds || caseIds.includes(c.id)));
-  const jobsFor = (rep: number) => cases.flatMap((c) => configsFor(c.advisor, configIds).map((cfg) => ({ c, cfg, rep })));
+  const study =
+    process.env.STUDY === "alden" ? ALDEN_STUDY_IDS : process.env.STUDY === "intellect" ? all.filter((c) => INTELLECT_KINDS.includes(c.kind) || c.source === "authentic").map((c) => c.id) : null;
+  const advisors = list(process.env.ADVISORS);
+  const cases = all.filter(
+    (c) => (pilot ? PILOT_CASE_IDS.includes(c.id) : study ? study.includes(c.id) && (!caseIds || caseIds.includes(c.id)) : !caseIds || caseIds.includes(c.id)) && (!advisors || advisors.includes(c.advisor)),
+  );
+  const jobsFor = (rep: number) => cases.flatMap((c) => configsFor(c.advisor, configIds).filter((cfg) => !cfg.needsHistory || c.history?.some((t) => t.daysAgo !== undefined) || (cfg.withoutHistory && !!c.history?.length)).map((cfg) => ({ c, cfg, rep })));
   const now = new Date();
 
   if (process.env.DRY_RUN) {
     const lines = jobsFor(1).map(({ c, cfg }) => `${c.id.padEnd(26)} ${cfg.id.padEnd(3)} ${String(instructionSize(cfg, c.advisor, now)).padStart(6)} chars of instructions${c.followUp ? "  (two turns)" : ""}${c.followUps ? `  (${c.followUps.length + 1} turns)` : ""}`);
     const calls = jobsFor(1).reduce((n, { c }) => n + 1 + (c.followUp ? 1 : 0) + (c.followUps?.length ?? 0), 0) * reps;
-    writeFileSync(`${OUT}dry-run.txt`, [...lines, "", `${calls} answer calls (${reps} repetitions), plus a rewrite call where a text-pipeline answer runs long.`].join("\n"));
+    // Cost per answer as measured in the Alden study (Nov 27): about $0.04 controlled, $0.07 with research; plus about $0.012 per automated check.
+    const est = jobsFor(1).reduce((n, { c, cfg }) => n + (1 + (c.followUp ? 1 : 0) + (c.followUps?.length ?? 0)) * (cfg.webSearch ? 0.07 : 0.04), 0) * reps;
+    const perConfig = jobsFor(1).reduce<Record<string, number>>((m, { cfg }) => ({ ...m, [cfg.id]: (m[cfg.id] ?? 0) + 1 }), {});
+    writeFileSync(
+      `${OUT}dry-run.txt`,
+      [
+        ...lines,
+        "",
+        `${cases.length} questions; per configuration: ${Object.entries(perConfig).map(([k, v]) => `${k} ${v}`).join(", ")}`,
+        `${calls} answer calls (${reps} repetitions), plus a rewrite call where a text-pipeline answer runs long.`,
+        `Estimated: $${est.toFixed(0)} for the answers, about $${(calls * 0.012 * 2).toFixed(0)} more for the automated checks.`,
+      ].join("\n"),
+    );
     return;
   }
 
@@ -306,4 +321,9 @@ it.skipIf(!process.env.RUN_CREATIVE_EXPERIMENT)("runs the creative comparison", 
     return;
   }
   render(OUT);
+  if (process.env.JUDGE) {
+    const judged = await judgeAll(OUT, cases, providers.router, budget - spent, () => providers.chat("alden"));
+    writeFileSync(`${OUT}spent.txt`, `$${(spent + judged).toFixed(2)} of $${budget} (checks $${judged.toFixed(2)})\n`);
+  }
+  if (process.env.STUDY === "intellect" || process.env.JUDGE) renderIntellect(OUT, cases);
 });

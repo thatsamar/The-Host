@@ -66,14 +66,19 @@
 import { existsSync, readFileSync } from "node:fs";
 import type { ContextBlock } from "@/lib/ai/types";
 import { assemblePrompt, dateBlock, type AskTurn } from "@/lib/ask/prompt";
+import { APP_JUDGMENT } from "@/lib/ask/prompt";
 import { COMPANIONS } from "@/lib/companions";
+import { cinqAdvisors } from "@/lib/companions/cinq";
 import type { Companion } from "@/lib/companions/types";
 import { shortTextVoice, textChannelNotes } from "@/lib/sms/handoff";
 import { answerBudget } from "@/lib/sms/short";
 import { speakerLabel } from "@/lib/sms/handler";
 import type { AdvisorId } from "./cases";
 
-export type ConfigId = "A" | "C" | "V" | "L" | "F" | "K" | "N" | "R" | "M" | "S" | "I" | "AF" | "X" | "D" | "DF" | "E" | "O" | "H" | "DE" | "OE" | "AE" | "G" | "G0" | "P" | "RS" | "PR" | "RF" | "DS";
+export type ConfigId =
+  | "A" | "C" | "V" | "L" | "F" | "K" | "N" | "R" | "M" | "S" | "I" | "AF" | "X" | "D" | "DF" | "E" | "O" | "H" | "DE" | "OE" | "AE" | "G" | "G0" | "P" | "RS" | "PR" | "RF" | "DS"
+  // The intellectual study (INTELLECT.md): sources of differentiation, and fair general-purpose baselines.
+  | "A0" | "AW" | "NJ" | "NX" | "DJ" | "DC" | "GJ" | "GS" | "G0S";
 
 export interface Config {
   id: ConfigId;
@@ -85,6 +90,10 @@ export interface Config {
   advisors?: AdvisorId[];
   /** G0: an ordinary general-purpose assistant, without the person's earlier messages (the follow-ups in a sequence still happen). */
   withoutHistory?: boolean;
+  /** AW: production's memory as it really is by text: only the last 24 hours of earlier messages (`recentTurns`), by each turn's `daysAgo`. */
+  productionWindow?: boolean;
+  /** Only where the case has earlier messages (A0, AW): elsewhere it would repeat A. */
+  needsHistory?: boolean;
   system: (advisor: AdvisorId, now: Date) => ContextBlock[];
 }
 
@@ -336,6 +345,34 @@ export const CONFIGS: Config[] = [
   { id: "RF", name: "P with the foundation material and research led by it", family: "end-to-end", textPipeline: true, webSearch: true, advisors: ["alden"], system: (id, now) => editResearchLed(id, afterBrief(productionText(id, { webSearch: true, now }), foundation(id))) },
   { id: "DS", name: "D with production web search", family: "end-to-end", textPipeline: false, webSearch: true, system: (id, now) => [brief(id), block("essentials", "ESSENTIALS", ESSENTIALS), constants(), dateBlock(now)] },
 ];
+
+/**
+ * The intellectual study (INTELLECT.md). Each isolates one source of
+ * differentiation, or gives the general-purpose baseline what Cinq has.
+ *   A0  A without the person's earlier messages: the value of memory to the advisor
+ *   AW  A with production's real memory: only the last 24 hours of earlier messages
+ *   NJ  A without APP_JUDGMENT, the shared standard of judgment (Cinq's shared philosophy in production)
+ *   NX  A without the shared paragraph about the other four advisors
+ *   DJ  D with APP_JUDGMENT: the brief and the shared standard, nothing else
+ *   DC  D with the advisor's own capabilities, without the shared layers
+ *   GJ  the general assistant with APP_JUDGMENT: what the shared standard does without a brief
+ *   GS  G with web search: a general assistant with the same personal context, research and safeguards
+ *   G0S G0 with web search: an ordinary assistant that can research
+ */
+const ownCapabilities = (id: AdvisorId) => COMPANIONS[id].capabilities(false).filter((line) => line !== cinqAdvisors(id)).join("\n");
+const judgment = () => block("judgment", "STANDARD OF JUDGMENT", APP_JUDGMENT);
+const removeFrom = (label: string, passage: string): Edit => (_id, blocks) => replaceIn(blocks, label, passage, "");
+CONFIGS.push(
+  { id: "A0", name: "Production's instructions by text, without the person's earlier messages", family: "controlled", textPipeline: true, webSearch: false, withoutHistory: true, needsHistory: true, system: (id, now) => variant(id, now, []) },
+  { id: "AW", name: "Production's instructions by text, with production's 24-hour memory", family: "controlled", textPipeline: true, webSearch: false, productionWindow: true, needsHistory: true, system: (id, now) => variant(id, now, []) },
+  { id: "NJ", name: "A without the shared standard of judgment", family: "controlled", textPipeline: true, webSearch: false, system: (id, now) => variant(id, now, [removeFrom("app_capabilities", `${APP_JUDGMENT}\n`)]) },
+  { id: "NX", name: "A without the paragraph about the other advisors", family: "controlled", textPipeline: true, webSearch: false, system: (id, now) => variant(id, now, [(i, b) => removeFrom("app_capabilities", `${cinqAdvisors(i)}\n`)(i, b)]) },
+  { id: "DJ", name: "The brief with the shared standard of judgment, essentials only", family: "controlled", textPipeline: false, webSearch: false, system: (id, now) => [brief(id), judgment(), block("essentials", "ESSENTIALS", ESSENTIALS), constants(), dateBlock(now)] },
+  { id: "DC", name: "The brief with its own capabilities, no shared layers", family: "controlled", textPipeline: false, webSearch: false, system: (id, now) => [brief(id), block("capabilities", "CAPABILITIES", ownCapabilities(id)), block("essentials", "ESSENTIALS", ESSENTIALS), constants(), dateBlock(now)] },
+  { id: "GJ", name: "A general-purpose assistant with the shared standard of judgment", family: "controlled", textPipeline: false, webSearch: false, system: (_id, now) => [general(now)[0], judgment(), ...general(now).slice(1)] },
+  { id: "GS", name: "A general-purpose assistant with the person's earlier messages and web search", family: "end-to-end", textPipeline: false, webSearch: true, system: (_id, now) => general(now) },
+  { id: "G0S", name: "An ordinary general-purpose assistant with web search, no earlier messages", family: "end-to-end", textPipeline: false, webSearch: true, withoutHistory: true, system: (_id, now) => general(now) },
+);
 
 export function configsFor(advisor: AdvisorId, ids?: string[] | null): Config[] {
   const hasPhilosophy = !!philosophy();
