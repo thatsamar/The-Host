@@ -136,6 +136,10 @@ export function summarize(cases: Case[], results: RunResult[], judgements: Judge
         });
         const consistency = mine("consistency");
         const convergence = mine("convergence");
+        const machinery = mine("machinery");
+        const mnum = (k: string) => mean(machinery.map((j) => num(j.data[k])).filter((x): x is number => x !== null));
+        const thread = mine("thread");
+        const threadYes = (k: string) => pct(thread.filter((j) => (j.data[k] as { verdict?: string } | undefined)?.verdict === "yes").length, thread.length);
         const facts = mine("facts").flatMap((j) => arr(j.data.claims) as { status?: string }[]);
         const score = (j: Judgement) => (j.data.verdict === "pass" ? 1 : j.data.verdict === "partly" ? 0.5 : 0);
         return {
@@ -158,6 +162,17 @@ export function summarize(cases: Case[], results: RunResult[], judgements: Judge
           sameRecommendationAsGeneral: pct(convergence.filter((j) => j.data.sameRecommendation === true).length, convergence.length),
           reasonOverlapWithGeneral: mean(convergence.map((j) => num(j.data.reasonOverlap)).filter((x): x is number => x !== null)),
           addsSomethingGeneralMissed: pct(convergence.filter((j) => typeof j.data.xNotInY === "string" && j.data.xNotInY.trim()).length, convergence.length),
+          sentences: mnum("sentences"),
+          researchNarration: mnum("researchNarration"),
+          logistics: mnum("logistics"),
+          repeats: mnum("repeats"),
+          ideas: mean(machinery.map((j) => arr(j.data.ideas).length)),
+          headingsOrLists: pct(machinery.filter((j) => j.data.headingsOrLists === true).length, machinery.length),
+          labelledEnding: pct(machinery.filter((j) => j.data.labelledEnding === true).length, machinery.length),
+          threadDeveloping: threadYes("developing"),
+          threadPossibilities: threadYes("possibilities"),
+          threadEmotional: threadYes("emotional"),
+          threadInterpretation: threadYes("interpretation"),
           factsChecked: facts.length,
           factsWrong: facts.filter((f) => f.status === "wrong").length,
         };

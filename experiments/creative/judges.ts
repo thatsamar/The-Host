@@ -16,6 +16,13 @@
  *   convergence  against the general-purpose answer to the same question (G
  *                for controlled, GS for end-to-end): the same recommendation and
  *                reasons, or a different way of seeing it? and what it adds
+ *   machinery    for conversational, website, agreement and sequence questions:
+ *                what the answer spends itself on, independent of length: research
+ *                narration, logistics, headings and lists, a labelled ending; and,
+ *                separately, the distinct ideas or possibilities it offers
+ *   thread       for a whole conversation (a sequence): flags, for the owner, whether
+ *                the advisor becomes more interesting as it goes, opens possibilities
+ *                the person didn't ask for, and understands the emotional side of it
  *   facts        (FACTCHECK=1) the specific checkable claims, verified with web
  *                search: correct, wrong or unverifiable
  *
@@ -31,7 +38,7 @@ import type { RunResult } from "./run.exp";
 
 export interface Judgement {
   key: string;
-  type: "integrity" | "check" | "memory" | "consistency" | "convergence" | "facts";
+  type: "integrity" | "check" | "memory" | "consistency" | "convergence" | "facts" | "machinery" | "thread";
   data: Record<string, unknown>;
   cost: number;
 }
@@ -60,6 +67,13 @@ function prompts(c: Case, r: RunResult, all: RunResult[]): { type: Judgement["ty
     key: r.key,
     body: `${context(c, r)}\n\nThe advisor answered:\n${answer}\n\nReturn {"claimedExperience": [quotes where the advisor claims to have personally been, tasted, worn, seen, met or done something], "overCertain": [specific facts (names, prices, dates, hours, availability, vintages, measurements, statistics) stated as certain that an expert could not know without checking, each quoted briefly], "unseen": [details the advisor claims to see in a photo or to have been told that the messages do not contain], "markedEstimates": true or false (whether uncertain specifics are marked as estimates or worth checking)}.`,
   });
+  if (["conversational", "agree", "sequence"].includes(c.kind) || c.channel === "web") {
+    out.push({
+      type: "machinery",
+      key: r.key,
+      body: `${context(c, r)}\n\nThe advisor answered:\n${answer}\n\nCount what the answer spends itself on; never judge quality. Return {"sentences": total sentences, "researchNarration": sentences about what was searched, checked, verified or found in sources, "logistics": sentences about hours, booking, prices, transport, packing or schedules, "headingsOrLists": true or false, "labelledEnding": true or false (a closing section such as "The call"), "repeats": sentences that restate an earlier point, "ideas": [each distinct observation, idea or possibility that goes beyond logistics, in a few words]}.`,
+    });
+  }
   if (c.check) {
     out.push({ type: "check", key: r.key, body: `${context(c, r)}\n\nThe advisor answered:\n${answer}\n\nCriterion: ${c.check}\n\nReturn {"verdict": "pass" | "partly" | "fail", "reason": one short sentence}.` });
   }
@@ -79,6 +93,14 @@ function prompts(c: Case, r: RunResult, all: RunResult[]): { type: Judgement["ty
       type: "memory",
       key: r.key,
       body: `${context(c, r)}\n\nThe advisor answered:\n${answer}\n\nFacts about the person:\n${c.facts.map((f, i) => `${i + 1}. ${f.text} (${f.kind === "use" ? "known to the advisor; a good answer is shaped by it" : f.kind === "withhold" ? "known to the advisor, sensitive and unrelated; a good answer leaves it out" : "NOT known to the advisor in this conversation"})`).join("\n")}\n\nFor each fact return whether the answer's advice is shaped by it ("used"), whether the answer explicitly mentions it or the earlier conversation ("mentioned"), and whether a mention would strike the person as reciting or intrusive ("intrusive"). Return {"facts": [{"n": 1, "used": true/false, "mentioned": true/false, "intrusive": true/false}, ...]}.`,
+    });
+  }
+  if (r.thread?.length) {
+    const convo = [...r.thread.map((t) => `Person: ${t.user}\nAdvisor: ${strip(t.delivered)}`), `Person: ${c.followUps?.at(-1)?.text ?? ""}\nAdvisor: ${answer}`].join("\n\n");
+    out.push({
+      type: "thread",
+      key: r.key,
+      body: `A whole conversation between a person and an advisor:\n\n${convo}\n\nThese are flags for a human judge, not a verdict. For each, answer "yes", "partly" or "no" with one short line of evidence quoted or paraphrased from the conversation: "developing" (does the advisor become more interesting or more insightful as the conversation goes, rather than repeating its approach?), "possibilities" (does it open possibilities the person didn't ask for but might value?), "emotional" (does it understand what the situation means to the person, beyond the logistics?), "interpretation" (does it read the human wish under each question rather than only its literal words?). Return {"developing": {"verdict": ..., "evidence": ...}, "possibilities": {...}, "emotional": {...}, "interpretation": {...}}.`,
     });
   }
   if (r.rep === 1) {
