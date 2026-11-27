@@ -81,6 +81,8 @@ export type ConfigId =
   | "A0" | "AW" | "NJ" | "NX" | "DJ" | "DC" | "GJ" | "GS" | "G0S"
   // The website, as production answers there: no text-only block, no length limit, no rewrite.
   | "W" | "WC"
+  // The owner's approved foundation (FOUNDATION_DIR), on the website, with the simplified variant, and given to a general assistant as plain context.
+  | "WE" | "WFE" | "GE" | "GSE" | "ACE"
   // Forced behaviour made conditional (FORCED-BEHAVIOUR.md): shared layers only, and with the owner's briefs too.
   | "WF" | "WFB" | "AC" | "ACB";
 
@@ -454,6 +456,11 @@ CONFIGS.push(
   { id: "WFB", name: "WF with the owner's-brief rows too (wording for the owner to approve)", family: "end-to-end", textPipeline: false, webSearch: true, photosOnly: forcedPhotos, system: (id, now) => forced(website(id, true, now), id, "web", true) },
   { id: "AC", name: "A with forced behaviour made conditional (shared layers)", family: "controlled", textPipeline: true, webSearch: false, photosOnly: forcedPhotos, system: (id, now) => forced(variant(id, now, []), id, "text", false) },
   { id: "ACB", name: "AC with the owner's-brief rows too (wording for the owner to approve)", family: "controlled", textPipeline: true, webSearch: false, photosOnly: forcedPhotos, system: (id, now) => forced(variant(id, now, []), id, "text", true) },
+  { id: "WE", name: "W with the advisor's foundation material", family: "end-to-end", textPipeline: false, webSearch: true, system: (id, now) => afterBrief(website(id, true, now), foundation(id)) },
+  { id: "WFE", name: "WF with the advisor's foundation material", family: "end-to-end", textPipeline: false, webSearch: true, photosOnly: forcedPhotos, system: (id, now) => forced(afterBrief(website(id, true, now), foundation(id)), id, "web", false) },
+  { id: "GE", name: "G given the advisor's foundation material as plain context", family: "controlled", textPipeline: false, webSearch: false, system: (id, now) => afterBrief(general(now), foundation(id)) },
+  { id: "GSE", name: "GS given the advisor's foundation material as plain context", family: "end-to-end", textPipeline: false, webSearch: true, system: (id, now) => afterBrief(general(now), foundation(id)) },
+  { id: "ACE", name: "AC with the advisor's foundation material", family: "controlled", textPipeline: true, webSearch: false, photosOnly: forcedPhotos, system: (id, now) => forced(afterBrief(variant(id, now, []), foundation(id)), id, "text", false) },
 );
 
 export function configsFor(advisor: AdvisorId, ids?: string[] | null): Config[] {
@@ -464,7 +471,7 @@ export function configsFor(advisor: AdvisorId, ids?: string[] | null): Config[] 
       (!ids || ids.includes(c.id)) &&
       (!c.advisors || c.advisors.includes(advisor)) &&
       (hasPhilosophy || !["AF", "DF"].includes(c.id)) &&
-      (hasFoundation || !["DE", "OE", "AE", "RF"].includes(c.id)) &&
+      (hasFoundation || !["DE", "OE", "AE", "RF", "WE", "WFE", "GE", "GSE", "ACE"].includes(c.id)) &&
       (c.id !== "H" || !!process.env.BRIEF_VERSION),
   );
 }
