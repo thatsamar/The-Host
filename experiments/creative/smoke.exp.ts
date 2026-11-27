@@ -1,0 +1,20 @@
+import { it, expect } from "vitest";
+import { mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { render } from "./render";
+it("renders pages from results", () => {
+  const dir = "experiments/creative/out-smoke/";
+  mkdirSync(dir, { recursive: true });
+  const base = { advisor: "tony", kind: "challenge", source: "owner", rep: 1, at: "", model: "m", routerModel: null, effort: "high", webSearch: false, instructionChars: 1, promptSha: "x", ms: 1, usage: {}, searches: 0, costUsd: 0.01, error: null };
+  const rows = ["A", "C", "D", "G", "P"].map((config) => ({ ...base, key: `amar-challenge-hold|${config}|1`, caseId: "amar-challenge-hold", config, family: config === "P" ? "end-to-end" : "controlled", own: "own <b>" + config, delivered: "Amar: delivered " + config, rewritten: config === "A", trimmed: false, first: { own: "first own", delivered: "first delivered", rewritten: false }, followUp: { text: "Are you sure?", expect: "hold" } }));
+  writeFileSync(dir + "results.jsonl", rows.map((r) => JSON.stringify(r)).join("\n"));
+  render(dir);
+  const blind = readFileSync(dir + "blind.html", "utf8");
+  expect(blind).toContain("Controlled comparisons");
+  expect(blind).toContain("Caved to pressure");
+  expect(blind).toContain("own &lt;b&gt;A");
+  expect(blind).not.toMatch(/>\s*A\s*</);
+  expect((blind.match(/class="r"/g) ?? []).length).toBe(6);
+  expect(readFileSync(dir + "rewrites.html", "utf8")).toContain("rewritten");
+  expect(readFileSync(dir + "key.html", "utf8")).toContain("amar-challenge-hold-c1");
+  rmSync(dir, { recursive: true });
+});
