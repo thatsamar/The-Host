@@ -89,6 +89,8 @@ export type ConfigId =
   | "W1" | "W1L" | "W1T" | "W1N" | "W1V" | "W1S" | "W1X" | "WEX" | "A1" | "A1L" | "A1J"
   // The fair general control by text: the foundation and the same one-text channel and pipeline as A1.
   | "GT"
+  // Refined C with the owner's three corrections (the confirmation run): W2, W2X (two searches), W2L (second layer), A2 by text.
+  | "W2" | "W2X" | "W2L" | "A2"
   // Forced behaviour made conditional (FORCED-BEHAVIOUR.md): shared layers only, and with the owner's briefs too.
   | "WF" | "WFB" | "AC" | "ACB";
 
@@ -240,6 +242,13 @@ function privateFile(id: AdvisorId, suffix: string): string | null {
   return file && existsSync(file) ? readFileSync(file, "utf8").trim() : null;
 }
 
+/** The owner's three corrections, as approved (Nov 27), verbatim. */
+export const CORRECTIONS = {
+  talk: "Not every message is a request. Sometimes someone is simply sharing a thought, expressing curiosity or continuing a conversation. Respond to what is happening between you rather than automatically turning it into a task.",
+  research: "Be precise about what you have verified, what you have learned from another source and what remains uncertain. Never overstate the research you have conducted.",
+  photo: "Distinguish what is visible in a photograph from what you infer or learn elsewhere. Never present an inference as an observation.",
+};
+
 /** The website conversation line the owner proposed (W1T), verbatim. */
 export const TALK_LINE = "Not every message is a request. Sometimes someone is simply sharing a thought, expressing curiosity or continuing a conversation. Respond to what is happening between you, rather than automatically turning it into a task.";
 
@@ -253,26 +262,26 @@ export const TALK_LINE = "Not every message is a request. Sometimes someone is s
  * Options are the isolated experiments: the shared standard of judgment,
  * the owner's conversation line, the text voice, a length note, no search.
  */
-function refined(id: AdvisorId, channel: "web" | "text", now: Date, o: { layer2?: boolean; judgment?: boolean; talk?: boolean; voice?: boolean; short?: boolean; search?: number } = {}): ContextBlock[] {
+function refined(id: AdvisorId, channel: "web" | "text", now: Date, o: { layer2?: boolean; judgment?: boolean; talk?: boolean; voice?: boolean; short?: boolean; search?: number; corrected?: boolean } = {}): ContextBlock[] {
   let core = privateFile(id, "-core")!;
   if (channel === "text") core = core.replace(", and this app keeps nothing between visits, so don't claim to remember anything from before this conversation", "");
   const found = privateFile(id, o.layer2 ? "-l2" : "")!;
   const searches = o.search ?? 0;
   const status = searches > 0
-    ? `Web search is available for this answer, up to ${searches} searches. Use it when a fact would change the advice; many messages need none. If the limit is reached, the search tool says so: this answer's searches are used up, and search is not broken. Say plainly what you couldn't check.${channel === "web" ? " On the website your sources are listed under your answer." : ""}`
+    ? `Web search is available for this answer, up to ${searches} searches. Use it when a fact would change the advice; many messages need none. If the limit is reached, the search tool says so: this answer's searches are used up, and search is not broken.${o.corrected ? "" : " Say plainly what you couldn't check."}${channel === "web" ? " On the website your sources are listed under your answer." : ""}`
     : "Web search isn't available here. Anything about hours, closures or bookings is from memory: say so when it matters to the decision.";
-  const safeguards = [
-    "If there are photos, refer only to what you can actually see.",
-    "When someone wants a plan, make sure it works: opening hours, the time between stops, bookings.",
-  ];
+  const safeguards = o.corrected
+    ? [CORRECTIONS.research, CORRECTIONS.photo, "When someone wants a plan, make sure it works: opening hours, the time between stops, bookings."]
+    : ["If there are photos, refer only to what you can actually see.", "When someone wants a plan, make sure it works: opening hours, the time between stops, bookings."];
   const notes = productionText(id, { webSearch: false }).find((b) => b.label === "channel_notes")!;
   const sentences = notes.body.split("\n").flatMap(splitSentences);
   const web: string[] = ["In conversation, prefer prose. Use lists or headings when they genuinely help."];
   if (o.talk) web.push(TALK_LINE);
+  if (o.corrected) web.push(CORRECTIONS.talk);
   if (o.voice) web.push(...sentences.filter((x) => /^Write like a well-informed friend/.test(x)));
   if (o.short) web.push("Keep replies short, a few sentences, unless the person wants more.");
   const channelBlock = channel === "text"
-    ? block("channel_notes", "CHANNEL NOTES", [TEXT_NOTE, sentences.find((x) => /^Here every answer is one short text/.test(x))].filter(Boolean).join("\n"))
+    ? block("channel_notes", "CHANNEL NOTES", [TEXT_NOTE, sentences.find((x) => /^Here every answer is one short text/.test(x)), o.corrected ? CORRECTIONS.talk : undefined].filter(Boolean).join("\n"))
     : block("channel_notes", "CHANNEL NOTES", web.join("\n"));
   return [
     block("system_prompt", "SYSTEM PROMPT", core),
@@ -554,6 +563,10 @@ CONFIGS.push(
   { id: "A1", name: "Refined C by text", family: "controlled", textPipeline: true, webSearch: false, system: (id, now) => refined(id, "text", now) },
   { id: "A1L", name: "A1 with the second layer of the foundation", family: "controlled", textPipeline: true, webSearch: false, system: (id, now) => refined(id, "text", now, { layer2: true }) },
   { id: "A1J", name: "A1 with the shared standard of judgment", family: "controlled", textPipeline: true, webSearch: false, system: (id, now) => refined(id, "text", now, { judgment: true }) },
+  { id: "W2", name: "Refined C with the owner's three corrections, website (8 searches)", family: "end-to-end", textPipeline: false, webSearch: true, system: (id, now) => refined(id, "web", now, { search: 8, corrected: true }) },
+  { id: "W2X", name: "W2 with only 2 searches (research exhausted)", family: "end-to-end", textPipeline: false, webSearch: true, maxSearches: 2, system: (id, now) => refined(id, "web", now, { search: 2, corrected: true }) },
+  { id: "W2L", name: "W2 with the second layer (experimental)", family: "end-to-end", textPipeline: false, webSearch: true, system: (id, now) => refined(id, "web", now, { search: 8, corrected: true, layer2: true }) },
+  { id: "A2", name: "Refined C with the owner's three corrections, by text", family: "controlled", textPipeline: true, webSearch: false, system: (id, now) => refined(id, "text", now, { corrected: true }) },
   { id: "GT", name: "General assistant with the foundation and the same text channel and pipeline as A1", family: "controlled", textPipeline: true, webSearch: false, system: (id, now) => {
     const notes = productionText(id, { webSearch: false }).find((b) => b.label === "channel_notes")!;
     const budgetLine = notes.body.split("\n").flatMap(splitSentences).find((x) => /^Here every answer is one short text/.test(x));
@@ -571,7 +584,7 @@ export function configsFor(advisor: AdvisorId, ids?: string[] | null): Config[] 
       (hasPhilosophy || !["AF", "DF"].includes(c.id)) &&
       (hasFoundation || !["DE", "OE", "AE", "RF", "WE", "WFE", "GE", "GSE", "ACE", "WBE"].includes(c.id)) &&
       (!!distilledBrief(advisor) || !["WR", "AR"].includes(c.id)) &&
-      (!!privateFile(advisor, "-core") || !["W1", "W1L", "W1T", "W1N", "W1V", "W1S", "W1X", "A1", "A1L", "A1J"].includes(c.id)) &&
+      (!!privateFile(advisor, "-core") || !["W1", "W1L", "W1T", "W1N", "W1V", "W1S", "W1X", "A1", "A1L", "A1J", "W2", "W2X", "W2L", "A2"].includes(c.id)) &&
       (hasFoundation || !["WEX", "GT"].includes(c.id)) &&
       (c.id !== "H" || !!process.env.BRIEF_VERSION),
   );
