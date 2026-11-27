@@ -78,7 +78,9 @@ import type { AdvisorId } from "./cases";
 export type ConfigId =
   | "A" | "C" | "V" | "L" | "F" | "K" | "N" | "R" | "M" | "S" | "I" | "AF" | "X" | "D" | "DF" | "E" | "O" | "H" | "DE" | "OE" | "AE" | "G" | "G0" | "P" | "RS" | "PR" | "RF" | "DS"
   // The intellectual study (INTELLECT.md): sources of differentiation, and fair general-purpose baselines.
-  | "A0" | "AW" | "NJ" | "NX" | "DJ" | "DC" | "GJ" | "GS" | "G0S";
+  | "A0" | "AW" | "NJ" | "NX" | "DJ" | "DC" | "GJ" | "GS" | "G0S"
+  // The website, as production answers there: no text-only block, no length limit, no rewrite.
+  | "W" | "WC";
 
 export interface Config {
   id: ConfigId;
@@ -374,6 +376,16 @@ CONFIGS.push(
   { id: "G0S", name: "An ordinary general-purpose assistant with web search, no earlier messages", family: "end-to-end", textPipeline: false, webSearch: true, withoutHistory: true, system: (_id, now) => general(now) },
 );
 
+/**
+ *   W   production on the website, exactly as today (web search on): for questions asked there
+ *   WC  W without web search (controlled): what research adds or takes away on the website
+ */
+const website = (id: AdvisorId, webSearch: boolean, now: Date) => assemblePrompt({ companion: COMPANIONS[id], turns: turn, webSearch, now }).system;
+CONFIGS.push(
+  { id: "W", name: "Production on the website, exactly as today (web search on)", family: "end-to-end", textPipeline: false, webSearch: true, system: (id, now) => website(id, true, now) },
+  { id: "WC", name: "Production on the website, without web search", family: "controlled", textPipeline: false, webSearch: false, system: (id, now) => [...website(id, false, now).filter((b) => b.label !== "current_date"), constants(), dateBlock(now)] },
+);
+
 export function configsFor(advisor: AdvisorId, ids?: string[] | null): Config[] {
   const hasPhilosophy = !!philosophy();
   const hasFoundation = !!foundation(advisor);
@@ -387,8 +399,16 @@ export function configsFor(advisor: AdvisorId, ids?: string[] | null): Config[] 
   );
 }
 
-export function instructionSize(config: Config, id: AdvisorId, now: Date): number {
-  return config.system(id, now).reduce((n, b) => n + b.body.length, 0);
+/** A question asked on the website: the "you are answering by text message" note comes out of the configurations that carry it. */
+export function forChannel(blocks: ContextBlock[], channel: "text" | "web" = "text"): ContextBlock[] {
+  if (channel === "text") return blocks;
+  return blocks
+    .map((b) => (b.body.includes(TEXT_NOTE) ? { ...b, body: b.body.split("\n").filter((l) => l !== TEXT_NOTE).join("\n") } : b))
+    .filter((b) => b.body.trim());
+}
+
+export function instructionSize(config: Config, id: AdvisorId, now: Date, channel: "text" | "web" = "text"): number {
+  return forChannel(config.system(id, now), channel).reduce((n, b) => n + b.body.length, 0);
 }
 
 export { splitSentences, channelWithout, isVoice, isShortText };

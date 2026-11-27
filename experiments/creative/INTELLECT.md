@@ -23,6 +23,30 @@ general-purpose AI would?
 | 8 | Factual integrity | `judges.ts`: claimed experience, specifics stated with more certainty than an expert could have, details not in the photo or message; `FACTCHECK=1` verifies the specific claims with web search; diligence rising with stakes |
 | 9 | Report before implementing | `report.html` and `report.json`: configuration-level results, per advisor and per kind, failed checks, repeatability, wrong facts; the owner's choices, once given, decide winning and losing examples |
 
+## The owner's New York conversation (Nov 27), and conversational intent
+
+The owner's real conversation with Amar on the website is an authentic case,
+kept outside the repository (`AUTHENTIC_DIR`): the whole five-question
+conversation replayed (`amar-ny-conversation`, every configuration answering
+each turn itself), and the three questions where production misread the
+person, each with production's real earlier answers as history:
+"what is disappearing from downtown" (`amar-ny-disappearing`), "what would you
+do differently if I were bringing my wife" (`amar-ny-wife`) and "what should I
+bring back to Austin" (`amar-ny-bring-back`). Their `check` states the owner's
+own reading of the failure. They are website questions (`channel: "web"`), so
+they run against W (production on the website, web search on), WC (the same
+without search), and the general-purpose baselines, without the text note.
+
+Each advisor also has a conversational question (`conversational`): a remark
+or a curious question, where a good answer talks rather than researching,
+planning or listing.
+
+Two investigations sit beside the study: `FORCED-BEHAVIOUR.md` (every
+instruction that compels an advisor to find fault, change something, offer an
+alternative, ask, summarize, show its research or show what it remembers) and
+`MEMORY.md` (from remembering to understanding). The founder interviews for
+the intellectual foundations are in `interviews/`.
+
 ## What is measured automatically, and what isn't
 
 The checks (`judges.ts`) flag; they never decide which answer is better.

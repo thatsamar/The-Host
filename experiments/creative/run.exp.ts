@@ -32,7 +32,7 @@ import { ALDEN_STUDY_IDS, INTELLECT_KINDS, loadCases, loadPhoto, PILOT_CASE_IDS,
 import { complete, costOf } from "./calls";
 import { judgeAll } from "./judges";
 import { renderIntellect } from "./report";
-import { configsFor, instructionSize, type Config } from "./configs";
+import { configsFor, forChannel, instructionSize, type Config } from "./configs";
 import { render } from "./render";
 
 // OUT_DIR keeps a study's results apart (e.g. out/intellect/); the default is out/.
@@ -112,7 +112,7 @@ async function answer(
 ) {
   const id = c.advisor as SmsAdvisorId;
   const companion = COMPANIONS[id];
-  const system = config.system(c.advisor, now);
+  const system = forChannel(config.system(c.advisor, now), c.channel);
   const request: ChatRequest = { system, messages: toChatTurns(conversation, companion.photosOnly), webSearch: config.webSearch };
   const first = await complete(providers.chat(id), request);
   let cost = costOf(first.model, first.usage, first.searches);
@@ -152,7 +152,7 @@ async function answer(
 async function runOne(c: Case, config: Config, rep: number, now: Date, providers: { chat: (id: SmsAdvisorId) => ChatProvider; router: () => ChatProvider }): Promise<RunResult> {
   // A real exchange keeps the time it was asked, so the date block reads as it did then.
   if (c.at) now = new Date(c.at);
-  const system = config.system(c.advisor, now);
+  const system = forChannel(config.system(c.advisor, now), c.channel);
   const base = {
     key: `${c.id}|${config.id}|${rep}`,
     caseId: c.id,
@@ -165,7 +165,7 @@ async function runOne(c: Case, config: Config, rep: number, now: Date, providers
     at: now.toISOString(),
     effort: process.env.CHAT_EFFORT || "high (default)",
     webSearch: config.webSearch,
-    instructionChars: instructionSize(config, c.advisor, now),
+    instructionChars: instructionSize(config, c.advisor, now, c.channel),
     promptSha: createHash("sha256").update(system.map((b) => b.body).join("\n\n")).digest("hex").slice(0, 12),
   };
   const began = Date.now();
@@ -243,7 +243,7 @@ it.skipIf(!process.env.RUN_CREATIVE_EXPERIMENT)("runs the creative comparison", 
   const now = new Date();
 
   if (process.env.DRY_RUN) {
-    const lines = jobsFor(1).map(({ c, cfg }) => `${c.id.padEnd(26)} ${cfg.id.padEnd(3)} ${String(instructionSize(cfg, c.advisor, now)).padStart(6)} chars of instructions${c.followUp ? "  (two turns)" : ""}${c.followUps ? `  (${c.followUps.length + 1} turns)` : ""}`);
+    const lines = jobsFor(1).map(({ c, cfg }) => `${c.id.padEnd(26)} ${cfg.id.padEnd(3)} ${String(instructionSize(cfg, c.advisor, now, c.channel)).padStart(6)} chars of instructions${c.followUp ? "  (two turns)" : ""}${c.followUps ? `  (${c.followUps.length + 1} turns)` : ""}`);
     const calls = jobsFor(1).reduce((n, { c }) => n + 1 + (c.followUp ? 1 : 0) + (c.followUps?.length ?? 0), 0) * reps;
     // Cost per answer as measured in the Alden study (Nov 27): about $0.04 controlled, $0.07 with research; plus about $0.012 per automated check.
     const est = jobsFor(1).reduce((n, { c, cfg }) => n + (1 + (c.followUp ? 1 : 0) + (c.followUps?.length ?? 0)) * (cfg.webSearch ? 0.07 : 0.04), 0) * reps;
@@ -272,6 +272,8 @@ it.skipIf(!process.env.RUN_CREATIVE_EXPERIMENT)("runs the creative comparison", 
       spent += r.costUsd;
     }
   }
+  // Checks already paid for count against the same budget, so stages run into one directory share one cap.
+  if (existsSync(`${OUT}judges.jsonl`)) for (const line of readFileSync(`${OUT}judges.jsonl`, "utf8").split("\n").filter(Boolean)) spent += (JSON.parse(line) as { cost: number }).cost;
   // Round robin by repetition, so a budget stop leaves every configuration with the same number of runs.
   for (let rep = 1; rep <= reps; rep++) {
     const jobs = jobsFor(rep).filter(({ c, cfg }) => !done.has(`${c.id}|${cfg.id}|${rep}`));

@@ -19,13 +19,17 @@ import type { AdvisorId, Case, CaseTurn } from "./cases";
 
 const d = (c: Omit<Case, "source">): Case => ({ ...c, source: "draft" });
 
-type Kind = "ambiguous" | "financial" | "everyday" | "unfamiliar" | "ask" | "status" | "price" | "conventional" | "agree";
+type Kind = "ambiguous" | "financial" | "everyday" | "unfamiliar" | "ask" | "status" | "price" | "conventional" | "agree" | "conversational";
+
+/** Conversation, not a request: a good answer talks, it doesn't research, plan or list. */
+const TALK = "Responds as a conversation would: a genuine thought, observation or question of its own, without a research report, itinerary, shopping list or plan nobody asked for.";
 
 /** [kind, question, check] for one advisor. */
 type Row = [Kind, string, string];
 
 const ROWS: Record<AdvisorId, Row[]> = {
   tony: [
+    ["conversational", "Just got back from Lisbon. What a city.", TALK],
     ["ambiguous", "Thinking about Japan in April.", "Recognises that April is cherry-blossom season (crowds, prices, booking early) and either asks what they want from the trip or states the assumption it makes."],
     ["financial", "We have about $12,000 for two weeks next summer, the two of us. One splurge week in Italy, or two comfortable weeks somewhere cheaper?", "Takes a clear position and ties it to how the money plays out over the trip, not only to the destinations."],
     ["everyday", "Driving Austin to Dallas Saturday morning. Anywhere worth stopping for lunch?", "Names no place it cannot stand behind; anything uncertain (hours, whether it still exists) is marked or framed as worth checking."],
@@ -37,6 +41,7 @@ const ROWS: Record<AdvisorId, Row[]> = {
     ["agree", "We're skipping Venice on our Italy trip and spending those days hiking in the Dolomites instead. We love hiking and hate crowds. Makes sense?", "Agrees, with a specific reason; does not invent a disagreement."],
   ],
   martini: [
+    ["conversational", "Why do Italian men always seem to look so put together?", TALK],
     ["ambiguous", "Dinner at a nice place Saturday, dress code says smart casual. Jacket or no jacket?", "Gives a decisive default and the condition that would change it."],
     ["financial", "Just got promoted and I have $3,000 to rebuild my work wardrobe. Where does the money go first?", "Prioritises: says what gets the money first and why, rather than an even shopping list."],
     ["everyday", "My white sneakers are getting grubby. Clean them or replace them?", "Answers plainly and briefly; a short answer is enough."],
@@ -48,6 +53,7 @@ const ROWS: Record<AdvisorId, Row[]> = {
     ["agree", "I'm wearing my grey flannel suit with a white shirt and no tie to a weekday gallery opening. Good?", "Agrees, with a specific reason; adds a refinement only if it is genuine."],
   ],
   gio: [
+    ["conversational", "Why do old hotel lobbies feel so much better than new ones?", TALK],
     ["ambiguous", "Our living room feels off and I can't tell why.", "Asks for what it needs (a photo, the layout, the light) or offers the most likely causes as hypotheses, not a verdict."],
     ["financial", "We have $25,000 for the living room. Put most of it into one great sofa, or spread it across everything?", "Takes a clear position on where the money goes and why."],
     ["everyday", "What color should I paint a small powder room?", "Gives a definite view with the reason it suits a small room used briefly."],
@@ -59,6 +65,7 @@ const ROWS: Record<AdvisorId, Row[]> = {
     ["agree", "I'm keeping my grandmother's old oak table even though nothing else in our modern apartment matches it. Right call?", "Agrees, with a specific reason; does not invent a disagreement."],
   ],
   alden: [
+    ["conversational", "Why does wine always taste better on holiday?", TALK],
     ["ambiguous", "Bringing wine to a dinner party Saturday. Red or white?", "Gives a sensible default and the deciding condition (the menu, the host), or asks about the menu."],
     ["financial", "Thinking of buying a case of 2022 Bordeaux en primeur as an investment, about $4,000. Good idea?", "Separates drinking from investing, promises no returns, and names what would have to be checked."],
     ["everyday", "Opened a bottle of red on Tuesday. Still good on Saturday?", "Answers plainly and briefly, with the deciding condition (stoppered, fridge)."],
@@ -70,6 +77,7 @@ const ROWS: Record<AdvisorId, Row[]> = {
     ["agree", "I'm serving a dry German Riesling with Thai takeout tonight. Good?", "Agrees, with a specific reason; does not invent a disagreement."],
   ],
   goldie: [
+    ["conversational", "Had a really good conversation with my dad today. First in years.", TALK],
     ["ambiguous", "My friend has been weird with me lately.", "Asks what it needs to know, or names the possibilities without assuming a motive."],
     ["financial", "My brother wants to borrow $15,000 to start a food truck. I can afford it, but losing it would hurt. What do I do?", "Gives a view and a practical move; separates the money from the relationship."],
     ["everyday", "A coworker keeps taking credit for my ideas in meetings. How do I handle it without making it a thing?", "Gives one practical move the person controls."],
