@@ -87,6 +87,8 @@ export type ConfigId =
   | "WR" | "AR" | "WBE"
   // Refined C, the working experimental architecture (owner, Nov 27): see refined() below.
   | "W1" | "W1L" | "W1T" | "W1N" | "W1V" | "W1S" | "W1X" | "WEX" | "A1" | "A1L" | "A1J"
+  // The fair general control by text: the foundation and the same one-text channel and pipeline as A1.
+  | "GT"
   // Forced behaviour made conditional (FORCED-BEHAVIOUR.md): shared layers only, and with the owner's briefs too.
   | "WF" | "WFB" | "AC" | "ACB";
 
@@ -552,6 +554,11 @@ CONFIGS.push(
   { id: "A1", name: "Refined C by text", family: "controlled", textPipeline: true, webSearch: false, system: (id, now) => refined(id, "text", now) },
   { id: "A1L", name: "A1 with the second layer of the foundation", family: "controlled", textPipeline: true, webSearch: false, system: (id, now) => refined(id, "text", now, { layer2: true }) },
   { id: "A1J", name: "A1 with the shared standard of judgment", family: "controlled", textPipeline: true, webSearch: false, system: (id, now) => refined(id, "text", now, { judgment: true }) },
+  { id: "GT", name: "General assistant with the foundation and the same text channel and pipeline as A1", family: "controlled", textPipeline: true, webSearch: false, system: (id, now) => {
+    const notes = productionText(id, { webSearch: false }).find((b) => b.label === "channel_notes")!;
+    const budgetLine = notes.body.split("\n").flatMap(splitSentences).find((x) => /^Here every answer is one short text/.test(x));
+    return [general(now)[0], foundation(id)!, block("channel_notes", "CHANNEL NOTES", [TEXT_NOTE, budgetLine].filter(Boolean).join("\n")), constants(), dateBlock(now)];
+  } },
 );
 
 export function configsFor(advisor: AdvisorId, ids?: string[] | null): Config[] {
@@ -565,7 +572,7 @@ export function configsFor(advisor: AdvisorId, ids?: string[] | null): Config[] 
       (hasFoundation || !["DE", "OE", "AE", "RF", "WE", "WFE", "GE", "GSE", "ACE", "WBE"].includes(c.id)) &&
       (!!distilledBrief(advisor) || !["WR", "AR"].includes(c.id)) &&
       (!!privateFile(advisor, "-core") || !["W1", "W1L", "W1T", "W1N", "W1V", "W1S", "W1X", "A1", "A1L", "A1J"].includes(c.id)) &&
-      (hasFoundation || c.id !== "WEX") &&
+      (hasFoundation || !["WEX", "GT"].includes(c.id)) &&
       (c.id !== "H" || !!process.env.BRIEF_VERSION),
   );
 }
