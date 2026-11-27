@@ -113,7 +113,7 @@ async function answer(
   const id = c.advisor as SmsAdvisorId;
   const companion = COMPANIONS[id];
   const system = forChannel(config.system(c.advisor, now), c.channel);
-  const request: ChatRequest = { system, messages: toChatTurns(conversation, companion.photosOnly), webSearch: config.webSearch };
+  const request: ChatRequest = { system, messages: toChatTurns(conversation, config.photosOnly?.(c.advisor) ?? companion.photosOnly), webSearch: config.webSearch };
   const first = await complete(providers.chat(id), request);
   let cost = costOf(first.model, first.usage, first.searches);
   const { text, suggest } = readSuggestion(first.text, id);
@@ -239,7 +239,7 @@ it.skipIf(!process.env.RUN_CREATIVE_EXPERIMENT)("runs the creative comparison", 
   const cases = all.filter(
     (c) => (pilot ? PILOT_CASE_IDS.includes(c.id) : study ? study.includes(c.id) && (!caseIds || caseIds.includes(c.id)) : !caseIds || caseIds.includes(c.id)) && (!advisors || advisors.includes(c.advisor)),
   );
-  const jobsFor = (rep: number) => cases.flatMap((c) => configsFor(c.advisor, configIds).filter((cfg) => !cfg.needsHistory || c.history?.some((t) => t.daysAgo !== undefined) || (cfg.withoutHistory && !!c.history?.length)).map((cfg) => ({ c, cfg, rep })));
+  const jobsFor = (rep: number) => cases.flatMap((c) => configsFor(c.advisor, configIds).filter((cfg) => (c.channel === "web" ? /^(W|G)/.test(cfg.id) : !cfg.id.startsWith("W"))).filter((cfg) => !cfg.needsHistory || c.history?.some((t) => t.daysAgo !== undefined) || (cfg.withoutHistory && !!c.history?.length)).map((cfg) => ({ c, cfg, rep })));
   const now = new Date();
 
   if (process.env.DRY_RUN) {

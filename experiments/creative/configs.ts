@@ -80,7 +80,9 @@ export type ConfigId =
   // The intellectual study (INTELLECT.md): sources of differentiation, and fair general-purpose baselines.
   | "A0" | "AW" | "NJ" | "NX" | "DJ" | "DC" | "GJ" | "GS" | "G0S"
   // The website, as production answers there: no text-only block, no length limit, no rewrite.
-  | "W" | "WC";
+  | "W" | "WC"
+  // Forced behaviour made conditional (FORCED-BEHAVIOUR.md): shared layers only, and with the owner's briefs too.
+  | "WF" | "WFB" | "AC" | "ACB";
 
 export interface Config {
   id: ConfigId;
@@ -94,6 +96,8 @@ export interface Config {
   withoutHistory?: boolean;
   /** AW: production's memory as it really is by text: only the last 24 hours of earlier messages (`recentTurns`), by each turn's `daysAgo`. */
   productionWindow?: boolean;
+  /** The photo-only prompt, where a configuration changes it (each advisor's `photosOnly`). */
+  photosOnly?: (advisor: AdvisorId) => ((count: number) => string) | undefined;
   /** Only where the case has earlier messages (A0, AW): elsewhere it would repeat A. */
   needsHistory?: boolean;
   system: (advisor: AdvisorId, now: Date) => ContextBlock[];
@@ -384,6 +388,72 @@ const website = (id: AdvisorId, webSearch: boolean, now: Date) => assemblePrompt
 CONFIGS.push(
   { id: "W", name: "Production on the website, exactly as today (web search on)", family: "end-to-end", textPipeline: false, webSearch: true, system: (id, now) => website(id, true, now) },
   { id: "WC", name: "Production on the website, without web search", family: "controlled", textPipeline: false, webSearch: false, system: (id, now) => [...website(id, false, now).filter((b) => b.label !== "current_date"), constants(), dateBlock(now)] },
+);
+
+/**
+ * Forced behaviour made conditional (FORCED-BEHAVIOUR.md, Part 3). Each
+ * passage is production's exact wording, and fails loudly if it moves.
+ *   WF  W with the shared-layer rows (#1-12) and the website sources line (#25)
+ *   WFB WF with the owner's-brief rows too (#13-24): evidence only; the wording is his to approve
+ *   AC  A with the shared-layer rows, and the text line about research (#25, text)
+ *   ACB AC with the owner's-brief rows
+ */
+type Swap = [from: string, to: string];
+export const FORCED_SHARED: Swap[] = [
+  ["Notice something consequential, explain why it matters, and make a call.", "Notice what is consequential, if anything is, explain why it matters, and give your view."],
+  ["mistake a forceful tone for sound judgment.", "mistake a forceful tone for sound judgment. Not every message asks for advice: when someone is curious, reflecting or just talking, answer as a conversation, and give a recommendation or a plan only when that is what they want."],
+  ["Put the substance in the reply itself, in full: plans, measurements, quantities, schedules, lists and tables, and when a layout helps", "When the person needs plans, measurements, quantities, schedules, lists or tables, put them in the reply itself, in full, and when a layout helps"],
+  ["For a substantial answer, when it would help the person act, you may end", "Only when the person has a decision to make or an action to take that the answer would otherwise leave unclear, you may end"],
+  ["Say briefly what you checked. Anything you didn't check is from memory: say so when it matters.", "Don't describe your research; mention what you could not confirm only when it would change the plan."],
+  ["End once. If you close with The call, it is your only ending, in a sentence or two, and nothing comes after it.", "End once."],
+  ["then the one change that makes the outfit work where it is going.", "then, if something isn't working, the one change that makes the outfit work where it is going; if it already works, say so and why."],
+  ["what's working, what isn't, and what to change first.", "what's working, and what, if anything, to change first."],
+  ["and recommend one practical next step", "and, when a step is called for, recommend one practical next step"],
+  ["(a name, a detail, a clear call)", "(a name, a detail, a clear view)"],
+  ["no headings or bullet lists.", "no headings, bullet lists or The call label."],
+];
+/** Alden's capabilities line (row 6); the same sentence in his brief is row 13. */
+const ALDEN_VERIFIED: Swap = ["Briefly say what you verified.", "Mention what you verified only when it changes the choice."];
+export const FORCED_PHOTOS: Swap[] = [
+  ["your read of it, and the one change that makes it work.", "your read of it, and, if it needs one, the one change that makes it work."],
+];
+export const FORCED_BRIEFS: Swap[] = [
+  ["Then say why that choice beats the nearest plausible alternative", "Then say why, and why it beats the nearest plausible alternative when that alternative is a real temptation"],
+  ["Then name the one change that makes the outfit work", "If it needs one, then name the one change that makes the outfit work"],
+  ["Identify the highest-leverage move first.", "Identify the highest-leverage move first, if there is one."],
+  ["look for the move that adds personality", "see whether a move would add personality"],
+  ["If yes, look harder.", "If the answer to the last question is yes, look harder."],
+  ["For any occasion, tell me the level of effort required.", "For an occasion, tell me the level of effort it calls for when that isn't obvious."],
+  ["first identify the wardrobe problem.", "first understand what the purchase is for."],
+  ["Classify decisions as invest, save, or skip.", "When someone is deciding what to buy, classify it as invest, save, or skip."],
+  ["Explain what each recommendation is for, when to go, who to bring, what to order or notice, and what mistake to avoid.", "Explain what each recommendation is for, and whichever of when to go, who to bring, what to order or notice, or what mistake to avoid would actually help."],
+  ["End with the one move you would make.", "End with the one move you would make, when there is one to make now."],
+  ["show who is absorbing the cost and what needs to give", "when someone is absorbing the cost, show who, and what needs to give"],
+];
+export const SOURCES_WEB = "On the website your sources are listed under your answer; keep in the answer only the uncertainties that matter to the decision.";
+export const SOURCES_TEXT = "Nothing shows your sources here; mention research only if an uncertainty changes the advice.";
+
+const swapAll = (blocks: ContextBlock[], swaps: Swap[], labels?: string[]) =>
+  blocks.map((b) => (labels && !labels.includes(b.label) ? b : { ...b, body: swaps.reduce((body, [from, to]) => body.split(from).join(to), b.body) }));
+function forced(blocks: ContextBlock[], id: AdvisorId, channel: "web" | "text", withBriefs: boolean): ContextBlock[] {
+  let out = swapAll(blocks, FORCED_SHARED, ["app_capabilities", "channel_notes"]);
+  out = swapAll(out, [[ALDEN_VERIFIED[0], ALDEN_VERIFIED[1]]], ["app_capabilities"]);
+  if (withBriefs) out = swapAll(out, [...FORCED_BRIEFS, ALDEN_VERIFIED], ["system_prompt", "app_capabilities"]);
+  if (id === "tony" || id === "alden") {
+    const note = channel === "web" ? SOURCES_WEB : SOURCES_TEXT;
+    out = out.map((b) => (b.label === (channel === "web" ? "app_capabilities" : "channel_notes") ? { ...b, body: `${b.body}\n${note}` } : b));
+  }
+  return out;
+}
+const forcedPhotos = (id: AdvisorId) => {
+  const base = COMPANIONS[id].photosOnly;
+  return (count: number) => FORCED_PHOTOS.reduce((t, [from, to]) => t.split(from).join(to), base(count));
+};
+CONFIGS.push(
+  { id: "WF", name: "Website production with forced behaviour made conditional (shared layers)", family: "end-to-end", textPipeline: false, webSearch: true, photosOnly: forcedPhotos, system: (id, now) => forced(website(id, true, now), id, "web", false) },
+  { id: "WFB", name: "WF with the owner's-brief rows too (wording for the owner to approve)", family: "end-to-end", textPipeline: false, webSearch: true, photosOnly: forcedPhotos, system: (id, now) => forced(website(id, true, now), id, "web", true) },
+  { id: "AC", name: "A with forced behaviour made conditional (shared layers)", family: "controlled", textPipeline: true, webSearch: false, photosOnly: forcedPhotos, system: (id, now) => forced(variant(id, now, []), id, "text", false) },
+  { id: "ACB", name: "AC with the owner's-brief rows too (wording for the owner to approve)", family: "controlled", textPipeline: true, webSearch: false, photosOnly: forcedPhotos, system: (id, now) => forced(variant(id, now, []), id, "text", true) },
 );
 
 export function configsFor(advisor: AdvisorId, ids?: string[] | null): Config[] {
