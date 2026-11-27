@@ -43,9 +43,19 @@
  * qualities are already in the briefs and are being diluted, so the
  * variants remove or correct what dilutes them.
  *
+ * The intellectual foundation (FOUNDATION_DIR, outside the repository: one
+ * <advisor>.md per advisor, written or approved by the owner). Without it
+ * these don't run. It goes right after the brief, as what informs the
+ * advisor's thinking, never as a catalogue of approved recommendations.
+ *   DE D with the advisor's foundation material
+ *   OE O (the original brief) with the foundation material
+ *   AE A (production) with the foundation material
+ *
  * End-to-end: what a person would actually get, research included.
  *   P  production by text exactly as it is today (web search on)
  *   RS P with research as the advisor's resource (R's change, web search on)
+ *   PR P with research led by the advisor's point of view (Alden first)
+ *   RF P with the foundation material and research led by it
  *   DS D with the advisor's production web search
  *
  * A, C, V, F, K, N, R, M, S, I, AF, X, P and RS go through production's text
@@ -63,7 +73,7 @@ import { answerBudget } from "@/lib/sms/short";
 import { speakerLabel } from "@/lib/sms/handler";
 import type { AdvisorId } from "./cases";
 
-export type ConfigId = "A" | "C" | "V" | "L" | "F" | "K" | "N" | "R" | "M" | "S" | "I" | "AF" | "X" | "D" | "DF" | "E" | "O" | "H" | "G" | "G0" | "P" | "RS" | "DS";
+export type ConfigId = "A" | "C" | "V" | "L" | "F" | "K" | "N" | "R" | "M" | "S" | "I" | "AF" | "X" | "D" | "DF" | "E" | "O" | "H" | "DE" | "OE" | "AE" | "G" | "G0" | "P" | "RS" | "PR" | "RF" | "DS";
 
 export interface Config {
   id: ConfigId;
@@ -189,6 +199,31 @@ const shapedBrief = (id: AdvisorId, prompt: string): string => (SHAPES[id] ?? []
 }, prompt);
 const editShape: Edit = (id, blocks) => editChecklist(id, blocks.map((b) => (b.label === "system_prompt" ? { ...b, body: shapedBrief(id, b.body) } : b)));
 
+/** The advisor's foundation material, from FOUNDATION_DIR (private, never in the repository). */
+function foundation(id: AdvisorId): ContextBlock | null {
+  const dir = process.env.FOUNDATION_DIR;
+  const file = dir ? `${dir.replace(/\/$/, "")}/${id}.md` : "";
+  if (!file || !existsSync(file)) return null;
+  return block("foundation", "WHAT INFORMS YOUR JUDGMENT", readFileSync(file, "utf8").trim());
+}
+const afterBrief = (blocks: ContextBlock[], extra: ContextBlock | null) => (extra ? [blocks[0], extra, ...blocks.slice(1)] : blocks);
+
+/**
+ * PR/RF: research led by the advisor's own point of view, not by ratings.
+ * Advisor-specific wording, replacing only the sentence that says when to
+ * search; Alden first, the others once his results are in.
+ */
+export const LED_RESEARCH: Partial<Record<AdvisorId, [string, string]>> = {
+  alden: [
+    "Use it when current facts affect the recommendation: a producer, bottling, vintage, ingredients, venue, availability or price.",
+    "Before you search, decide from what you know and value what you are looking for: the producers, regions, styles and traditions you would trust for this moment, and the obvious choice you would test against them. Search to check those facts and to find what you might be missing, from producers, importers, specialist merchants and regional sources rather than scores, rankings or \"best of\" lists. Judge what you find by your own standards; a high score or a famous label is a fact to weigh, never the reason.",
+  ],
+};
+const editResearchLed: Edit = (id, blocks) => {
+  const pair = LED_RESEARCH[id];
+  return pair ? replaceIn(blocks, "app_capabilities", ...pair) : blocks;
+};
+
 /** R: research is the advisor's resource, not its voice. */
 export const RESEARCH = {
   tonySearch: ["Say briefly what you checked. Anything you didn't check is from memory: say so when it matters.", "What you checked is for you: mention it only when it changes the advice, or when the person should confirm something themselves before relying on it."],
@@ -290,16 +325,29 @@ export const CONFIGS: Config[] = [
     webSearch: false,
     system: (id, now) => [block("system_prompt", "SYSTEM PROMPT", briefAt(id, process.env.BRIEF_VERSION ?? ORIGINAL_DATE).text), block("essentials", "ESSENTIALS", ESSENTIALS), constants(), dateBlock(now)],
   },
+  { id: "DE", name: "D with the advisor's foundation material", family: "controlled", textPipeline: false, webSearch: false, system: (id, now) => [brief(id), foundation(id)!, block("essentials", "ESSENTIALS", ESSENTIALS), constants(), dateBlock(now)] },
+  { id: "OE", name: "The original brief with the foundation material", family: "controlled", textPipeline: false, webSearch: false, system: (id, now) => [block("system_prompt", "SYSTEM PROMPT", briefAt(id, ORIGINAL_DATE).text), foundation(id)!, block("essentials", "ESSENTIALS", ESSENTIALS), constants(), dateBlock(now)] },
+  { id: "AE", name: "Production's instructions with the foundation material", family: "controlled", textPipeline: true, webSearch: false, system: (id, now) => [...afterBrief(productionText(id, { webSearch: false }), foundation(id)), constants(), dateBlock(now)] },
   { id: "G", name: "A general-purpose assistant, no brief, with the person's earlier messages", family: "controlled", textPipeline: false, webSearch: false, system: (_id, now) => general(now) },
   { id: "G0", name: "An ordinary general-purpose assistant: no brief, no earlier messages", family: "controlled", textPipeline: false, webSearch: false, withoutHistory: true, system: (_id, now) => general(now) },
   { id: "P", name: "Production by text, exactly as today (web search on)", family: "end-to-end", textPipeline: true, webSearch: true, system: (id, now) => productionText(id, { webSearch: true, now }) },
   { id: "RS", name: "P with research as the advisor's resource", family: "end-to-end", textPipeline: true, webSearch: true, advisors: ["tony", "alden"], system: (id, now) => editResearch(id, productionText(id, { webSearch: true, now })) },
+  { id: "PR", name: "P with research led by the advisor's point of view", family: "end-to-end", textPipeline: true, webSearch: true, advisors: ["alden"], system: (id, now) => editResearchLed(id, productionText(id, { webSearch: true, now })) },
+  { id: "RF", name: "P with the foundation material and research led by it", family: "end-to-end", textPipeline: true, webSearch: true, advisors: ["alden"], system: (id, now) => editResearchLed(id, afterBrief(productionText(id, { webSearch: true, now }), foundation(id))) },
   { id: "DS", name: "D with production web search", family: "end-to-end", textPipeline: false, webSearch: true, system: (id, now) => [brief(id), block("essentials", "ESSENTIALS", ESSENTIALS), constants(), dateBlock(now)] },
 ];
 
 export function configsFor(advisor: AdvisorId, ids?: string[] | null): Config[] {
   const hasPhilosophy = !!philosophy();
-  return CONFIGS.filter((c) => (!ids || ids.includes(c.id)) && (!c.advisors || c.advisors.includes(advisor)) && (hasPhilosophy || !["AF", "DF"].includes(c.id)) && (c.id !== "H" || !!process.env.BRIEF_VERSION));
+  const hasFoundation = !!foundation(advisor);
+  return CONFIGS.filter(
+    (c) =>
+      (!ids || ids.includes(c.id)) &&
+      (!c.advisors || c.advisors.includes(advisor)) &&
+      (hasPhilosophy || !["AF", "DF"].includes(c.id)) &&
+      (hasFoundation || !["DE", "OE", "AE", "RF"].includes(c.id)) &&
+      (c.id !== "H" || !!process.env.BRIEF_VERSION),
+  );
 }
 
 export function instructionSize(config: Config, id: AdvisorId, now: Date): number {

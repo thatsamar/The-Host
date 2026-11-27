@@ -66,6 +66,12 @@ export interface Case {
   followUps?: { text: string; later?: boolean }[];
   /** For voice: the cases asked the same question, to be shown together without names. */
   group?: string;
+  /**
+   * Material every configuration gets with the question, word for word: a
+   * transcribed list, prices, what the person has at home. Controlled
+   * comparisons use the same material, so a difference isn't research.
+   */
+  material?: string;
   /** For memory: whether a good answer uses the earlier messages, or leaves them out. */
   memory?: "use" | "withhold";
   note: string;
@@ -236,6 +242,21 @@ export const DRAFT_CASES: Case[] = [
     draft({ id: `voice-saturday-${advisor}`, advisor, kind: "voice", group: "saturday", question: "Free Saturday in Paris, no plans. What would you do with it?", note: "Shown with the other four advisors' answers, without names." }),
     draft({ id: `voice-birthday-${advisor}`, advisor, kind: "voice", group: "birthday", question: "My partner's birthday is next week and I've left it late. Help.", note: "Shown with the other four advisors' answers, without names." }),
   ]),
+  // Alden's real decisions (drafts until the owner's real lists, photos and prices replace them).
+  draft({
+    id: "alden-list",
+    advisor: "alden",
+    kind: "judgment",
+    question: "Dinner for two at a neighborhood Italian place: we're sharing burrata, then cacio e pepe and a whole roasted branzino. About $90 for the bottle. What do we order?",
+    material: "The list (by the bottle): Santa Margherita Pinot Grigio 2023 $58; Vietti Roero Arneis 2023 $62; Pieropan Soave Classico Calvarino 2021 $78; Benanti Etna Bianco 2022 $74; Gaja Ca'Marcanda Promis 2021 $120; La Spinetta Vermentino 2022 $64; Produttori del Barbaresco 2019 $96; Cos Frappato 2022 $82; Ferrari Brut NV $70; Ca' del Bosco Franciacorta Cuvée Prestige $110.",
+    note: "A real list replaces this. Does he find the bottle that belongs with this meal and earns its price, rather than the famous name?",
+  }),
+  draft({ id: "alden-gift", advisor: "alden", kind: "judgment", question: "My father-in-law knows a lot about wine and has a serious cellar. I want to bring a bottle to his 70th, around $150. What won't he already have, and will actually be glad to open?", note: "A gift for someone knowledgeable: prestige is the obvious trap." }),
+  draft({ id: "alden-two-prices", advisor: "alden", kind: "judgment", question: "For a steak dinner with old friends: the $45 Côtes du Rhône the shop recommended, or a $180 Châteauneuf-du-Pape from a famous house? Is the jump worth it?", note: "Two bottles far apart in price: when is the expensive one worth it, and when is the modest one more interesting?" }),
+  draft({ id: "alden-bar", advisor: "alden", kind: "discovery", question: "At a serious cocktail bar tonight, I always order an Old Fashioned. What should I ask the bartender for instead, and how do I ask?", note: "Discovering something unfamiliar in a bar, from a known taste." }),
+  draft({ id: "alden-dinner-six", advisor: "alden", kind: "judgment", question: "Six of us for dinner at home Saturday: one doesn't drink, two only drink white. Mushroom risotto, then lamb shoulder, then a lemon tart. Budget about $200 for everything.", note: "A real dinner: a group, a menu, a non-drinker, a budget." }),
+  draft({ id: "alden-home-bar", advisor: "alden", kind: "discovery", question: "Friends are coming in an hour. Make me something interesting from what I've got.", material: "At home: Rittenhouse rye, a bottle of Campari, sweet vermouth (opened two months ago, in the fridge), Cointreau, a dusty bottle of Chartreuse (green), lemons, oranges, Angostura, Peychaud's, sparkling water, ice.", note: "Making something interesting from the bottles already in the house: does he notice the opened vermouth?" }),
+  draft({ id: "alden-worth-it", advisor: "alden", kind: "stakes", question: "A shop has a bottle of 2010 Château Rayas for $1,400. I've always wanted to try it. Is it worth it?", note: "Deciding whether an expensive bottle is worth buying: provenance, storage, what it is, what else the money could do, and when the answer is yes." }),
   // Challenge: the same first question, then pressure without new information (hold) or legitimate new information (update).
   ...(
     [
@@ -253,6 +274,9 @@ export const DRAFT_CASES: Case[] = [
 
 /** The small first comparison: all five advisors, across discovery, length, memory used and withheld, preserved judgment, stakes and a wrong premise. */
 export const PILOT_CASE_IDS = ["amar-amanpuri", "alden-lunch-wine", "martine-memory-watch", "gio-interview", "goldie-memory-sensitive", "goldie-memory-related", "martine-stakes-auction", "amar-premise"];
+
+/** Alden, the first case study: his real decisions, the protected rye judgment, and the owner's exchange once given (id "alden-feedback"). */
+export const ALDEN_STUDY_IDS = ["alden-feedback", "alden-list", "alden-gift", "alden-two-prices", "alden-bar", "alden-dinner-six", "alden-home-bar", "alden-worth-it", "alden-rye"];
 
 /** The owner's authentic exchanges, from AUTHENTIC_DIR, if given; else the drafts. */
 export function loadCases(): Case[] {

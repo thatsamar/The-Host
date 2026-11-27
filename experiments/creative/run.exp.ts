@@ -8,6 +8,9 @@
  * and what the full run would cost, to confirm the experiment draws real distinctions
  * before the budget is committed. DRY_RUN=1 makes no model calls at all.
  * REPS (default 2), BUDGET_USD (default 30), CASES and CONFIGS (comma lists) narrow it.
+ * STUDY=alden runs Alden's case study (ALDEN_STUDY_IDS). EXTRACT=1, after a run,
+ * restates every answer's recommendation and reasons in neutral words (one
+ * low-effort call each, within the budget) for the substance page.
  * Results go to experiments/creative/out/ (never committed). Nothing touches production:
  * no database, no Twilio, no deployment; only model calls made from here.
  */
@@ -24,12 +27,17 @@ import { speakerLabel, toSmsText } from "@/lib/sms/handler";
 import { SMS_ADVISORS, type SmsAdvisorId } from "@/lib/sms/navigation";
 import { answerBudget, answerFits, condensePrompt, roomForAnswer, shortAnswerText } from "@/lib/sms/short";
 import type { ChatProvider, ChatRequest } from "@/lib/ai/types";
-import { loadCases, loadPhoto, PILOT_CASE_IDS, type Case, type CaseTurn } from "./cases";
+import { ALDEN_STUDY_IDS, loadCases, loadPhoto, PILOT_CASE_IDS, type Case, type CaseTurn } from "./cases";
 import { configsFor, instructionSize, type Config } from "./configs";
 import { render } from "./render";
 
 const OUT = fileURLToPath(new URL("./out/", import.meta.url));
 const RESULTS = `${OUT}results.jsonl`;
+const EXTRACTS = `${OUT}extracts.jsonl`;
+
+/** The neutral restatement: the judgment without the writing, for the substance page. */
+export const EXTRACT_PROMPT =
+  "Restate the advice below as plain, neutral notes, in the same words for any writer: what is recommended (each thing, with any price given), the deciding reasons, what is rejected or advised against and why, and any question asked. Keep every specific name, number and condition exactly. Remove all style, voice, humor, warmth and flourish; add nothing, judge nothing, and keep it as short as the content allows. Plain lines starting with \"- \", no headings.";
 /** Assumed list price per web search, for the budget only (not in the rates table). */
 const SEARCH_USD = 0.01;
 
@@ -162,7 +170,8 @@ async function runOne(c: Case, config: Config, rep: number, now: Date, providers
   const began = Date.now();
   try {
     // The same earlier messages and context for every configuration, the general-purpose one included; G0 is the ordinary assistant without them.
-    let conversation: AskTurn[] = [...(config.withoutHistory ? [] : (c.history ?? []).map(toAsk)), { role: "user", text: c.question, images: c.photos?.map(loadPhoto) }];
+    const asked = c.material ? `${c.question}\n\n${c.material}` : c.question;
+    let conversation: AskTurn[] = [...(config.withoutHistory ? [] : (c.history ?? []).map(toAsk)), { role: "user", text: asked, images: c.photos?.map(loadPhoto) }];
     let result = await answer(c, config, conversation, now, providers);
     let cost = result.cost;
     let first: RunResult["first"];
@@ -174,14 +183,14 @@ async function runOne(c: Case, config: Config, rep: number, now: Date, providers
       cost += result.cost;
     }
     const thread: NonNullable<RunResult["thread"]> = [];
-    let asked = c.question;
+    let lastAsked = c.question;
     for (const next of c.followUps ?? []) {
-      thread.push({ user: asked, own: result.own, delivered: result.delivered, later: thread.length ? (c.followUps ?? [])[thread.length - 1]?.later : undefined });
+      thread.push({ user: lastAsked, own: result.own, delivered: result.delivered, later: thread.length ? (c.followUps ?? [])[thread.length - 1]?.later : undefined });
       // A new conversation on another day: the advisor keeps what came before (as Cinq would within its window); the ordinary assistant starts fresh.
       conversation = next.later && config.withoutHistory ? [{ role: "user", text: next.text }] : [...conversation, { role: "assistant", text: seen(result) }, { role: "user", text: next.text }];
       result = await answer(c, config, conversation, now, providers);
       cost += result.cost;
-      asked = next.text;
+      lastAsked = next.text;
     }
     return {
       ...base,
@@ -223,7 +232,8 @@ it.skipIf(!process.env.RUN_CREATIVE_EXPERIMENT)("runs the creative comparison", 
   const caseIds = list(process.env.CASES);
   const configIds = list(process.env.CONFIGS);
   const all = loadCases();
-  const cases = all.filter((c) => (pilot ? PILOT_CASE_IDS.includes(c.id) : !caseIds || caseIds.includes(c.id)));
+  const study = process.env.STUDY === "alden" ? ALDEN_STUDY_IDS : null;
+  const cases = all.filter((c) => (pilot ? PILOT_CASE_IDS.includes(c.id) : study ? study.includes(c.id) : !caseIds || caseIds.includes(c.id)));
   const jobsFor = (rep: number) => cases.flatMap((c) => configsFor(c.advisor, configIds).map((cfg) => ({ c, cfg, rep })));
   const now = new Date();
 
@@ -257,6 +267,23 @@ it.skipIf(!process.env.RUN_CREATIVE_EXPERIMENT)("runs the creative comparison", 
       }
     }
     if (spent >= budget) break;
+  }
+  if (process.env.EXTRACT && !pilot) {
+    // The substance page: every answer's judgment restated in neutral words, within the same budget.
+    const have = new Set(existsSync(EXTRACTS) ? readFileSync(EXTRACTS, "utf8").split("\n").filter(Boolean).map((l) => (JSON.parse(l) as { key: string }).key) : []);
+    const todo = readFileSync(RESULTS, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as RunResult).filter((r) => !r.error && !have.has(r.key));
+    for (let i = 0; i < todo.length && spent < budget; i += 4) {
+      const batch = await Promise.all(
+        todo.slice(i, i + 4).map(async (r) => {
+          const out = await complete(providers.router(), { system: [{ label: "extract", title: "EXTRACT", body: EXTRACT_PROMPT }], messages: [{ role: "user", content: [{ type: "text", text: r.delivered }] }], webSearch: false });
+          return { key: r.key, text: out.text.trim(), cost: costOf(out.model, out.usage, 0) };
+        }),
+      );
+      for (const e of batch) {
+        spent += e.cost;
+        appendFileSync(EXTRACTS, JSON.stringify({ key: e.key, text: e.text }) + "\n");
+      }
+    }
   }
   writeFileSync(`${OUT}spent.txt`, `$${spent.toFixed(2)} of $${budget}\n`);
   if (pilot) {

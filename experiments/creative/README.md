@@ -86,6 +86,40 @@ folder), `history` (the earlier messages, with their photos) and `followUp`.
 Then set `AUTHENTIC_DIR` to that folder. Every configuration, the
 general-purpose one included, gets the same earlier messages and context.
 
+## Alden: the first case study
+
+The owner's comparison, mapped to configurations:
+
+| The owner's | Configuration |
+|---|---|
+| A. A strong general-purpose AI, no personal context | G0 |
+| B. The same, with equivalent personal context | G |
+| C. Production Cinq | A (controlled) and P (end to end) |
+| D. The original brief with essentials only | O (and D, today's brief, the same way) |
+| E. The original brief with founder-approved material | OE (and DE, AE) |
+| F. The foundations also inform research and evaluation | PR (research alone), RF (both) |
+| Another consumer AI | `EXT-<name>`: answers pasted into `AUTHENTIC_DIR/external.json` |
+
+- **The material:** the founder-approved material lives in `FOUNDATION_DIR`
+  (`alden.md`), outside the repository. Without it, DE, OE, AE and RF
+  don't run.
+- **Same inputs:** a case's `material` (a transcribed list, the bottles at
+  home) goes to every configuration word for word, so controlled
+  comparisons share the same research inputs.
+- **Substance only:** `EXTRACT=1` restates every answer in neutral words
+  (`substance.html`), to show whether the judgment or the writing is
+  preferred.
+- **The cases:** `STUDY=alden` runs his real decisions, the protected rye
+  judgment, and the exchange that prompted the feedback (`alden-feedback`)
+  once it is in `AUTHENTIC_DIR`.
+
+```
+# Stage 1, no founder material yet: is it knowledge, reasoning, research or expression?
+STUDY=alden CONFIGS=G0,G,A,D,O,P,PR REPS=2 EXTRACT=1 BUDGET_USD=15 $X
+# Stage 2, with FOUNDATION_DIR: does the material change the substance?
+STUDY=alden CONFIGS=DE,OE,AE,RF REPS=2 EXTRACT=1 BUDGET_USD=10 $X
+```
+
 ## Every version of the briefs
 
 `brief-versions.json` holds every committed version of each brief on main,
