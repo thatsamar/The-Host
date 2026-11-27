@@ -276,7 +276,8 @@ it.skipIf(!process.env.RUN_CREATIVE_EXPERIMENT)("runs the creative comparison", 
   // Checks already paid for count against the same budget, so stages run into one directory share one cap.
   if (existsSync(`${OUT}judges.jsonl`)) for (const line of readFileSync(`${OUT}judges.jsonl`, "utf8").split("\n").filter(Boolean)) spent += (JSON.parse(line) as { cost: number }).cost;
   // Round robin by repetition, so a budget stop leaves every configuration with the same number of runs.
-  for (let rep = 1; rep <= reps; rep++) {
+  // JUDGE_ONLY: check what's already answered, and answer nothing new.
+  for (let rep = 1; rep <= (process.env.JUDGE_ONLY ? 0 : reps); rep++) {
     const jobs = jobsFor(rep).filter(({ c, cfg }) => !done.has(`${c.id}|${cfg.id}|${rep}`));
     for (let i = 0; i < jobs.length; i += 4) {
       if (spent >= budget) break;
