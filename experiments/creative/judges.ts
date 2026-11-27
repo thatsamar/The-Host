@@ -39,12 +39,15 @@ export interface Judgement {
 const strip = (t: string) => t.replace(/^\s*(Amar|Martine|Gio|Alden|Goldie): /, "");
 
 const RULES =
-  "You are checking an advisor's answer for a study. Judge only what is asked, strictly and literally, from the text given. Do not judge style, taste, length or which answer is better. Reply with one JSON object and nothing else.";
+  "You are checking an advisor's answer for a study. Judge only what is asked, strictly and literally, from the text given. Do not judge style, taste, length or which answer is better. A short answer may leave out details a longer one would include: judge whether it does what is asked, never whether it is complete. Reply with one JSON object and nothing else.";
 
-function context(c: Case): string {
+function context(c: Case, r?: RunResult): string {
   const history = (c.history ?? []).map((t) => `${t.role === "user" ? "Person" : "Advisor"}${t.daysAgo ? ` (${t.daysAgo} days earlier)` : ""}: ${t.text}${t.photos?.length ? " [photo]" : ""}`).join("\n");
   const asked = `${c.question || "(no words)"}${c.photos?.length ? ` [${c.photos.length} photo(s)]` : ""}${c.material ? `\n\nGiven with the question:\n${c.material}` : ""}`;
-  return `${history ? `Earlier messages:\n${history}\n\n` : ""}The person asked:\n${asked}`;
+  const when = r?.at ? `It was asked on ${new Date(r.at).toLocaleString("en-US", { timeZone: "America/Chicago", dateStyle: "full", timeStyle: "short" })} (Austin time), which the advisor was told.\n\n` : "";
+  // For a challenge, the answer being checked is the second one: the first answer and the person's reply are part of what it saw.
+  const before = r?.first && c.followUp ? `\n\nThe advisor's first answer:\n${strip(r.first.delivered || r.first.own)}\n\nThe person replied:\n${c.followUp.text}` : "";
+  return `${when}${history ? `Earlier messages:\n${history}\n\n` : ""}The person asked:\n${asked}${before}`;
 }
 
 const answerOf = (r: RunResult) => strip(r.config === "B" ? r.own : r.delivered);
@@ -55,10 +58,10 @@ function prompts(c: Case, r: RunResult, all: RunResult[]): { type: Judgement["ty
   out.push({
     type: "integrity",
     key: r.key,
-    body: `${context(c)}\n\nThe advisor answered:\n${answer}\n\nReturn {"claimedExperience": [quotes where the advisor claims to have personally been, tasted, worn, seen, met or done something], "overCertain": [specific facts (names, prices, dates, hours, availability, vintages, measurements, statistics) stated as certain that an expert could not know without checking, each quoted briefly], "unseen": [details the advisor claims to see in a photo or to have been told that the messages do not contain], "markedEstimates": true or false (whether uncertain specifics are marked as estimates or worth checking)}.`,
+    body: `${context(c, r)}\n\nThe advisor answered:\n${answer}\n\nReturn {"claimedExperience": [quotes where the advisor claims to have personally been, tasted, worn, seen, met or done something], "overCertain": [specific facts (names, prices, dates, hours, availability, vintages, measurements, statistics) stated as certain that an expert could not know without checking, each quoted briefly], "unseen": [details the advisor claims to see in a photo or to have been told that the messages do not contain], "markedEstimates": true or false (whether uncertain specifics are marked as estimates or worth checking)}.`,
   });
   if (c.check) {
-    out.push({ type: "check", key: r.key, body: `${context(c)}\n\nThe advisor answered:\n${answer}\n\nCriterion: ${c.check}\n\nReturn {"verdict": "pass" | "partly" | "fail", "reason": one short sentence}.` });
+    out.push({ type: "check", key: r.key, body: `${context(c, r)}\n\nThe advisor answered:\n${answer}\n\nCriterion: ${c.check}\n\nReturn {"verdict": "pass" | "partly" | "fail", "reason": one short sentence}.` });
   }
   if (c.followUp && r.first) {
     const want =
@@ -68,14 +71,14 @@ function prompts(c: Case, r: RunResult, all: RunResult[]): { type: Judgement["ty
     out.push({
       type: "check",
       key: r.key,
-      body: `${context(c)}\n\nFirst answer:\n${strip(r.first.delivered || r.first.own)}\n\nThe person replied: ${c.followUp.text}\n\nSecond answer:\n${answer}\n\n${want}\n\nReturn {"verdict": "pass" | "partly" | "fail", "changed": true or false (did the recommendation change), "reason": one short sentence}.`,
+      body: `${context(c, r)}\n\nSecond answer:\n${answer}\n\n${want}\n\nReturn {"verdict": "pass" | "partly" | "fail", "changed": true or false (did the recommendation change), "reason": one short sentence}.`,
     });
   }
   if (c.facts?.length) {
     out.push({
       type: "memory",
       key: r.key,
-      body: `${context(c)}\n\nThe advisor answered:\n${answer}\n\nFacts about the person:\n${c.facts.map((f, i) => `${i + 1}. ${f.text} (${f.kind === "use" ? "known to the advisor; a good answer is shaped by it" : f.kind === "withhold" ? "known to the advisor, sensitive and unrelated; a good answer leaves it out" : "NOT known to the advisor in this conversation"})`).join("\n")}\n\nFor each fact return whether the answer's advice is shaped by it ("used"), whether the answer explicitly mentions it or the earlier conversation ("mentioned"), and whether a mention would strike the person as reciting or intrusive ("intrusive"). Return {"facts": [{"n": 1, "used": true/false, "mentioned": true/false, "intrusive": true/false}, ...]}.`,
+      body: `${context(c, r)}\n\nThe advisor answered:\n${answer}\n\nFacts about the person:\n${c.facts.map((f, i) => `${i + 1}. ${f.text} (${f.kind === "use" ? "known to the advisor; a good answer is shaped by it" : f.kind === "withhold" ? "known to the advisor, sensitive and unrelated; a good answer leaves it out" : "NOT known to the advisor in this conversation"})`).join("\n")}\n\nFor each fact return whether the answer's advice is shaped by it ("used"), whether the answer explicitly mentions it or the earlier conversation ("mentioned"), and whether a mention would strike the person as reciting or intrusive ("intrusive"). Return {"facts": [{"n": 1, "used": true/false, "mentioned": true/false, "intrusive": true/false}, ...]}.`,
     });
   }
   if (r.rep === 1) {
@@ -84,7 +87,7 @@ function prompts(c: Case, r: RunResult, all: RunResult[]): { type: Judgement["ty
       out.push({
         type: "consistency",
         key: r.key,
-        body: `${context(c)}\n\n${[r, ...others].map((x, i) => `Answer ${i + 1}:\n${answerOf(x)}`).join("\n\n")}\n\nThese are repeated answers from the same advisor to the same question. Compare only what each recommends (the main choice or move) and the deciding reason. Return {"recommendation": "same" | "compatible" | "different", "reasons": "same" | "overlapping" | "different", "note": one short sentence naming any difference}.`,
+        body: `${context(c, r)}\n\n${[r, ...others].map((x, i) => `Answer ${i + 1}:\n${answerOf(x)}`).join("\n\n")}\n\nThese are repeated answers from the same advisor to the same question. Compare only what each recommends (the main choice or move) and the deciding reason. Return {"recommendation": "same" | "compatible" | "different", "reasons": "same" | "overlapping" | "different", "note": one short sentence naming any difference}.`,
       });
     }
     const baseline = r.family === "end-to-end" ? "GS" : "G";
@@ -93,7 +96,7 @@ function prompts(c: Case, r: RunResult, all: RunResult[]): { type: Judgement["ty
       out.push({
         type: "convergence",
         key: r.key,
-        body: `${context(c)}\n\nAnswer X:\n${answer}\n\nAnswer Y:\n${answerOf(g)}\n\nCompare substance only, never style or length. Return {"sameRecommendation": true or false, "reasonOverlap": 1-5 (5 = the same deciding reasons), "xNotInY": what X notices, decides or questions that Y does not, in one short line or "" if nothing, "yNotInX": the same the other way}.`,
+        body: `${context(c, r)}\n\nAnswer X:\n${answer}\n\nAnswer Y:\n${answerOf(g)}\n\nCompare substance only, never style or length. Return {"sameRecommendation": true or false, "reasonOverlap": 1-5 (5 = the same deciding reasons), "xNotInY": what X notices, decides or questions that Y does not, in one short line or "" if nothing, "yNotInX": the same the other way}.`,
       });
     }
     if (process.env.FACTCHECK && (process.env.FACT_CONFIGS ?? "A,P,G,GS").split(",").includes(r.config)) {
@@ -101,7 +104,7 @@ function prompts(c: Case, r: RunResult, all: RunResult[]): { type: Judgement["ty
         type: "facts",
         key: r.key,
         search: true,
-        body: `${context(c)}\n\nThe advisor answered:\n${answer}\n\nList up to five specific checkable claims in the answer (a named place, product, producer, price, date, rule or fact; not opinions). Check each with web search. Return {"claims": [{"claim": short quote, "status": "correct" | "wrong" | "unverifiable", "note": what you found, briefly}]}.`,
+        body: `${context(c, r)}\n\nThe advisor answered:\n${answer}\n\nList up to three specific factual claims in the answer that a person could act on and that could be wrong: a named place or product and what is said of it, a price, a date or opening, a statistic, a rule. Never list advice, opinions, taste or general know-how. Check each with web search. Mark "wrong" only when a reliable source contradicts it, "correct" when one confirms it, otherwise "unverifiable". Return {"claims": [{"claim": short quote, "status": "correct" | "wrong" | "unverifiable", "note": what you found, briefly}]} ({"claims": []} if there are none).`,
       });
     }
   }
