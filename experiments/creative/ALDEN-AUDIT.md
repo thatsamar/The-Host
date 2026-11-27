@@ -6,7 +6,7 @@ not results: nothing has been run yet.
 
 ## What he receives
 
-On text, about 23,000 characters of instructions. His brief is 14,000 of
+On text, about 24,000 characters of instructions. His brief is 14,000 of
 them, and of the brief:
 
 | Kind | Share | Examples |
