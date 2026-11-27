@@ -1,3 +1,4 @@
+import type { FoundationsView } from "./foundations";
 import { RECOVERY_WINDOW_MS, SILENT_AFTER_MS, type Report, type Spread } from "./report";
 import { SMS_ADVISORS } from "@/lib/sms/navigation";
 import { RETENTION_DAYS } from "@/lib/sms/metrics";
@@ -56,7 +57,31 @@ export function summaryLines(r: Report): string[] {
 }
 
 /** The /ops page: aggregates only, never anything from a conversation. */
-export function renderOpsPage(report: Report, opts: { days: number; recorded: boolean }): string {
+/** Each advisor's architecture: labels, versions and counts only (src/lib/ops/foundations.ts). */
+function foundationsSection(view: FoundationsView | undefined): string {
+  if (!view) return "";
+  if (!view.available) return `<section><h2>Advisor architecture</h2><p class="note">Not set up on this project yet: every advisor runs on the current architecture.</p></section>`;
+  const rows = view.advisors
+    .map((a) => {
+      const reasons = Object.entries(a.reasons).map(([k, v]) => `${k} ${v}`).join(", ");
+      const alert = a.unavailable24h ? ' class="bad-text"' : a.fallbacks24h ? ' class="bad-text"' : "";
+      return `<tr><td>${esc(a.advisor)}</td><td>${esc(a.architecture)}</td><td>${esc(a.versions)}</td><td>${esc(a.lastLoaded ?? "")}</td><td${alert}>${num(a.fallbacks24h)}${reasons ? ` <span class="note">(${esc(reasons)})</span>` : ""}</td><td${a.unavailable24h ? ' class="bad-text"' : ""}>${num(a.unavailable24h)}</td><td>${num(a.leakGuard24h)}</td><td class="note">${esc(a.updated)}</td></tr>`;
+    })
+    .join("");
+  const costs = view.costs
+    .map((c) => `<tr><td>${esc(c.architecture)}</td><td>${num(c.answers)}</td><td>${secs(c.medianMs)}</td><td>${c.costPerAnswer === null ? "" : usd(c.costPerAnswer)}</td></tr>`)
+    .join("");
+  return `<section><h2>Advisor architecture</h2><p class="note">Which architecture each advisor answers on, and whether its private foundation loaded. A fallback means the advisor answered on its current architecture because its foundation couldn't be loaded; unavailable means that lasted past the threshold. Counts are for the last 24 hours. No foundation text is ever shown here.</p>
+<div class="wrap"><table><thead><tr><th>Advisor</th><th>Architecture</th><th>Versions</th><th>Last loaded (UTC)</th><th>Fallbacks</th><th>Unavailable</th><th>Leak guard</th><th>Changed</th></tr></thead><tbody>
+${rows || `<tr><td colspan="8" class="note">No advisor configured: all on the current architecture.</td></tr>`}
+</tbody></table></div>
+<h3>By architecture (Cinq by text, this period)</h3>
+<div class="wrap"><table><thead><tr><th>Architecture</th><th>Answers</th><th>Median answer time</th><th>AI cost per answer</th></tr></thead><tbody>
+${costs || `<tr><td colspan="4" class="note">None.</td></tr>`}
+</tbody></table></div></section>`;
+}
+
+export function renderOpsPage(report: Report, opts: { days: number; recorded: boolean; foundations?: FoundationsView }): string {
   const r = report;
   const tabs = [1, 7, 30]
     .map((d) => `<a href="?days=${d}" class="${d === opts.days ? "on" : ""}">${d === 1 ? "24 hours" : `${d} days`}</a>`)
@@ -147,6 +172,8 @@ ${r.measurement.days.map((d) => `<tr><td>${esc(day(`${d.day}T00:00:00Z`))}</td><
     : ""
 }
 <p class="note">A request whose final record was lost counts as "ended in silence", so a lost record can make reliability look worse, never better. Twilio's outgoing count can include its own automatic STOP and HELP replies. Records are deleted after ${RETENTION_DAYS} days.</p></section>
+
+${foundationsSection(opts.foundations)}
 
 <details><summary>Engineering detail</summary>
 <h3>Latency</h3>

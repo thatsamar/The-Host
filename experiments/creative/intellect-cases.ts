@@ -16,6 +16,7 @@
  */
 
 import type { AdvisorId, Case, CaseTurn } from "./cases";
+import { EXTRACTION_CASES } from "./extraction-cases";
 
 const d = (c: Omit<Case, "source">): Case => ({ ...c, source: "draft" });
 
@@ -243,4 +244,4 @@ const competence: Case[] = [
   d({ note: "What greater freedom might cost (owner, Nov 27).", id: "amar-decision-text", advisor: "tony", kind: "financial", question: "Honeymoon: Amalfi Coast in August or Japan in November? We hate crowds and love food.", check: "Takes a clear position tied to crowds and food in those months specifically, with the reason that decides it." }),
 ];
 
-export const INTELLECT_CASES: Case[] = [...single, ...longitudinal, ...talk, ...talk2, ...competence];
+export const INTELLECT_CASES: Case[] = [...single, ...longitudinal, ...talk, ...talk2, ...competence, ...EXTRACTION_CASES];

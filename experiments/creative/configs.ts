@@ -66,6 +66,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import type { ContextBlock } from "@/lib/ai/types";
 import { assemblePrompt, dateBlock, type AskTurn } from "@/lib/ask/prompt";
+import { CORRECTIONS } from "@/lib/ask/safeguards";
 import { APP_JUDGMENT } from "@/lib/ask/prompt";
 import { COMPANIONS } from "@/lib/companions";
 import { cinqAdvisors } from "@/lib/companions/cinq";
@@ -242,12 +243,8 @@ function privateFile(id: AdvisorId, suffix: string): string | null {
   return file && existsSync(file) ? readFileSync(file, "utf8").trim() : null;
 }
 
-/** The owner's three corrections, as approved (Nov 27), verbatim. */
-export const CORRECTIONS = {
-  talk: "Not every message is a request. Sometimes someone is simply sharing a thought, expressing curiosity or continuing a conversation. Respond to what is happening between you rather than automatically turning it into a task.",
-  research: "Be precise about what you have verified, what you have learned from another source and what remains uncertain. Never overstate the research you have conducted.",
-  photo: "Distinguish what is visible in a photograph from what you infer or learn elsewhere. Never present an inference as an observation.",
-};
+/** The owner's three corrections, as approved (Nov 27): the shared source in src, so the harness tests the words production uses. */
+export { CORRECTIONS } from "@/lib/ask/safeguards";
 
 /** The website conversation line the owner proposed (W1T), verbatim. */
 export const TALK_LINE = "Not every message is a request. Sometimes someone is simply sharing a thought, expressing curiosity or continuing a conversation. Respond to what is happening between you, rather than automatically turning it into a task.";
