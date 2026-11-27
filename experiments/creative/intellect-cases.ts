@@ -207,6 +207,15 @@ const TALK_TURNS = [
   "I've only ever done Tokyo and Kyoto. Is there a version of Japan most people miss?",
   "Honestly I might not go for another year. I just like thinking about it.",
 ];
+const TALK2_TURNS = [
+  "Just got back from Lisbon. What a city.",
+  "The light, mostly. And a tiny place where the owner kept refilling our glasses and wouldn't let us pay for the last round.",
+  "Do you think some cities are just better at hospitality than others?",
+  "Anyway. Back to real life tomorrow.",
+];
+const talk2: Case[] = [
+  d({ id: "amar-talk2-web", advisor: "tony", kind: "sequence", channel: "web", question: TALK2_TURNS[0], followUps: TALK2_TURNS.slice(1).map((text) => ({ text })), check: TALK, note: "A conversation with nothing to recommend: does the website hold it without research, lists or homework?" }),
+];
 const talk: Case[] = (["text", "web"] as const).map((channel) =>
   d({
     id: channel === "text" ? "amar-talk" : "amar-talk-web",
@@ -222,11 +231,16 @@ const talk: Case[] = (["text", "web"] as const).map((channel) =>
 
 /** What greater freedom might cost (owner, Nov 27): real plans, a consequential decision, factual precision, research that runs out. */
 const competence: Case[] = [
-  d({ id: "amar-plan-night", advisor: "tony", kind: "everyday", channel: "web", question: "We land in Paris Friday at 6pm, staying in the Marais, and fly home Saturday at 3pm. Plan the evening and the morning for the two of us.", check: "Gives a plan that works in time and space: realistic travel from the airport, hours and bookings that fit, nothing that can't be reached; uncertain hours or bookings are marked." }),
-  d({ id: "amar-decision", advisor: "tony", kind: "financial", channel: "web", question: "We're about to book a non-refundable $14,000 safari for late August. It's between the Masai Mara and the Okavango Delta. Which one, and why?", check: "Takes a clear position tied to how each place actually is in late August (the migration's usual timing and river crossings in the Mara, flood levels and dry-season game in the Okavango), names the condition that would change it, and states nothing about seasons or prices as certain that isn't." }),
-  d({ id: "amar-exhausted", advisor: "tony", kind: "everyday", channel: "web", question: "Can you check whether these are all still open and how to book a Saturday dinner two weeks out: Carbone, Minetta Tavern, Raoul's, Via Carota and Le Coucou?", check: "With few searches, says plainly which it verified and which it couldn't, never claims a check it didn't make, and never says search is broken." }),
-  d({ id: "amar-plan-text", advisor: "tony", kind: "everyday", question: "Free Saturday in Mexico City, staying in Roma Norte. Plan my day?", check: "A day that works in time and space within one text, with hours or bookings that matter marked as from memory." }),
-  d({ id: "amar-decision-text", advisor: "tony", kind: "financial", question: "Honeymoon: Amalfi Coast in August or Japan in November? We hate crowds and love food.", check: "Takes a clear position tied to crowds and food in those months specifically, with the reason that decides it." }),
+  d({ note: "What greater freedom might cost (owner, Nov 27).", id: "amar-plan-night", advisor: "tony", kind: "everyday", channel: "web", question: "We land in Paris Friday at 6pm, staying in the Marais, and fly home Saturday at 3pm. Plan the evening and the morning for the two of us.", check: "Gives a plan that works in time and space: realistic travel from the airport, hours and bookings that fit, nothing that can't be reached; uncertain hours or bookings are marked." }),
+  d({ note: "What greater freedom might cost (owner, Nov 27).", id: "amar-decision", advisor: "tony", kind: "financial", channel: "web", question: "We're about to book a non-refundable $14,000 safari for late August. It's between the Masai Mara and the Okavango Delta. Which one, and why?", check: "Takes a clear position tied to how each place actually is in late August (the migration's usual timing and river crossings in the Mara, flood levels and dry-season game in the Okavango), names the condition that would change it, and states nothing about seasons or prices as certain that isn't." }),
+  d({ note: "What greater freedom might cost (owner, Nov 27).", id: "amar-exhausted", advisor: "tony", kind: "everyday", channel: "web", question: "Can you check whether these are all still open and how to book a Saturday dinner two weeks out: Carbone, Minetta Tavern, Raoul's, Via Carota and Le Coucou?", check: "With few searches, says plainly which it verified and which it couldn't, never claims a check it didn't make, and never says search is broken." }),
+  d({ note: "What greater freedom might cost (owner, Nov 27).", id: "amar-plan-text", advisor: "tony", kind: "everyday", question: "Free Saturday in Mexico City, staying in Roma Norte. Plan my day?", check: "A day that works in time and space within one text, with hours or bookings that matter marked as from memory." }),
+  d({ note: "What greater freedom might cost (owner, Nov 27).", id: "amar-order", advisor: "tony", kind: "everyday", channel: "web", question: "First lunch at Contramar in Mexico City on Saturday. What should we order?", check: "Names specific dishes the restaurant is actually known for and says why, with how to order (to share, timing, booking); nothing invented about the menu, and uncertainty marked." }),
+  d({ note: "What greater freedom might cost (owner, Nov 27).", id: "amar-order-text", advisor: "tony", kind: "everyday", question: "First lunch at Contramar in Mexico City on Saturday. What should we order?", check: "Names specific dishes the restaurant is actually known for, within one text; nothing invented about the menu." }),
+  d({ note: "What greater freedom might cost (owner, Nov 27).", id: "amar-philosophy", advisor: "tony", kind: "conversational", channel: "web", question: "Why do some hotels feel like home and others never do, however much they cost?", check: TALK }),
+  d({ note: "What greater freedom might cost (owner, Nov 27).", id: "amar-alone", advisor: "tony", kind: "everyday", question: "In Chicago alone on a Tuesday night for work. Where should I eat?", check: "Treats dining alone as a pleasure (a counter or bar seat, a room that suits one), names specific places it can stand behind, and marks uncertain hours." }),
+  d({ note: "What greater freedom might cost (owner, Nov 27).", id: "amar-family", advisor: "tony", kind: "judgment", channel: "web", question: "Family of five, kids 9 to 15, plus my mother, who walks slowly. One city for a week in April. Where would you send us?", check: "Makes a clear pick fitted to the ages and to the grandmother's pace (distances, transport, rest), with room for shared and separate time; no generic family list." }),
+  d({ note: "What greater freedom might cost (owner, Nov 27).", id: "amar-decision-text", advisor: "tony", kind: "financial", question: "Honeymoon: Amalfi Coast in August or Japan in November? We hate crowds and love food.", check: "Takes a clear position tied to crowds and food in those months specifically, with the reason that decides it." }),
 ];
 
-export const INTELLECT_CASES: Case[] = [...single, ...longitudinal, ...talk, ...competence];
+export const INTELLECT_CASES: Case[] = [...single, ...longitudinal, ...talk, ...talk2, ...competence];
