@@ -83,7 +83,9 @@ The owner's authentic exchanges replace the drafts. Put them **outside the
 repository** (it is public), in a folder with `cases.json`. Each entry has an
 `id`, `advisor`, `kind`, `question`, and optionally `photos` (paths in that
 folder), `history` (the earlier messages, with their photos) and `followUp`.
-Then set `AUTHENTIC_DIR` to that folder. Every configuration, the
+Then set `AUTHENTIC_DIR` to that folder. An authentic case replaces the draft with
+the same `id`, or the drafts it lists in `replaces`; `at` (an ISO time) keeps
+the time it was really asked, for the date block. Every configuration, the
 general-purpose one included, gets the same earlier messages and context.
 
 ## Alden: the first case study

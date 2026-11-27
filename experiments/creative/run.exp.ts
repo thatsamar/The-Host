@@ -151,6 +151,8 @@ async function answer(
 }
 
 async function runOne(c: Case, config: Config, rep: number, now: Date, providers: { chat: (id: SmsAdvisorId) => ChatProvider; router: () => ChatProvider }): Promise<RunResult> {
+  // A real exchange keeps the time it was asked, so the date block reads as it did then.
+  if (c.at) now = new Date(c.at);
   const system = config.system(c.advisor, now);
   const base = {
     key: `${c.id}|${config.id}|${rep}`,

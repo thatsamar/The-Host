@@ -72,6 +72,10 @@ export interface Case {
    * comparisons use the same material, so a difference isn't research.
    */
   material?: string;
+  /** For an authentic case: the ids of the drafts it stands in for. */
+  replaces?: string[];
+  /** When the question was really asked (ISO time with offset): every configuration's date block shows this time, as the advisor saw it. */
+  at?: string;
   /** For memory: whether a good answer uses the earlier messages, or leaves them out. */
   memory?: "use" | "withhold";
   note: string;
@@ -275,8 +279,8 @@ export const DRAFT_CASES: Case[] = [
 /** The small first comparison: all five advisors, across discovery, length, memory used and withheld, preserved judgment, stakes and a wrong premise. */
 export const PILOT_CASE_IDS = ["amar-amanpuri", "alden-lunch-wine", "martine-memory-watch", "gio-interview", "goldie-memory-sensitive", "goldie-memory-related", "martine-stakes-auction", "amar-premise"];
 
-/** Alden, the first case study: his real decisions, the protected rye judgment, and the owner's exchange once given (id "alden-feedback"). */
-export const ALDEN_STUDY_IDS = ["alden-feedback", "alden-list", "alden-gift", "alden-two-prices", "alden-bar", "alden-dinner-six", "alden-home-bar", "alden-worth-it", "alden-rye"];
+/** Alden, the first case study: his real decisions, the protected rye judgment, and the owner's exchange once given ("alden-feedback": before dinner; "alden-feedback-nightcap": the same menu at 3:37 AM). */
+export const ALDEN_STUDY_IDS = ["alden-feedback", "alden-feedback-nightcap", "alden-list", "alden-gift", "alden-two-prices", "alden-bar", "alden-dinner-six", "alden-home-bar", "alden-worth-it", "alden-rye"];
 
 /** The owner's authentic exchanges, from AUTHENTIC_DIR, if given; else the drafts. */
 export function loadCases(): Case[] {
@@ -285,9 +289,9 @@ export function loadCases(): Case[] {
   const file = join(dir, "cases.json");
   if (!existsSync(file)) throw new Error(`AUTHENTIC_DIR has no cases.json: ${dir}`);
   const authentic = (JSON.parse(readFileSync(file, "utf8")) as Case[]).map((c) => ({ ...c, source: "authentic" as const }));
-  // Drafts stay only where no authentic case covers the same advisor and kind.
-  const covered = new Set(authentic.map((c) => `${c.advisor}|${c.kind}`));
-  return [...authentic, ...DRAFT_CASES.filter((c) => !covered.has(`${c.advisor}|${c.kind}`))];
+  // A draft gives way to an authentic case with its id, or one that names it in `replaces`.
+  const replaced = new Set(authentic.flatMap((c) => [c.id, ...(c.replaces ?? [])]));
+  return [...authentic, ...DRAFT_CASES.filter((c) => !replaced.has(c.id))];
 }
 
 const MEDIA: Record<string, string> = { ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif" };
