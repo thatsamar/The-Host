@@ -200,4 +200,24 @@ const longitudinal = LONGITUDINAL.flatMap(({ advisor, sessions, question, facts 
   ];
 });
 
-export const INTELLECT_CASES: Case[] = [...single, ...longitudinal];
+/** A sustained conversation with no trip to plan: would the person want to keep talking? The same turns by text and on the website. */
+const TALK_TURNS = [
+  "Been thinking about Japan again. Not sure why it keeps pulling at me.",
+  "Maybe it's that everything there seems done properly, even the small stuff. Is that real or am I romanticizing it?",
+  "I've only ever done Tokyo and Kyoto. Is there a version of Japan most people miss?",
+  "Honestly I might not go for another year. I just like thinking about it.",
+];
+const talk: Case[] = (["text", "web"] as const).map((channel) =>
+  d({
+    id: channel === "text" ? "amar-talk" : "amar-talk-web",
+    advisor: "tony",
+    kind: "sequence",
+    channel,
+    question: TALK_TURNS[0],
+    followUps: TALK_TURNS.slice(1).map((text) => ({ text })),
+    check: TALK,
+    note: "A sustained conversation, not a request: does he make it more interesting to keep talking, without turning it into research or a plan?",
+  }),
+);
+
+export const INTELLECT_CASES: Case[] = [...single, ...longitudinal, ...talk];

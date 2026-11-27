@@ -83,6 +83,8 @@ export type ConfigId =
   | "W" | "WC"
   // The owner's approved foundation (FOUNDATION_DIR), on the website, with the simplified variant, and given to a general assistant as plain context.
   | "WE" | "WFE" | "GE" | "GSE" | "ACE"
+  // The radical alternative (owner, Nov 27): a distilled brief (FOUNDATION_DIR/<id>-distilled.md), the foundation, the safeguards; and the brief with the foundation and nothing else.
+  | "WR" | "AR" | "WBE"
   // Forced behaviour made conditional (FORCED-BEHAVIOUR.md): shared layers only, and with the owner's briefs too.
   | "WF" | "WFB" | "AC" | "ACB";
 
@@ -224,6 +226,24 @@ function foundation(id: AdvisorId): ContextBlock | null {
   return block("foundation", "WHAT INFORMS YOUR JUDGMENT", readFileSync(file, "utf8").trim());
 }
 const afterBrief = (blocks: ContextBlock[], extra: ContextBlock | null) => (extra ? [blocks[0], extra, ...blocks.slice(1)] : blocks);
+
+/** The owner-requested distilled brief (FOUNDATION_DIR/<id>-distilled.md, private), with the foundation, the safeguards and, by text, only the length budget. */
+function distilledBrief(id: AdvisorId): string | null {
+  const dir = process.env.FOUNDATION_DIR;
+  const file = dir ? `${dir.replace(/\/$/, "")}/${id}-distilled.md` : "";
+  return file && existsSync(file) ? readFileSync(file, "utf8").trim() : null;
+}
+function distilled(id: AdvisorId, channel: "web" | "text", now: Date): ContextBlock[] {
+  let brief = distilledBrief(id)!;
+  if (channel === "text") {
+    const search = brief.match(/You can search the web\.[^\n]*/)?.[0];
+    if (search) brief = brief.replace(search, "Web search is unavailable here. When hours, closures or booking details matter to the decision, say they're from memory.");
+    const notes = productionText(id, { webSearch: false }).find((b) => b.label === "channel_notes")!;
+    const budgetLine = notes.body.split("\n").flatMap(splitSentences).find((x) => /^Here every answer is one short text/.test(x));
+    return [block("system_prompt", "SYSTEM PROMPT", brief), foundation(id)!, block("channel_notes", "CHANNEL NOTES", [TEXT_NOTE, budgetLine].filter(Boolean).join("\n")), constants(), dateBlock(now)];
+  }
+  return [block("system_prompt", "SYSTEM PROMPT", brief), foundation(id)!, constants(), dateBlock(now)];
+}
 
 /**
  * PR/RF: research led by the advisor's own point of view, not by ratings.
@@ -461,6 +481,9 @@ CONFIGS.push(
   { id: "GE", name: "G given the advisor's foundation material as plain context", family: "controlled", textPipeline: false, webSearch: false, system: (id, now) => afterBrief(general(now), foundation(id)) },
   { id: "GSE", name: "GS given the advisor's foundation material as plain context", family: "end-to-end", textPipeline: false, webSearch: true, system: (id, now) => afterBrief(general(now), foundation(id)) },
   { id: "ACE", name: "AC with the advisor's foundation material", family: "controlled", textPipeline: true, webSearch: false, photosOnly: forcedPhotos, system: (id, now) => forced(afterBrief(variant(id, now, []), foundation(id)), id, "text", false) },
+  { id: "WR", name: "Distilled brief, the foundation and the safeguards, on the website (web search on)", family: "end-to-end", textPipeline: false, webSearch: true, system: (id, now) => distilled(id, "web", now) },
+  { id: "AR", name: "Distilled brief, the foundation and the safeguards, by text", family: "controlled", textPipeline: true, webSearch: false, system: (id, now) => distilled(id, "text", now) },
+  { id: "WBE", name: "Production's brief with the foundation and nothing else, on the website (web search on)", family: "end-to-end", textPipeline: false, webSearch: true, system: (id, now) => [website(id, true, now)[0], foundation(id)!, constants(), dateBlock(now)] },
 );
 
 export function configsFor(advisor: AdvisorId, ids?: string[] | null): Config[] {
@@ -471,7 +494,8 @@ export function configsFor(advisor: AdvisorId, ids?: string[] | null): Config[] 
       (!ids || ids.includes(c.id)) &&
       (!c.advisors || c.advisors.includes(advisor)) &&
       (hasPhilosophy || !["AF", "DF"].includes(c.id)) &&
-      (hasFoundation || !["DE", "OE", "AE", "RF", "WE", "WFE", "GE", "GSE", "ACE"].includes(c.id)) &&
+      (hasFoundation || !["DE", "OE", "AE", "RF", "WE", "WFE", "GE", "GSE", "ACE", "WBE"].includes(c.id)) &&
+      (!!distilledBrief(advisor) || !["WR", "AR"].includes(c.id)) &&
       (c.id !== "H" || !!process.env.BRIEF_VERSION),
   );
 }
