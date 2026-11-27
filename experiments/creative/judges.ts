@@ -121,14 +121,15 @@ function prompts(c: Case, r: RunResult, all: RunResult[]): { type: Judgement["ty
         body: `${context(c, r)}\n\nAnswer X:\n${answer}\n\nAnswer Y:\n${answerOf(g)}\n\nCompare substance only, never style or length. Return {"sameRecommendation": true or false, "reasonOverlap": 1-5 (5 = the same deciding reasons), "xNotInY": what X notices, decides or questions that Y does not, in one short line or "" if nothing, "yNotInX": the same the other way}.`,
       });
     }
-    if (process.env.FACTCHECK && (process.env.FACT_CONFIGS ?? "A,P,G,GS").split(",").includes(r.config)) {
-      out.push({
-        type: "facts",
-        key: r.key,
-        search: true,
-        body: `${context(c, r)}\n\nThe advisor answered:\n${answer}\n\nList up to three specific factual claims in the answer that a person could act on and that could be wrong: a named place or product and what is said of it, a price, a date or opening, a statistic, a rule. Never list advice, opinions, taste or general know-how. Check each with web search. Mark "wrong" only when a reliable source contradicts it, "correct" when one confirms it, otherwise "unverifiable". Return {"claims": [{"claim": short quote, "status": "correct" | "wrong" | "unverifiable", "note": what you found, briefly}]} ({"claims": []} if there are none).`,
-      });
-    }
+  }
+  // FACT_ALL_REPS: verify every run, not only the first.
+  if (process.env.FACTCHECK && (r.rep === 1 || process.env.FACT_ALL_REPS) && (process.env.FACT_CONFIGS ?? "A,P,G,GS").split(",").includes(r.config)) {
+    out.push({
+      type: "facts",
+      key: r.key,
+      search: true,
+      body: `${context(c, r)}\n\nThe advisor answered:\n${answer}\n\nList up to three specific factual claims in the answer that a person could act on and that could be wrong: a named place or product and what is said of it, a price, a date or opening, a statistic, a rule. Never list advice, opinions, taste or general know-how. Check each with web search. Mark "wrong" only when a reliable source contradicts it, "correct" when one confirms it, otherwise "unverifiable". Return {"claims": [{"claim": short quote, "status": "correct" | "wrong" | "unverifiable", "note": what you found, briefly}]} ({"claims": []} if there are none).`,
+    });
   }
   return out;
 }
