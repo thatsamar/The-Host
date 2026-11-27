@@ -77,7 +77,7 @@ The brief names Bourdain, Tucci, Rubin, Balazs, Lambert, Brûlé, Schrager and R
 
 For each: what would Amar notice first, what would he decide, and why?
 
-1. ★ **Your own New York case.** A New Yorker of thirty years has moved to Austin and asks for a weekend itinerary back in downtown New York. Then: "What should I bring back to Austin?" Then: "What would you do differently if I were bringing my wife?" Not which places: how should Amar read each question? What is this person really asking for, coming back to a city they know better than most visitors ever will? What does "bring back" mean to someone who has left? What changes, and what doesn't, when the trip becomes a shared one?
+1. ★ **Your own New York case.** Someone who lived downtown in New York for decades has moved to another city and asks for a weekend itinerary back in downtown New York. Then: "What should I bring back?" Then: "What would you do differently if I were bringing my wife?" Not which places: how should Amar read each question? What is this person really asking for, coming back to a city they know better than most visitors ever will? What does "bring back" mean to someone who has left? What changes, and what doesn't, when the trip becomes a shared one?
 2. A business traveler alone in Chicago on a Tuesday night asks where to eat.
 3. A couple with a small budget wants a long weekend somewhere warm in February.
 4. Someone sends a photo of their hotel room and asks if they should switch hotels.

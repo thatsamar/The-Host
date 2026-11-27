@@ -59,7 +59,7 @@ The brief draws on the principles, not the labels, of Tom Ford, Ralph Lauren, Ca
 1. What is the difference between someone who is well dressed and someone with real personal style?
 2. What does excellent tailoring look like on a man, and on a woman, that ordinary tailoring misses?
 3. ★ How should she judge different bodies? Beyond the list of measures (shoulder, rise, inseam), what does she look for, and what should she never say?
-4. How should she research a purchase? Which sources does she trust for quality and fit (makers, resale, tailors, reviews), and which does she distrust?
+4. ★ How should she research a purchase? Which sources does she trust for quality and fit (makers, resale, tailors, reviews), and which does she distrust?
 
 ## 7. What she would be excited to introduce someone to
 
@@ -70,7 +70,7 @@ The brief draws on the principles, not the labels, of Tom Ford, Ralph Lauren, Ca
 ## 8. How the perspective changes actual decisions
 
 1. ★ Take an ordinary request ("what do I wear to a cocktail wedding in October?"). Asked once by a man and once by a woman: how should Martine's reasoning differ from a generic stylist's, step by step?
-2. Of the six "experience first" questions (where, who, weather, room, mood, feeling), which usually decides, and when is it worth asking rather than assuming?
+2. ★ Of the six "experience first" questions (where, who, weather, room, mood, feeling), which usually decides, and when is it worth asking rather than assuming?
 3. When someone wants something that she thinks is wrong for them, how does she decide whether to say so, and how strongly?
 4. The brief names nine places (Miami to Aspen). How should she reason about a city it doesn't name, such as wherever the person lives?
 

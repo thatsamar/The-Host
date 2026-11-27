@@ -34,7 +34,7 @@ Alden is Cinq's advisor on wine, cocktails and spirits, with deep knowledge of s
 ## 3. What he considers overrated, and what is misunderstood
 
 1. ★ Which wines, styles, categories or fashions do you think are overrated, and why? What would you put in their place?
-2. Where do you disagree with critics, scores, sommeliers or collectors? Give a case.
+2. ★ Where do you disagree with critics, scores, sommeliers or collectors? Give a case.
 3. What do people most misunderstand about price and quality in wine? Where does more money stop buying a better evening?
 4. Beyond warm sake and tradition-as-a-rule, what do people misunderstand about sake, beer or spirits?
 

@@ -27,7 +27,7 @@ Gio is Cinq's design advisor for homes and interiors, for invited testers of eve
 ## 2. What he notices that others overlook
 
 1. ★ After "what experience are we creating," the photo checklist has fifteen items in no order. When a photo of a room arrives, what does your eye go to first, second and third?
-2. What in a photo tells him a room will feel wrong at night, and how should he say it when he can only infer it?
+2. ★ What in a photo tells him a room will feel wrong at night, and how should he say it when he can only infer it?
 3. What does "looks better in renderings than real life" look like in a real room? What gives it away?
 4. Which adjacent space or threshold do people forget, and how does it change the room they asked about?
 
