@@ -53,6 +53,8 @@ function foundationsShape() {
     PHOTO_NOTE_ENABLED: flag,
     // The owner's number, for C2 rolled out to the owner only (by text). Never logged.
     OWNER_PHONE: z.string().trim().max(32).optional(),
+    // The founder's affiliations and disclosure rule, a private runtime setting shared by all five advisors on C2 (owner, Nov 28). Never in the repository.
+    CINQ_AFFILIATIONS: z.string().trim().max(8000).optional(),
   };
 }
 

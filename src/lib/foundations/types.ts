@@ -30,6 +30,6 @@ export type ResolvedArchitecture =
   /** The current architecture: the companion's own prompt and capabilities. `fallback` is set when C2 was configured but couldn't be loaded. */
   | { kind: "legacy"; fallback?: FallbackReason }
   /** C2: identity and foundation from the private store (layer 2 appended when active). */
-  | { kind: "c2"; identity: string; foundation: string; versions: FoundationVersions }
+  | { kind: "c2"; identity: string; foundation: string; versions: FoundationVersions; /** The shared affiliations reference (CINQ_AFFILIATIONS), when set. */ affiliations?: string }
   /** Fallback has lasted past the threshold: the advisor is treated as unavailable. */
   | { kind: "unavailable"; fallback: FallbackReason };

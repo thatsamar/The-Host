@@ -173,6 +173,9 @@ export function assemblePrompt(input: {
 /** The C2 blocks, in order (docs/foundations.md). The channel block comes from the channel, or the website's own notes. */
 export const C2_BLOCK_ORDER = ["system_prompt", "foundation", "safeguards", CHANNEL_BLOCK, "search_status"] as const;
 
+/** The label of the shared affiliations reference (optional, after the safeguards). */
+export const AFFILIATIONS_BLOCK = "affiliations";
+
 /** The labels of C2's photo note (optional, before the date). */
 export const PHOTO_NOTE_BLOCK = "photo_note";
 
@@ -222,6 +225,7 @@ function assembleC2(
       { label: "system_prompt", title: "SYSTEM PROMPT", body: arch.identity, cacheable: true },
       { label: "foundation", title: "WHAT INFORMS YOUR JUDGMENT", body: `${arch.foundation}\n\n${FOUNDATION_PROTECTION}`, cacheable: true },
       { label: "safeguards", title: "SAFEGUARDS", body: c2Safeguards(companion, channel), cacheable: true },
+      ...(arch.affiliations ? [{ label: AFFILIATIONS_BLOCK, title: "CINQ AFFILIATIONS", body: arch.affiliations, cacheable: true }] : []),
       { label: CHANNEL_BLOCK, title: input.channel?.title ?? "CHANNEL NOTES", body: channelBody, cacheable: input.channel?.cacheable ?? true },
       { label: "search_status", title: "SEARCH STATUS", body: searchStatus(limit, channel), cacheable: true },
       ...(input.photoNote && hasPhotos(input.turns) ? [photoNoteBlock()] : []),

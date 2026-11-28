@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { APP_JUDGMENT, BLOCK_ORDER, C2_BLOCK_ORDER, CHANNEL_BLOCK, DATE_BLOCK, PHOTO_NOTE_BLOCK, assemblePrompt } from "@/lib/ask/prompt";
+import { AFFILIATIONS_BLOCK, APP_JUDGMENT, BLOCK_ORDER, C2_BLOCK_ORDER, CHANNEL_BLOCK, DATE_BLOCK, PHOTO_NOTE_BLOCK, assemblePrompt } from "@/lib/ask/prompt";
 import { CORRECTIONS, EDITORIAL, FOUNDATION_PROTECTION, PHOTO_NOTE, SAFETY, WEB_EXPRESSION } from "@/lib/ask/safeguards";
 import { COMPANIONS } from "@/lib/companions";
 import { GOLDIE_SAFETY } from "@/lib/companions/goldie";
@@ -99,5 +99,14 @@ describe("the shared editorial standard", () => {
       const legacy = assemblePrompt({ companion: tony, turns, channel, now }).system.find((b) => b.label === "app_capabilities")?.body ?? "";
       expect(legacy).not.toContain(EDITORIAL);
     }
+  });
+});
+
+describe("the shared affiliations reference", () => {
+  it("follows the safeguards when the private setting supplies it, and is absent otherwise", () => {
+    const withIt = assemblePrompt({ companion: tony, turns, now, architecture: { ...c2, affiliations: "STAND-IN AFFILIATIONS." } as ResolvedArchitecture }).system.map((b) => b.label);
+    expect(withIt).toEqual(["system_prompt", "foundation", "safeguards", AFFILIATIONS_BLOCK, CHANNEL_BLOCK, "search_status", DATE_BLOCK]);
+    const without = assemblePrompt({ companion: tony, turns, now, architecture: c2 }).system.map((b) => b.label);
+    expect(without).not.toContain(AFFILIATIONS_BLOCK);
   });
 });

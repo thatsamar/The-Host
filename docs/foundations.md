@@ -27,6 +27,8 @@ Five layers, each developed on its own without rewriting the others (owner, Nov 
 | Technical capabilities | what the advisor can access, remember, research and do right now: output limits (no files), memory on each channel, search status, channel notes | code: `safeguards.ts`, `prompt.ts`, `src/lib/sms/handoff.ts`, supplied by the system per answer | a reviewed pull request |
 | Personal understanding | what an advisor knows about the individual and how it evolves | `sms_sessions` today (24 hours, by text); later, persistent understanding | never mixed with the layers above |
 
+The founder's affiliations and disclosure rule are one shared factual reference, kept privately and supplied at runtime by the `CINQ_AFFILIATIONS` setting (a Vercel environment variable, shareable across the advisors' projects): on C2 it follows the safeguards as its own block, and when unset there is no block. Its text never enters the repository.
+
 Shared standards stay minimal: never a common behavioral instruction or standard of judgment that would dilute an advisor's voice. Identities hold no technical limits (memory, files, search): the system states those accurately on every channel, so they can change without touching an identity.
 
 The private source of truth for every layer is the owner's private repository, which holds:

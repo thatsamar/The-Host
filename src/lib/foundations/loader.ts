@@ -185,7 +185,8 @@ export class FoundationLoader {
     // Best effort, at most once per cache period: when C2 last loaded, for the threshold.
     const loadedAt = row.last_loaded_at ? Date.parse(row.last_loaded_at) : 0;
     if (this.now() - loadedAt > CACHE_TTL_MS) void store.markLoaded(advisorId, new Date(this.now())).catch(() => {});
-    return { kind: "c2", identity, foundation: layer2 ? `${foundation}\n\n${layer2}` : foundation, versions };
+    const affiliations = affiliationsText();
+    return { kind: "c2", identity, foundation: layer2 ? `${foundation}\n\n${layer2}` : foundation, versions, ...(affiliations ? { affiliations } : {}) };
   }
 
   /** Option A, or unavailable past the threshold. Every call is logged and counted. */
@@ -259,4 +260,13 @@ export function architectureLog(resolved: Resolved): Record<string, unknown> {
     ...(resolved.kind !== "c2" && resolved.fallback ? { foundationFallback: resolved.fallback } : {}),
     foundationLoadMs: resolved.loadMs,
   };
+}
+
+/** The founder's affiliations reference, a private runtime setting (never in the repository); empty when unset or invalid. */
+function affiliationsText(): string | undefined {
+  try {
+    return foundationsEnv().CINQ_AFFILIATIONS || undefined;
+  } catch {
+    return undefined;
+  }
 }
