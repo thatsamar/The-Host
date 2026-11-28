@@ -13,7 +13,8 @@ import { createClient, getUserId } from "@/lib/supabase/server";
 import { errorClass, safeToken } from "@/lib/diagnostics";
 import type { FailureInfo } from "@/lib/ai/types";
 import { architectureLog, foundationLoader, photoNoteEnabled, recordLeakGuard } from "@/lib/foundations/loader";
-import { checkLeak } from "@/lib/foundations/leak-guard";
+import { leakIndexFor } from "@/lib/foundations/leak-guard";
+import { continuationTurns, screenAnswer, type ScreenStats } from "@/lib/foundations/screen";
 
 // Long answers with web search can take a while.
 export const maxDuration = 300;
@@ -107,12 +108,24 @@ async function answer(request: Request): Promise<Response> {
   };
 
   const { id, turns } = parsed.data;
+  // A C2 answer is screened before any of it is released (screen.ts): the
+  // page and the relay only ever get checked text. Other answers stream as is.
+  const screen: ScreenStats = { hits: 0, continued: false };
+  const answerEvents = (deps: Omit<Parameters<typeof ask>[0], "provider" | "companion">): AsyncGenerator<AskEvent> => {
+    const events = ask({ provider, companion, ...deps, ...shape }, turns);
+    if (resolved.kind !== "c2") return events;
+    return screenAnswer(events, {
+      index: leakIndexFor(resolved),
+      continueFrom: (clean) => ask({ provider, companion, ...deps, ...shape }, continuationTurns(turns, clean)),
+      stats: screen,
+    });
+  };
   const encoder = new TextEncoder();
   const encode = (event: StreamEvent) => encoder.encode(`${JSON.stringify(event)}\n`);
 
   if (!id) {
     // Without an answer id there's nothing to resume, so stop when the visitor goes.
-    const events = ask({ provider, companion, signal: request.signal, ...shape }, turns);
+    const events = answerEvents({ signal: request.signal });
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
         try {
@@ -155,8 +168,6 @@ async function answer(request: Request): Promise<Response> {
   // Where the time went, even when the answer never finishes: each phase and when it began.
   const phases: [string, number][] = [];
   let answerChars = 0;
-  // Kept in memory only for the leak check below; never logged or stored.
-  let answerText = "";
   let searchesRun = 0;
   let timedOut = false;
   const timeLimit = setTimeout(() => {
@@ -175,7 +186,7 @@ async function answer(request: Request): Promise<Response> {
   const generation = (async () => {
     let outcome = "answered";
     try {
-      for await (let event of ask({ provider, companion, signal: stop.signal, onFinish, onFailure, ...shape }, turns)) {
+      for await (let event of answerEvents({ signal: stop.signal, onFinish, onFailure })) {
         if (event.type === "error") {
           outcome = timedOut ? "time-limit" : event.message === "Stopped." ? "stopped" : "error";
           if (timedOut) event = { type: "error", message: timeLimitMessage(companion.name) };
@@ -186,7 +197,6 @@ async function answer(request: Request): Promise<Response> {
         } else if (event.type === "text") {
           log.firstTextMs ??= Date.now() - receivedAt;
           answerChars += event.text.length;
-          if (resolved.kind === "c2") answerText += event.text;
         } else if (event.type === "searching") searchesRun++;
         relay.push(event);
         live.send?.(event);
@@ -199,14 +209,15 @@ async function answer(request: Request): Promise<Response> {
     } finally {
       clearTimeout(timeLimit);
       clearInterval(heartbeat);
-      // The leak guard on the website can only detect and count: the answer has already streamed.
-      if (resolved.kind === "c2" && answerText) {
-        const leak = checkLeak(answerText, resolved.foundation);
-        if (leak.leaked) {
-          log.leakGuard = { longestRun: leak.longestRun, phrases: leak.phrases };
-          recordLeakGuard(companion.id, "web");
-        }
-        answerText = "";
+      // Pre-release screening, counted (never the text): matches held back, and the time the hold added before the first text.
+      if (resolved.kind === "c2") {
+        log.screen = {
+          hits: screen.hits,
+          continued: screen.continued,
+          ...(screen.firstModelTextAt !== undefined ? { modelFirstTextMs: screen.firstModelTextAt - receivedAt } : {}),
+          ...(screen.firstModelTextAt !== undefined && screen.firstReleaseAt !== undefined ? { heldMs: screen.firstReleaseAt - screen.firstModelTextAt } : {}),
+        };
+        if (screen.hits) recordLeakGuard(companion.id, "web");
       }
       await relay.finish();
       console.info(

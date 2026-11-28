@@ -20,7 +20,7 @@ import { errorClass, safeToken } from "@/lib/diagnostics";
 import { numberKey, PRUNE_ONE_IN, RequestMeasure, usageCounts, type ModelCall, type ModelPurpose } from "@/lib/sms/metrics";
 import { SupabaseMetricsSink } from "@/lib/sms/supabase-metrics";
 import { foundationLoader, photoNoteEnabled, recordLeakGuard } from "@/lib/foundations/loader";
-import { checkLeak, LEAK_REWRITE_PROMPT, sentencesOf } from "@/lib/foundations/leak-guard";
+import { checkLeak, LEAK_REWRITE_PROMPT, leakIndexFor, sentencesOf } from "@/lib/foundations/leak-guard";
 
 // Answers can take a while; the webhook itself answers immediately (below)
 // and the replies go out through the REST API after the handler finishes.
@@ -190,7 +190,9 @@ export async function POST(request: Request): Promise<Response> {
               if (!text.trim()) throw new Error("ask_empty");
               // The leak guard: a text is complete before it is sent, so one that repeats the
               // foundation is rewritten once in fresh words; failing that, the repeating sentences go.
-              if (resolved.kind === "c2" && checkLeak(text, resolved.foundation).leaked) {
+              // The same index of distinctive sequences the website screens against (leakIndexFor, built once per version).
+              const leakIndex = resolved.kind === "c2" ? leakIndexFor(resolved) : null;
+              if (leakIndex && checkLeak(text, leakIndex).leaked) {
                 note({ leak_guard: true });
                 recordLeakGuard(advisorId, "text");
                 const room = context?.budget ?? 450;
@@ -207,8 +209,8 @@ export async function POST(request: Request): Promise<Response> {
                   }
                   return reply.trim();
                 }).catch(() => "");
-                if (rewritten && !checkLeak(rewritten, resolved.foundation).leaked) return rewritten;
-                const kept = sentencesOf(text).filter((s) => !checkLeak(s, resolved.foundation).leaked).join(" ").trim();
+                if (rewritten && !checkLeak(rewritten, leakIndex).leaked) return rewritten;
+                const kept = sentencesOf(text).filter((s) => !checkLeak(s, leakIndex).leaked).join(" ").trim();
                 if (!kept) throw new Error("ask_leak");
                 return kept;
               }
