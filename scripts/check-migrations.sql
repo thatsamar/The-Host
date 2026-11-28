@@ -142,3 +142,69 @@ begin
   assert (select count(*) from public.system_prompt_versions) = 0, 'other user cannot see prompt history';
 end $$;
 reset role;
+
+-- The advisors' private foundations: the public roles see nothing and can
+-- write nothing, even with table grants (row level security, no policies);
+-- a stored version can't be changed or deleted; configuration changes are
+-- kept in the history.
+insert into public.advisor_layers (advisor_id, layer, version, ciphertext, iv, tag, key_id, sha256, approved_by, approved_at)
+  values ('tony', 'identity', 1, 'c', 'i', 't', 'k1', 's', 'owner', now());
+insert into public.advisor_active (advisor_id, architecture, identity_version, foundation_version, updated_by)
+  values ('tony', 'c2', 1, 1, 'owner');
+update public.advisor_active set last_loaded_at = now() where advisor_id = 'tony';
+update public.advisor_active set architecture = 'legacy', updated_by = 'owner' where advisor_id = 'tony';
+do $$
+begin
+  assert (select count(*) from public.advisor_active_history) = 2, 'history keeps each configuration change, not load times';
+  begin
+    update public.advisor_layers set ciphertext = 'changed' where advisor_id = 'tony';
+    raise exception 'stored version was changed';
+  exception when raise_exception then
+    if sqlerrm not like '%immutable%' then raise; end if;
+  end;
+  begin
+    delete from public.advisor_layers where advisor_id = 'tony';
+    raise exception 'stored version was deleted';
+  exception when raise_exception then
+    if sqlerrm not like '%kept%' then raise; end if;
+  end;
+  update public.advisor_layers set status = 'retired' where advisor_id = 'tony';
+end $$;
+
+-- Staged rollout (20261128000001): the audience and the fallback test are recorded with their action and note; only 'owner' or 'everyone'.
+update public.advisor_active set architecture = 'c2', audience = 'owner', last_action = 'activate', note = 'rehearsal', updated_at = now() + interval '1 second' where advisor_id = 'tony';
+update public.advisor_active set fallback_test_until = now() + interval '10 minutes', last_action = 'fallback_test_on', updated_at = now() + interval '2 seconds' where advisor_id = 'tony';
+update public.advisor_active set last_loaded_at = now() where advisor_id = 'tony';
+do $$
+begin
+  assert (select count(*) from public.advisor_active_history) = 4, 'history keeps the audience and fallback test changes, not load times';
+  assert (select audience from public.advisor_active_history where action = 'activate') = 'owner', 'history keeps the audience';
+  assert (select note from public.advisor_active_history where action = 'activate') = 'rehearsal', 'history keeps the note';
+  begin
+    update public.advisor_active set audience = 'friends' where advisor_id = 'tony';
+    raise exception 'an unknown audience was accepted';
+  exception when check_violation then null;
+  end;
+end $$;
+
+set role anon;
+do $$
+begin
+  assert (select count(*) from public.advisor_layers) = 0, 'anon reads no foundation';
+exception when insufficient_privilege then null;
+end $$;
+reset role;
+
+set role authenticated;
+do $$
+begin
+  assert (select count(*) from public.advisor_layers) = 0, 'a signed-in user reads no foundation';
+  assert (select count(*) from public.advisor_active) = 0, 'a signed-in user reads no configuration';
+  assert (select count(*) from public.advisor_events) = 0, 'a signed-in user reads no events';
+  begin
+    insert into public.advisor_active (advisor_id, architecture, updated_by) values ('gio', 'legacy', 'intruder');
+    raise exception 'a signed-in user changed a configuration';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;

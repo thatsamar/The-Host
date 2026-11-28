@@ -16,6 +16,21 @@
 
 import type { ChatContentPart, ChatRequest, ChatTurn, ContextBlock } from "@/lib/ai/types";
 import type { Companion } from "@/lib/companions/types";
+import type { ResolvedArchitecture } from "@/lib/foundations/types";
+import {
+  APP_OUTPUT_LIMITS_TEXT,
+  CORRECTIONS,
+  EDITORIAL,
+  FOUNDATION_PROTECTION,
+  INTEGRITY,
+  PHOTO_NOTE,
+  PLAN_CHECK,
+  PRIVACY,
+  SAFETY,
+  WEB_EXPRESSION,
+  WEB_MEMORY,
+  searchStatus,
+} from "./safeguards";
 
 export interface AskImage {
   mediaType: string;
@@ -62,8 +77,7 @@ export const MAX_HISTORY_TURNS = 40;
  * What every companion's reply can and can't be, whatever it advises on: this
  * app shows text and links, and has no way to make, attach or send a file.
  */
-export const APP_OUTPUT_LIMITS =
-  "This app shows your reply as text. You cannot create, attach, export, upload or send files of any kind (PNG, PDF, images, drawings, renderings, spreadsheets, documents) or links to files you made, so never say or imply that you have. Put the substance in the reply itself, in full: plans, measurements, quantities, schedules, lists and tables, and when a layout helps, a text layout or table someone can work from, labeled as a text layout rather than a drawing or map. If someone asks for a file, say plainly that this app can't produce one, then give them the content you can.";
+export const APP_OUTPUT_LIMITS = APP_OUTPUT_LIMITS_TEXT;
 
 /**
  * Cinq's shared standard of judgment, the same for every companion: earned
@@ -133,14 +147,88 @@ export function assemblePrompt(input: {
   channel?: ContextBlock;
   /** The time now: adds today's date as the last block (DATE_BLOCK). */
   now?: Date;
+  /** The advisor's resolved architecture; absent or legacy means the current one, unchanged. */
+  architecture?: ResolvedArchitecture;
+  /** Searches allowed for this answer (the provider's setting), for C2's search status. */
+  searchLimit?: number;
+  /** PHOTO_NOTE_ENABLED: add the photo note when the latest message carries photos. */
+  photoNote?: boolean;
 }): Omit<ChatRequest, "signal"> {
   const { companion } = input;
   const webSearch = input.webSearch ?? true;
+  if (input.architecture?.kind === "c2") return assembleC2(input, input.architecture, webSearch);
   return {
     system: [
       { label: "system_prompt", title: "SYSTEM PROMPT", body: companion.systemPrompt, cacheable: true },
       capabilitiesBlock(companion, webSearch),
       ...(input.channel ? [{ ...input.channel, label: CHANNEL_BLOCK }] : []),
+      ...(input.photoNote && hasPhotos(input.turns) ? [photoNoteBlock()] : []),
+      ...(input.now ? [dateBlock(input.now)] : []),
+    ],
+    messages: toChatTurns(input.turns, companion.photosOnly, input.maxTurns),
+    webSearch,
+  };
+}
+
+/** The C2 blocks, in order (docs/foundations.md). The channel block comes from the channel, or the website's own notes. */
+export const C2_BLOCK_ORDER = ["system_prompt", "foundation", "safeguards", CHANNEL_BLOCK, "search_status"] as const;
+
+/** The label of the shared affiliations reference (optional, after the safeguards). */
+export const AFFILIATIONS_BLOCK = "affiliations";
+
+/** The labels of C2's photo note (optional, before the date). */
+export const PHOTO_NOTE_BLOCK = "photo_note";
+
+/** What C2 advisors share: accuracy, integrity, privacy, safety and reliability. Never a standard of judgment. */
+export function c2Safeguards(companion: Companion, channel: "web" | "text"): string {
+  return [
+    INTEGRITY,
+    CORRECTIONS.research,
+    CORRECTIONS.photo,
+    PLAN_CHECK,
+    PRIVACY,
+    companion.safety ?? SAFETY,
+    APP_OUTPUT_LIMITS,
+    EDITORIAL,
+    ...(channel === "web" ? [WEB_MEMORY] : []),
+  ].join("\n");
+}
+
+function hasPhotos(turns: AskTurn[]): boolean {
+  const last = turns.at(-1);
+  return last?.role === "user" && !!last.images?.length;
+}
+
+function photoNoteBlock(): ContextBlock {
+  return { label: PHOTO_NOTE_BLOCK, title: "PHOTOS", body: PHOTO_NOTE, cacheable: false };
+}
+
+/**
+ * C2: the advisor's identity and intellectual foundation (from the private
+ * store), the shared safeguards, the channel's notes with the owner's
+ * conversation line, and the system's factual search status. The
+ * companion's own prompt, capabilities and the shared standard of judgment
+ * are not used: identity carries who the advisor is and the other advisors'
+ * territories.
+ */
+function assembleC2(
+  input: Parameters<typeof assemblePrompt>[0],
+  arch: Extract<ResolvedArchitecture, { kind: "c2" }>,
+  webSearch: boolean,
+): Omit<ChatRequest, "signal"> {
+  const { companion } = input;
+  const channel = input.channel ? "text" : "web";
+  const channelBody = input.channel ? `${input.channel.body}\n${CORRECTIONS.talk}` : `${WEB_EXPRESSION}\n${CORRECTIONS.talk}`;
+  const limit = webSearch ? (input.searchLimit ?? companion.webSearchMaxUses) : 0;
+  return {
+    system: [
+      { label: "system_prompt", title: "SYSTEM PROMPT", body: arch.identity, cacheable: true },
+      { label: "foundation", title: "WHAT INFORMS YOUR JUDGMENT", body: `${arch.foundation}\n\n${FOUNDATION_PROTECTION}`, cacheable: true },
+      { label: "safeguards", title: "SAFEGUARDS", body: c2Safeguards(companion, channel), cacheable: true },
+      ...(arch.affiliations ? [{ label: AFFILIATIONS_BLOCK, title: "CINQ AFFILIATIONS", body: arch.affiliations, cacheable: true }] : []),
+      { label: CHANNEL_BLOCK, title: input.channel?.title ?? "CHANNEL NOTES", body: channelBody, cacheable: input.channel?.cacheable ?? true },
+      { label: "search_status", title: "SEARCH STATUS", body: searchStatus(limit, channel), cacheable: true },
+      ...(input.photoNote && hasPhotos(input.turns) ? [photoNoteBlock()] : []),
       ...(input.now ? [dateBlock(input.now)] : []),
     ],
     messages: toChatTurns(input.turns, companion.photosOnly, input.maxTurns),

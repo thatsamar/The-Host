@@ -48,8 +48,36 @@ export function sessionCookie(request: Request): string | undefined {
   return undefined;
 }
 
+/**
+ * The cookie is sent site-wide (Path=/) so the website can recognise the owner
+ * for C2 rolled out to the owner only (foundations/owner.ts). It stays
+ * HttpOnly, Secure and SameSite=Strict; the page's own code never sees it.
+ */
 export function sessionHeader(value: string, maxAge: number): string {
-  return `${SESSION_COOKIE}=${value}; Path=/ops; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Strict`;
+  return `${SESSION_COOKIE}=${value}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Strict`;
+}
+
+/** Signing out clears the cookie, and the one earlier versions set for /ops alone. */
+export function signOutHeaders(): [string, string][] {
+  return [
+    ["Set-Cookie", sessionHeader("", 0)],
+    ["Set-Cookie", `${SESSION_COOKIE}=; Path=/ops; Max-Age=0; HttpOnly; Secure; SameSite=Strict`],
+  ];
+}
+
+/**
+ * That a form post came from a page on this deployment (the browser's Origin,
+ * else its Referer), so another site can't submit the owner's forms.
+ */
+export function sameOrigin(request: Request): boolean {
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? new URL(request.url).host;
+  const source = request.headers.get("origin") ?? request.headers.get("referer");
+  if (!source || source === "null") return false;
+  try {
+    return new URL(source).host === host;
+  } catch {
+    return false;
+  }
 }
 
 /** The sign-in page: a password field a phone's password manager can fill and remember. */

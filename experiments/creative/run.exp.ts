@@ -21,25 +21,28 @@ import { fileURLToPath } from "node:url";
 import { it } from "vitest";
 import { toChatTurns, type AskTurn } from "@/lib/ask/prompt";
 import { COMPANIONS } from "@/lib/companions";
-import { callCost } from "@/lib/ops/rates";
 import { readSuggestion, offerText } from "@/lib/sms/handoff";
 import { speakerLabel, toSmsText } from "@/lib/sms/handler";
 import { SMS_ADVISORS, type SmsAdvisorId } from "@/lib/sms/navigation";
 import { answerBudget, answerFits, condensePrompt, roomForAnswer, shortAnswerText } from "@/lib/sms/short";
 import type { ChatProvider, ChatRequest } from "@/lib/ai/types";
-import { ALDEN_STUDY_IDS, loadCases, loadPhoto, PILOT_CASE_IDS, type Case, type CaseTurn } from "./cases";
-import { configsFor, instructionSize, type Config } from "./configs";
+import { recentTurns } from "@/lib/sms/context";
+import type { SmsTurn } from "@/lib/sms/store";
+import { ALDEN_STUDY_IDS, INTELLECT_KINDS, loadCases, loadPhoto, PILOT_CASE_IDS, type Case, type CaseTurn } from "./cases";
+import { complete, costOf } from "./calls";
+import { judgeAll } from "./judges";
+import { renderIntellect } from "./report";
+import { configsFor, forChannel, instructionSize, type Config } from "./configs";
 import { render } from "./render";
 
-const OUT = fileURLToPath(new URL("./out/", import.meta.url));
+// OUT_DIR keeps a study's results apart (e.g. out/intellect/); the default is out/.
+const OUT = process.env.OUT_DIR ? `${process.env.OUT_DIR.replace(/\/$/, "")}/` : fileURLToPath(new URL("./out/", import.meta.url));
 const RESULTS = `${OUT}results.jsonl`;
 const EXTRACTS = `${OUT}extracts.jsonl`;
 
 /** The neutral restatement: the judgment without the writing, for the substance page. */
 export const EXTRACT_PROMPT =
   "Restate the advice below as plain, neutral notes, in the same words for any writer: what is recommended (each thing, with any price given), the deciding reasons, what is rejected or advised against and why, and any question asked. Keep every specific name, number and condition exactly. Remove all style, voice, humor, warmth and flourish; add nothing, judge nothing, and keep it as short as the content allows. Plain lines starting with \"- \", no headings.";
-/** Assumed list price per web search, for the budget only (not in the rates table). */
-const SEARCH_USD = 0.01;
 
 export interface RunResult {
   key: string;
@@ -80,28 +83,24 @@ function withoutLabel(answer: string, advisorId: SmsAdvisorId): string {
   return answer.replace(new RegExp(String.raw`^\s*[*_]*${name}[*_]*\s*:[*_]*\s*`, "i"), "");
 }
 
-async function complete(provider: ChatProvider, request: ChatRequest): Promise<{ text: string; usage: Record<string, unknown>; model: string | null; searches: number }> {
-  let text = "";
-  let usage: Record<string, unknown> = {};
-  let model: string | null = null;
-  let searches = 0;
-  for await (const event of provider.streamChat(request)) {
-    if (event.type === "text") text += event.text;
-    else if (event.type === "done") {
-      usage = event.usage;
-      model = event.model;
-      searches = event.webSearches.length;
-    }
-  }
-  return { text, usage, model, searches };
-}
-
-const costOf = (model: string | null, usage: Record<string, unknown>, searches: number) => {
-  const n = (k: string) => (typeof usage[k] === "number" ? (usage[k] as number) : 0);
-  return (callCost({ model: model ?? undefined, input: n("input_tokens"), output: n("output_tokens"), cache_read: n("cache_read_input_tokens"), cache_write: n("cache_creation_input_tokens") }) ?? 0) + searches * SEARCH_USD;
-};
 
 const toAsk = (t: CaseTurn): AskTurn => ({ role: t.role, text: t.text, images: t.photos?.map(loadPhoto) });
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The earlier messages a configuration sees: all of them, none (G0, A0), or,
+ * for AW, what production by text really keeps: `recentTurns` over each
+ * turn's age. A turn with no `daysAgo` belongs to the same conversation.
+ */
+export function historyFor(c: Case, config: Config, now: Date): CaseTurn[] {
+  const history = c.history ?? [];
+  if (config.withoutHistory) return [];
+  if (!config.productionWindow) return history;
+  const stored: SmsTurn[] = history.map((t) => ({ role: t.role, text: t.text, at: now.getTime() - (t.daysAgo ?? 0) * DAY_MS }));
+  const kept = new Set(recentTurns(stored, now.getTime()).map((t) => t.text));
+  return history.filter((t) => kept.has(t.text));
+}
 
 /** One answer through the configuration: the advisor's own words, and what the person would receive. */
 async function answer(
@@ -109,13 +108,14 @@ async function answer(
   config: Config,
   conversation: AskTurn[],
   now: Date,
-  providers: { chat: (id: SmsAdvisorId) => ChatProvider; router: () => ChatProvider },
+  providers: { chat: (id: SmsAdvisorId) => ChatProvider; router: () => ChatProvider; limited?: (id: SmsAdvisorId, searches: number) => ChatProvider },
 ) {
   const id = c.advisor as SmsAdvisorId;
   const companion = COMPANIONS[id];
-  const system = config.system(c.advisor, now);
-  const request: ChatRequest = { system, messages: toChatTurns(conversation, companion.photosOnly), webSearch: config.webSearch };
-  const first = await complete(providers.chat(id), request);
+  const system = forChannel(config.system(c.advisor, now), c.channel);
+  const request: ChatRequest = { system, messages: toChatTurns(conversation, config.photosOnly?.(c.advisor) ?? companion.photosOnly), webSearch: config.webSearch };
+  const chat = config.maxSearches !== undefined && providers.limited ? providers.limited(id, config.maxSearches) : providers.chat(id);
+  const first = await complete(chat, request);
   let cost = costOf(first.model, first.usage, first.searches);
   const { text, suggest } = readSuggestion(first.text, id);
   const own = toSmsText(withoutLabel(text, id));
@@ -150,10 +150,10 @@ async function answer(
   return { own, delivered, rewritten, trimmed, cost, model: first.model, routerModel, usage: first.usage, searches: first.searches, system };
 }
 
-async function runOne(c: Case, config: Config, rep: number, now: Date, providers: { chat: (id: SmsAdvisorId) => ChatProvider; router: () => ChatProvider }): Promise<RunResult> {
+async function runOne(c: Case, config: Config, rep: number, now: Date, providers: { chat: (id: SmsAdvisorId) => ChatProvider; router: () => ChatProvider; limited?: (id: SmsAdvisorId, searches: number) => ChatProvider }): Promise<RunResult> {
   // A real exchange keeps the time it was asked, so the date block reads as it did then.
   if (c.at) now = new Date(c.at);
-  const system = config.system(c.advisor, now);
+  const system = forChannel(config.system(c.advisor, now), c.channel);
   const base = {
     key: `${c.id}|${config.id}|${rep}`,
     caseId: c.id,
@@ -166,14 +166,14 @@ async function runOne(c: Case, config: Config, rep: number, now: Date, providers
     at: now.toISOString(),
     effort: process.env.CHAT_EFFORT || "high (default)",
     webSearch: config.webSearch,
-    instructionChars: instructionSize(config, c.advisor, now),
+    instructionChars: instructionSize(config, c.advisor, now, c.channel),
     promptSha: createHash("sha256").update(system.map((b) => b.body).join("\n\n")).digest("hex").slice(0, 12),
   };
   const began = Date.now();
   try {
     // The same earlier messages and context for every configuration, the general-purpose one included; G0 is the ordinary assistant without them.
     const asked = c.material ? `${c.question}\n\n${c.material}` : c.question;
-    let conversation: AskTurn[] = [...(config.withoutHistory ? [] : (c.history ?? []).map(toAsk)), { role: "user", text: asked, images: c.photos?.map(loadPhoto) }];
+    let conversation: AskTurn[] = [...historyFor(c, config, now).map(toAsk), { role: "user", text: asked, images: c.photos?.map(loadPhoto) }];
     let result = await answer(c, config, conversation, now, providers);
     let cost = result.cost;
     let first: RunResult["first"];
@@ -234,20 +234,36 @@ it.skipIf(!process.env.RUN_CREATIVE_EXPERIMENT)("runs the creative comparison", 
   const caseIds = list(process.env.CASES);
   const configIds = list(process.env.CONFIGS);
   const all = loadCases();
-  const study = process.env.STUDY === "alden" ? ALDEN_STUDY_IDS : null;
-  const cases = all.filter((c) => (pilot ? PILOT_CASE_IDS.includes(c.id) : study ? study.includes(c.id) : !caseIds || caseIds.includes(c.id)));
-  const jobsFor = (rep: number) => cases.flatMap((c) => configsFor(c.advisor, configIds).map((cfg) => ({ c, cfg, rep })));
+  const study =
+    process.env.STUDY === "alden" ? ALDEN_STUDY_IDS : process.env.STUDY === "intellect" ? all.filter((c) => INTELLECT_KINDS.includes(c.kind) || c.source === "authentic").map((c) => c.id) : null;
+  const advisors = list(process.env.ADVISORS);
+  const cases = all.filter(
+    (c) => (pilot ? PILOT_CASE_IDS.includes(c.id) : study ? study.includes(c.id) && (!caseIds || caseIds.includes(c.id)) : !caseIds || caseIds.includes(c.id)) && (!advisors || advisors.includes(c.advisor)),
+  );
+  const jobsFor = (rep: number) => cases.flatMap((c) => configsFor(c.advisor, configIds).filter((cfg) => (c.channel === "web" ? /^(W|G)/.test(cfg.id) : !cfg.id.startsWith("W"))).filter((cfg) => !cfg.needsHistory || c.history?.some((t) => t.daysAgo !== undefined) || (cfg.withoutHistory && !!c.history?.length)).map((cfg) => ({ c, cfg, rep })));
   const now = new Date();
 
   if (process.env.DRY_RUN) {
-    const lines = jobsFor(1).map(({ c, cfg }) => `${c.id.padEnd(26)} ${cfg.id.padEnd(3)} ${String(instructionSize(cfg, c.advisor, now)).padStart(6)} chars of instructions${c.followUp ? "  (two turns)" : ""}${c.followUps ? `  (${c.followUps.length + 1} turns)` : ""}`);
+    const lines = jobsFor(1).map(({ c, cfg }) => `${c.id.padEnd(26)} ${cfg.id.padEnd(3)} ${String(instructionSize(cfg, c.advisor, now, c.channel)).padStart(6)} chars of instructions${c.followUp ? "  (two turns)" : ""}${c.followUps ? `  (${c.followUps.length + 1} turns)` : ""}`);
     const calls = jobsFor(1).reduce((n, { c }) => n + 1 + (c.followUp ? 1 : 0) + (c.followUps?.length ?? 0), 0) * reps;
-    writeFileSync(`${OUT}dry-run.txt`, [...lines, "", `${calls} answer calls (${reps} repetitions), plus a rewrite call where a text-pipeline answer runs long.`].join("\n"));
+    // Cost per answer as measured in the Alden study (Nov 27): about $0.04 controlled, $0.07 with research; plus about $0.012 per automated check.
+    const est = jobsFor(1).reduce((n, { c, cfg }) => n + (1 + (c.followUp ? 1 : 0) + (c.followUps?.length ?? 0)) * (cfg.webSearch ? 0.07 : 0.04), 0) * reps;
+    const perConfig = jobsFor(1).reduce<Record<string, number>>((m, { cfg }) => ({ ...m, [cfg.id]: (m[cfg.id] ?? 0) + 1 }), {});
+    writeFileSync(
+      `${OUT}dry-run.txt`,
+      [
+        ...lines,
+        "",
+        `${cases.length} questions; per configuration: ${Object.entries(perConfig).map(([k, v]) => `${k} ${v}`).join(", ")}`,
+        `${calls} answer calls (${reps} repetitions), plus a rewrite call where a text-pipeline answer runs long.`,
+        `Estimated: $${est.toFixed(0)} for the answers, about $${(calls * 0.012 * 2).toFixed(0)} more for the automated checks.`,
+      ].join("\n"),
+    );
     return;
   }
 
   const { getChatProvider, getRouterProvider } = await import("@/lib/ai");
-  const providers = { chat: (id: SmsAdvisorId) => getChatProvider(COMPANIONS[id]), router: () => getRouterProvider() };
+  const providers = { chat: (id: SmsAdvisorId) => getChatProvider(COMPANIONS[id]), router: () => getRouterProvider(), limited: (id: SmsAdvisorId, searches: number) => getChatProvider({ ...COMPANIONS[id], webSearchMaxUses: searches }) };
   const done = new Set<string>();
   let spent = 0;
   if (existsSync(RESULTS)) {
@@ -257,8 +273,11 @@ it.skipIf(!process.env.RUN_CREATIVE_EXPERIMENT)("runs the creative comparison", 
       spent += r.costUsd;
     }
   }
+  // Checks already paid for count against the same budget, so stages run into one directory share one cap.
+  if (existsSync(`${OUT}judges.jsonl`)) for (const line of readFileSync(`${OUT}judges.jsonl`, "utf8").split("\n").filter(Boolean)) spent += (JSON.parse(line) as { cost: number }).cost;
   // Round robin by repetition, so a budget stop leaves every configuration with the same number of runs.
-  for (let rep = 1; rep <= reps; rep++) {
+  // JUDGE_ONLY: check what's already answered, and answer nothing new.
+  for (let rep = 1; rep <= (process.env.JUDGE_ONLY ? 0 : reps); rep++) {
     const jobs = jobsFor(rep).filter(({ c, cfg }) => !done.has(`${c.id}|${cfg.id}|${rep}`));
     for (let i = 0; i < jobs.length; i += 4) {
       if (spent >= budget) break;
@@ -306,4 +325,9 @@ it.skipIf(!process.env.RUN_CREATIVE_EXPERIMENT)("runs the creative comparison", 
     return;
   }
   render(OUT);
+  if (process.env.JUDGE) {
+    const judged = await judgeAll(OUT, cases, providers.router, budget - spent, () => providers.chat("alden"));
+    writeFileSync(`${OUT}spent.txt`, `$${(spent + judged).toFixed(2)} of $${budget} (checks $${judged.toFixed(2)})\n`);
+  }
+  if (process.env.STUDY === "intellect" || process.env.JUDGE) renderIntellect(OUT, cases);
 });

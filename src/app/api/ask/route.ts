@@ -12,6 +12,10 @@ import { MAX_PHOTOS_PER_TURN } from "@/lib/ask/prompt";
 import { createClient, getUserId } from "@/lib/supabase/server";
 import { errorClass, safeToken } from "@/lib/diagnostics";
 import type { FailureInfo } from "@/lib/ai/types";
+import { architectureLog, foundationLoader, photoNoteEnabled, recordLeakGuard } from "@/lib/foundations/loader";
+import { leakIndexFor } from "@/lib/foundations/leak-guard";
+import { isOwnerRequest } from "@/lib/foundations/owner";
+import { continuationTurns, screenAnswer, type ScreenStats } from "@/lib/foundations/screen";
 
 // Long answers with web search can take a while.
 export const maxDuration = 300;
@@ -95,13 +99,35 @@ async function answer(request: Request): Promise<Response> {
     return Response.json({ error: unavailable(companion.name) }, { status: 503 });
   }
 
+  // The advisor's architecture, once per answer (docs/foundations.md). Off, or on the current architecture, this changes nothing.
+  // With C2 rolled out to the owner only, the owner is whoever carries this deployment's /ops sign-in (never logged).
+  const resolved = foundationLoader().quick() ?? (await foundationLoader().resolve(companion.id, { owner: isOwnerRequest(request) }));
+  if (resolved.kind === "unavailable") return Response.json({ error: unavailable(companion.name) }, { status: 503 });
+  const shape = {
+    architecture: resolved.kind === "c2" ? resolved : undefined,
+    searchLimit: env.WEB_SEARCH_MAX_USES ?? companion.webSearchMaxUses,
+    photoNote: photoNoteEnabled(),
+  };
+
   const { id, turns } = parsed.data;
+  // A C2 answer is screened before any of it is released (screen.ts): the
+  // page and the relay only ever get checked text. Other answers stream as is.
+  const screen: ScreenStats = { hits: 0, continued: false };
+  const answerEvents = (deps: Omit<Parameters<typeof ask>[0], "provider" | "companion">): AsyncGenerator<AskEvent> => {
+    const events = ask({ provider, companion, ...deps, ...shape }, turns);
+    if (resolved.kind !== "c2") return events;
+    return screenAnswer(events, {
+      index: leakIndexFor(resolved),
+      continueFrom: (clean) => ask({ provider, companion, ...deps, ...shape }, continuationTurns(turns, clean)),
+      stats: screen,
+    });
+  };
   const encoder = new TextEncoder();
   const encode = (event: StreamEvent) => encoder.encode(`${JSON.stringify(event)}\n`);
 
   if (!id) {
     // Without an answer id there's nothing to resume, so stop when the visitor goes.
-    const events = ask({ provider, companion, signal: request.signal }, turns);
+    const events = answerEvents({ signal: request.signal });
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
         try {
@@ -139,6 +165,7 @@ async function answer(request: Request): Promise<Response> {
     model: safeToken(env.CHAT_MODEL),
     effort: env.CHAT_EFFORT,
     webSearchMaxUses: env.WEB_SEARCH_MAX_USES ?? companion.webSearchMaxUses,
+    ...architectureLog(resolved),
   };
   // Where the time went, even when the answer never finishes: each phase and when it began.
   const phases: [string, number][] = [];
@@ -161,7 +188,7 @@ async function answer(request: Request): Promise<Response> {
   const generation = (async () => {
     let outcome = "answered";
     try {
-      for await (let event of ask({ provider, companion, signal: stop.signal, onFinish, onFailure }, turns)) {
+      for await (let event of answerEvents({ signal: stop.signal, onFinish, onFailure })) {
         if (event.type === "error") {
           outcome = timedOut ? "time-limit" : event.message === "Stopped." ? "stopped" : "error";
           if (timedOut) event = { type: "error", message: timeLimitMessage(companion.name) };
@@ -184,6 +211,16 @@ async function answer(request: Request): Promise<Response> {
     } finally {
       clearTimeout(timeLimit);
       clearInterval(heartbeat);
+      // Pre-release screening, counted (never the text): matches held back, and the time the hold added before the first text.
+      if (resolved.kind === "c2") {
+        log.screen = {
+          hits: screen.hits,
+          continued: screen.continued,
+          ...(screen.firstModelTextAt !== undefined ? { modelFirstTextMs: screen.firstModelTextAt - receivedAt } : {}),
+          ...(screen.firstModelTextAt !== undefined && screen.firstReleaseAt !== undefined ? { heldMs: screen.firstReleaseAt - screen.firstModelTextAt } : {}),
+        };
+        if (screen.hits) recordLeakGuard(companion.id, "web");
+      }
       await relay.finish();
       console.info(
         "Answer finished",

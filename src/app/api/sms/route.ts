@@ -19,6 +19,9 @@ import type { SmsTurn } from "@/lib/sms/store";
 import { errorClass, safeToken } from "@/lib/diagnostics";
 import { numberKey, PRUNE_ONE_IN, RequestMeasure, usageCounts, type ModelCall, type ModelPurpose } from "@/lib/sms/metrics";
 import { SupabaseMetricsSink } from "@/lib/sms/supabase-metrics";
+import { foundationLoader, photoNoteEnabled, recordLeakGuard } from "@/lib/foundations/loader";
+import { checkLeak, LEAK_REWRITE_PROMPT, leakIndexFor, sentencesOf } from "@/lib/foundations/leak-guard";
+import { isOwnerPhone } from "@/lib/foundations/owner";
 
 // Answers can take a while; the webhook itself answers immediately (below)
 // and the replies go out through the REST API after the handler finishes.
@@ -116,11 +119,17 @@ export async function POST(request: Request): Promise<Response> {
           }
         };
         // A model call, timed, with its token counts.
-        const timed = async <T>(purpose: ModelPurpose, run: (onUsage: (usage: Record<string, unknown>, model?: string) => void) => Promise<T>) => {
+        const timed = async <T>(
+          purpose: ModelPurpose,
+          run: (onUsage: (usage: Record<string, unknown>, model?: string) => void, note: (fields: Partial<ModelCall>) => void) => Promise<T>,
+        ) => {
           const began = Date.now();
           const call: ModelCall = { purpose, ms: 0 };
           try {
-            return await run((usage, model) => Object.assign(call, usageCounts(usage), model ? { model: safeToken(model) } : {}));
+            return await run(
+              (usage, model) => Object.assign(call, usageCounts(usage), model ? { model: safeToken(model) } : {}),
+              (fields) => Object.assign(call, fields),
+            );
           } catch (err) {
             call.failed = true;
             throw err;
@@ -143,10 +152,20 @@ export async function POST(request: Request): Promise<Response> {
           // On text, each advisor also gets the text-only notes: how to suggest
           // another advisor, and the previous advisor's answer on a handoff.
           ask: (advisorId, turns, context) =>
-            timed("answer", async (onUsage) => {
+            timed("answer", async (onUsage, note) => {
               measure.row.advisor_id = advisorId;
               const companion = COMPANIONS[advisorId as CompanionId];
               const provider = getChatProvider(companion);
+              // The advisor's architecture, once per answer (docs/foundations.md); off or current, nothing changes.
+              // With C2 rolled out to the owner only, the owner is the sender whose number is OWNER_PHONE (never logged).
+              const resolved = foundationLoader().quick() ?? (await foundationLoader().resolve(advisorId, { owner: isOwnerPhone(from) }));
+              note({
+                architecture: resolved.kind === "c2" ? "c2" : "legacy",
+                foundation_ms: resolved.loadMs,
+                ...(resolved.kind !== "c2" && resolved.fallback ? { foundation_fallback: resolved.fallback } : {}),
+              });
+              // Past the fallback threshold the advisor is unavailable: the handler sends its plain fallback text.
+              if (resolved.kind === "unavailable") throw new Error("advisor_unavailable");
               let text = "";
               for await (const event of ask(
                 {
@@ -155,6 +174,9 @@ export async function POST(request: Request): Promise<Response> {
                   channel: textChannelNotes(advisorId, context?.handoff, context?.met, context?.budget, context?.region),
                   signal: context?.signal,
                   onUsage,
+                  architecture: resolved.kind === "c2" ? resolved : undefined,
+                  searchLimit: process.env.WEB_SEARCH_MAX_USES ? Number(process.env.WEB_SEARCH_MAX_USES) : companion.webSearchMaxUses,
+                  photoNote: photoNoteEnabled(),
                 },
                 turns.map(
                   (turn: SmsTurn) => ({
@@ -168,6 +190,32 @@ export async function POST(request: Request): Promise<Response> {
                 else if (event.type === "error") throw new Error("ask_error");
               }
               if (!text.trim()) throw new Error("ask_empty");
+              // The leak guard: a text is complete before it is sent, so one that repeats the
+              // foundation is rewritten once in fresh words; failing that, the repeating sentences go.
+              // The same index of distinctive sequences the website screens against (leakIndexFor, built once per version).
+              const leakIndex = resolved.kind === "c2" ? leakIndexFor(resolved) : null;
+              if (leakIndex && checkLeak(text, leakIndex).leaked) {
+                note({ leak_guard: true });
+                recordLeakGuard(advisorId, "text");
+                const room = context?.budget ?? 450;
+                const rewritten = await timed("leak_rewrite", async (onRewriteUsage) => {
+                  let reply = "";
+                  for await (const event of getRouterProvider().streamChat({
+                    system: [{ label: "rewrite", title: "REWRITE", body: LEAK_REWRITE_PROMPT(companion.name, room) }],
+                    messages: [{ role: "user", content: [{ type: "text", text }] }],
+                    webSearch: false,
+                    signal: AbortSignal.timeout(ROUTE_TIMEOUT_MS),
+                  })) {
+                    if (event.type === "text") reply += event.text;
+                    else if (event.type === "done") onRewriteUsage(event.usage, event.model);
+                  }
+                  return reply.trim();
+                }).catch(() => "");
+                if (rewritten && !checkLeak(rewritten, leakIndex).leaked) return rewritten;
+                const kept = sentencesOf(text).filter((s) => !checkLeak(s, leakIndex).leaked).join(" ").trim();
+                if (!kept) throw new Error("ask_leak");
+                return kept;
+              }
               return text;
             }),
           // Which advisor a question goes to when none is picked: one short, low-effort call.

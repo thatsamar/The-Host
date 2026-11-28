@@ -93,7 +93,8 @@ describe("the operations dashboard", () => {
     const ok = await signIn(new Request("https://cinq.example/ops", { method: "POST", body: new URLSearchParams({ password: "right-horse" }) }));
     expect(ok.status).toBe(303);
     const cookie = ok.headers.get("Set-Cookie")!;
-    expect(cookie).toMatch(/^cinq_ops=\d+\.[\w-]+; Path=\/ops; Max-Age=2592000; HttpOnly; Secure; SameSite=Strict$/);
+    // Site-wide, so the website can recognise the owner for owner-only C2; still HttpOnly, Secure and Strict.
+    expect(cookie).toMatch(/^cinq_ops=\d+\.[\w-]+; Path=\/; Max-Age=2592000; HttpOnly; Secure; SameSite=Strict$/);
     const value = cookie.split(";")[0];
     const res = await ops(new Request("https://cinq.example/ops", { headers: { Cookie: value } }));
     expect(res.status).toBe(200);
@@ -104,7 +105,11 @@ describe("the operations dashboard", () => {
     expect(validSession(old.value, "right-horse")).toBe(false);
     expect(validSession(newSession("old-password").value, "right-horse")).toBe(false);
     const out = await ops(new Request("https://cinq.example/ops?signout=1", { headers: { Cookie: value } }));
-    expect(out.headers.get("Set-Cookie")).toContain("Max-Age=0");
+    // Both the site-wide cookie and the one earlier versions set for /ops alone are cleared.
+    const cleared = out.headers.getSetCookie();
+    expect(cleared).toHaveLength(2);
+    expect(cleared.every((c) => c.includes("Max-Age=0"))).toBe(true);
+    expect(cleared.some((c) => c.includes("Path=/ops;"))).toBe(true);
   });
 
   it("shows aggregates to the right password, never stored or indexed", async () => {

@@ -1,6 +1,7 @@
 import { ChatError, type AnswerPhase, type ChatProvider, type ContextBlock, type FailureInfo, type WebSourceRef } from "@/lib/ai/types";
 import type { Companion } from "@/lib/companions/types";
 import { safeToken } from "@/lib/diagnostics";
+import type { ResolvedArchitecture } from "@/lib/foundations/types";
 import { assemblePrompt, type AskTurn } from "./prompt";
 
 export type AskEvent =
@@ -40,6 +41,12 @@ export async function* ask(
     webSearch?: boolean;
     /** Notes for a channel other than the website (see assemblePrompt). */
     channel?: ContextBlock;
+    /** The advisor's resolved architecture (the route resolves it once per answer); absent means the current one. */
+    architecture?: ResolvedArchitecture;
+    /** Searches allowed for this answer, for C2's search status. */
+    searchLimit?: number;
+    /** PHOTO_NOTE_ENABLED, read by the route. */
+    photoNote?: boolean;
     signal?: AbortSignal;
     onFinish?: (info: AnswerInfo) => void;
     /** The time now, for the date line (tests set it); the real time otherwise. */
@@ -51,7 +58,16 @@ export async function* ask(
   },
   turns: AskTurn[],
 ): AsyncGenerator<AskEvent> {
-  const request = assemblePrompt({ companion: deps.companion, turns, webSearch: deps.webSearch, channel: deps.channel, now: deps.now?.() ?? new Date() });
+  const request = assemblePrompt({
+    companion: deps.companion,
+    turns,
+    webSearch: deps.webSearch,
+    channel: deps.channel,
+    now: deps.now?.() ?? new Date(),
+    architecture: deps.architecture,
+    searchLimit: deps.searchLimit,
+    photoNote: deps.photoNote,
+  });
   if (request.messages.at(-1)?.role !== "user") {
     yield { type: "error", message: "Add a photo or a question." };
     return;
