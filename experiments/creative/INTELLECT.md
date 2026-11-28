@@ -15,7 +15,7 @@ general-purpose AI would?
 |---|---|---|
 | 1 | The intellectual baseline | G0 (an ordinary assistant), G (with the same personal context), GS (G with web search: equivalent knowledge, research and safeguards), against A (production, controlled) and P (production end to end) |
 | 2 | Sources of differentiation | E (the brief alone), D (brief and essentials), DJ (D + the shared standard of judgment), DC (D + the advisor's own capabilities), NJ (production without the shared standard), NX (production without the paragraph about the other advisors), GJ (the shared standard without a brief), A0 (production without memory), P vs A (research). Dilution: how close each configuration's substance is to the general-purpose answer (`convergence`) |
-| 3 | Distinct intellectual foundations | `audits/`: each brief's own way of interpreting, deciding and concluding, in its own words, with the gaps only the owner can fill. Foundations are tested as DE, OE, AE and RF once the owner provides or approves them (`FOUNDATION_DIR`). None is generated here |
+| 3 | Distinct intellectual foundations | The audits (kept in the private repository): each brief's own way of interpreting, deciding and concluding, in its own words, with the gaps only the owner can fill. Foundations are tested as DE, OE, AE and RF once the owner provides or approves them (`FOUNDATION_DIR`). None is generated here |
 | 4 | Longitudinal | One case per advisor, four earlier conversations over six weeks, asked with the first two (`-early`) and all four (`-full`); A (full memory), AW (production's real 24-hour memory), A0, G, G0. Checked: each earlier fact used, recited, or (if sensitive and unrelated) left out |
 | 5 | The simplified blind evaluation | `primary.html`: four choices per question (whose advice I'd follow, most discernment, understood what others missed, which I'd return to). The detailed rubric stays in `blind.html`, for diagnosis |
 | 6 | Beyond Alden | `intellect-cases.ts`: for all five, an ambiguous question, a meaningful financial decision, an everyday one, an unfamiliar person, one where asking first is right, plus the earlier independence, challenge, premise, stakes, luxury, memory and voice cases |
@@ -45,7 +45,7 @@ Two investigations sit beside the study: `FORCED-BEHAVIOUR.md` (every
 instruction that compels an advisor to find fault, change something, offer an
 alternative, ask, summarize, show its research or show what it remembers) and
 `MEMORY.md` (from remembering to understanding). The founder interviews for
-the intellectual foundations are in `interviews/`.
+the intellectual foundations are kept in the private repository, not here.
 
 ## What is measured automatically, and what isn't
 
