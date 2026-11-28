@@ -7,6 +7,7 @@
 //   node scripts/foundations.mjs activate --advisor tony --architecture c2 --identity <n> --foundation <n> [--layer2 <n>|none] --by <name>
 //   node scripts/foundations.mjs activate --advisor tony --architecture legacy --by <name>
 //   node scripts/foundations.mjs rollback --advisor tony --by <name>        (back to the configuration before the current one)
+//   (The /ops foundations panel does the same and sets the audience; activate here keeps the stored audience.)
 //   node scripts/foundations.mjs status
 //   node scripts/foundations.mjs verify-lockdown                            (with the public key: every table refuses)
 //   node scripts/foundations.mjs export --out <dir>                         (encrypted rows and a manifest; no text)
@@ -95,12 +96,12 @@ async function publish(a) {
   console.log(`Published ${a.advisor} ${a.layer} v${version} (sha256 ${short(sealed.sha256)}…, key ${key.id}). Not active until activated.`);
 }
 
-const describe = (row) => (row ? (row.architecture === "c2" ? `c2 (identity v${row.identity_version}, foundation v${row.foundation_version}, layer 2 ${row.layer2_version ? `v${row.layer2_version}` : "off"})` : "legacy") : "not configured (legacy)");
+const describe = (row) => (row ? (row.architecture === "c2" ? `c2 for ${row.audience === "owner" ? "the owner only" : "everyone"} (identity v${row.identity_version}, foundation v${row.foundation_version}, layer 2 ${row.layer2_version ? `v${row.layer2_version}` : "off"})` : "legacy") : "not configured (legacy)");
 
 async function activate(a) {
   if (!a.advisor || !["legacy", "c2"].includes(a.architecture) || !a.by) fail("activate needs --advisor, --architecture (legacy | c2) and --by.");
   const db = await client();
-  const row = { advisor_id: a.advisor, architecture: a.architecture, updated_by: a.by, updated_at: new Date().toISOString() };
+  const row = { advisor_id: a.advisor, architecture: a.architecture, updated_by: a.by, updated_at: new Date().toISOString(), last_action: a.action ?? "activate", note: null, fallback_test_until: null };
   if (a.architecture === "c2") {
     const identity = Number(a.identity);
     const foundation = Number(a.foundation);
@@ -128,11 +129,13 @@ async function activate(a) {
 async function rollback(a) {
   if (!a.advisor || !a.by) fail("rollback needs --advisor and --by.");
   const db = await client();
-  const { data, error } = await db.from("advisor_active_history").select("*").eq("advisor_id", a.advisor).order("id", { ascending: false }).limit(2);
+  const { data, error } = await db.from("advisor_active_history").select("*").eq("advisor_id", a.advisor).order("id", { ascending: false }).limit(300);
   if (error) fail(`Couldn't read the history (${error.code ?? "error"}).`);
-  const previous = data?.[1];
+  // Configurations only: uploads and fallback tests (from the /ops panel) aren't ones to go back to.
+  const configs = (data ?? []).filter((h) => !["upload", "fallback_test_on", "fallback_test_off"].includes(h.action));
+  const previous = configs[1];
   if (!previous) fail(`${a.advisor} has no earlier configuration; use activate --architecture legacy.`);
-  await activate({ advisor: a.advisor, architecture: previous.architecture, identity: previous.identity_version, foundation: previous.foundation_version, layer2: previous.layer2_version ?? "none", by: a.by });
+  await activate({ advisor: a.advisor, architecture: previous.architecture, identity: previous.identity_version, foundation: previous.foundation_version, layer2: previous.layer2_version ?? "none", by: a.by, action: "rollback" });
 }
 
 async function status() {
