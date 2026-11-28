@@ -35,6 +35,12 @@ export const SAFETY =
 
 export const PLAN_CHECK = "When someone wants a plan, make sure it works: opening hours, the time between stops, bookings.";
 
+/**
+ * The shared editorial convention (owner, Nov 28): basic punctuation only,
+ * never a voice. Each advisor's voice comes from its own identity.
+ */
+export const EDITORIAL = "No em dashes.";
+
 /** The website's only note on expression: a preference, never a ban on lists. */
 export const WEB_EXPRESSION = "In conversation, prefer prose. Use lists or headings when they genuinely help.";
 

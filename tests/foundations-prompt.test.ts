@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { APP_JUDGMENT, BLOCK_ORDER, C2_BLOCK_ORDER, CHANNEL_BLOCK, DATE_BLOCK, PHOTO_NOTE_BLOCK, assemblePrompt } from "@/lib/ask/prompt";
-import { CORRECTIONS, FOUNDATION_PROTECTION, PHOTO_NOTE, SAFETY, WEB_EXPRESSION } from "@/lib/ask/safeguards";
+import { CORRECTIONS, EDITORIAL, FOUNDATION_PROTECTION, PHOTO_NOTE, SAFETY, WEB_EXPRESSION } from "@/lib/ask/safeguards";
 import { COMPANIONS } from "@/lib/companions";
 import { GOLDIE_SAFETY } from "@/lib/companions/goldie";
 import { tony } from "@/lib/companions/tony";
@@ -87,6 +87,17 @@ describe("the photo note", () => {
       const at = req.system.findIndex((b) => b.label === PHOTO_NOTE_BLOCK);
       expect(req.system[at].body).toBe(PHOTO_NOTE);
       expect(req.system[at + 1].label).toBe(DATE_BLOCK);
+    }
+  });
+});
+
+describe("the shared editorial standard", () => {
+  it("is in C2's safeguards on both channels, and nowhere in legacy", () => {
+    for (const channel of [undefined, textChannelNotes("gio")]) {
+      const c2Prompt = assemblePrompt({ companion: tony, turns, channel, now, architecture: c2 }).system.map((b) => b.body).join("\n");
+      expect(c2Prompt).toContain(EDITORIAL);
+      const legacy = assemblePrompt({ companion: tony, turns, channel, now }).system.find((b) => b.label === "app_capabilities")?.body ?? "";
+      expect(legacy).not.toContain(EDITORIAL);
     }
   });
 });

@@ -20,6 +20,7 @@ import type { ResolvedArchitecture } from "@/lib/foundations/types";
 import {
   APP_OUTPUT_LIMITS_TEXT,
   CORRECTIONS,
+  EDITORIAL,
   FOUNDATION_PROTECTION,
   INTEGRITY,
   PHOTO_NOTE,
@@ -185,6 +186,7 @@ export function c2Safeguards(companion: Companion, channel: "web" | "text"): str
     PRIVACY,
     companion.safety ?? SAFETY,
     APP_OUTPUT_LIMITS,
+    EDITORIAL,
     ...(channel === "web" ? [WEB_MEMORY] : []),
   ].join("\n");
 }

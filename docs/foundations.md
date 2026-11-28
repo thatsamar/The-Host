@@ -17,13 +17,17 @@ Nothing changes until `FOUNDATIONS_ENABLED` is set. Until then nothing is read, 
 
 ## Layers, and where each lives
 
-| Layer | Where | Changed by |
-| --- | --- | --- |
-| Identity (who the advisor is, territories, disclosures) | `advisor_layers`, encrypted, versioned | the `/ops` foundations panel (or `scripts/foundations.mjs`) |
-| Intellectual foundation (layer 1) | `advisor_layers`, encrypted, versioned | the same |
-| Second layer (experimental) | `advisor_layers` as `foundation_l2`; off unless `layer2_version` is set | the same |
-| Shared safeguards, channel notes, search status | code: `src/lib/ask/safeguards.ts`, `src/lib/ask/prompt.ts` | a reviewed pull request |
-| A person's conversations (memory) | `sms_sessions` (24 hours, by text); later, persistent understanding | never mixed with the layers above |
+Five layers, each developed on its own without rewriting the others (owner, Nov 28):
+
+| Layer | What it holds | Where | Changed by |
+| --- | --- | --- | --- |
+| Identity | who the advisor is: purpose, personality, voice, territories, disclosures | `advisor_layers`, encrypted, versioned | the `/ops` foundations panel (or `scripts/foundations.mjs`) |
+| Intellectual foundation | how they see the world: convictions, influences, preferences, judgment (layer 1; a second layer stays experimental, off unless `layer2_version` is set) | `advisor_layers`, encrypted, versioned | the same |
+| Shared standards | integrity, discretion, factual accuracy, safety, basic editorial conventions (`EDITORIAL`: no em dashes) | code: `src/lib/ask/safeguards.ts` | a reviewed pull request |
+| Technical capabilities | what the advisor can access, remember, research and do right now: output limits (no files), memory on each channel, search status, channel notes | code: `safeguards.ts`, `prompt.ts`, `src/lib/sms/handoff.ts`, supplied by the system per answer | a reviewed pull request |
+| Personal understanding | what an advisor knows about the individual and how it evolves | `sms_sessions` today (24 hours, by text); later, persistent understanding | never mixed with the layers above |
+
+Shared standards stay minimal: never a common behavioral instruction or standard of judgment that would dilute an advisor's voice. Identities hold no technical limits (memory, files, search): the system states those accurately on every channel, so they can change without touching an identity.
 
 The private source of truth for every layer is the owner's private repository, which holds:
 - the interview transcripts;
