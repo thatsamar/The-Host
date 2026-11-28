@@ -4,7 +4,7 @@ import { SMS_ADVISORS } from "@/lib/sms/navigation";
 import { RETENTION_DAYS } from "@/lib/sms/metrics";
 import { HOME_SCREEN_TAGS } from "./session";
 
-const esc = (v: unknown) =>
+export const esc = (v: unknown) =>
   String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 const secs = (ms: number | null) => (ms === null ? "–" : ms < 10_000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.round(ms / 1000)} s`);
 const pct = (n: number, d: number) => (d ? `${Math.round((n / d) * 100)}%` : "–");
@@ -65,13 +65,13 @@ function foundationsSection(view: FoundationsView | undefined): string {
     .map((a) => {
       const reasons = Object.entries(a.reasons).map(([k, v]) => `${k} ${v}`).join(", ");
       const alert = a.unavailable24h ? ' class="bad-text"' : a.fallbacks24h ? ' class="bad-text"' : "";
-      return `<tr><td>${esc(a.advisor)}</td><td>${esc(a.architecture)}</td><td>${esc(a.versions)}</td><td>${esc(a.lastLoaded ?? "")}</td><td${alert}>${num(a.fallbacks24h)}${reasons ? ` <span class="note">(${esc(reasons)})</span>` : ""}</td><td${a.unavailable24h ? ' class="bad-text"' : ""}>${num(a.unavailable24h)}</td><td>${num(a.leakGuard24h)}</td><td class="note">${esc(a.updated)}</td></tr>`;
+      return `<tr><td>${esc(a.advisor)}</td><td>${esc(a.architecture)}${a.audience ? ` <span class="note">(${esc(a.audience)})</span>` : ""}${a.fallbackTest ? ` <span class="bad-text">fallback test</span>` : ""}</td><td>${esc(a.versions)}</td><td>${esc(a.lastLoaded ?? "")}</td><td${alert}>${num(a.fallbacks24h)}${reasons ? ` <span class="note">(${esc(reasons)})</span>` : ""}</td><td${a.unavailable24h ? ' class="bad-text"' : ""}>${num(a.unavailable24h)}</td><td>${num(a.leakGuard24h)}</td><td class="note">${esc(a.updated)}</td></tr>`;
     })
     .join("");
   const costs = view.costs
     .map((c) => `<tr><td>${esc(c.architecture)}</td><td>${num(c.answers)}</td><td>${secs(c.medianMs)}</td><td>${c.costPerAnswer === null ? "" : usd(c.costPerAnswer)}</td></tr>`)
     .join("");
-  return `<section><h2>Advisor architecture</h2><p class="note">Which architecture each advisor answers on, and whether its private foundation loaded. A fallback means the advisor answered on its current architecture because its foundation couldn't be loaded; unavailable means that lasted past the threshold. Counts are for the last 24 hours. No foundation text is ever shown here.</p>
+  return `<section><h2>Advisor architecture</h2><p class="note">Which architecture each advisor answers on, and whether its private foundation loaded. A fallback means the advisor answered on its current architecture because its foundation couldn't be loaded; unavailable means that lasted past the threshold. Counts are for the last 24 hours. No foundation text is ever shown here. <a href="/ops/foundations">Manage foundations</a>: upload, activate, roll back, emergency legacy, fallback test.</p>
 <div class="wrap"><table><thead><tr><th>Advisor</th><th>Architecture</th><th>Versions</th><th>Last loaded (UTC)</th><th>Fallbacks</th><th>Unavailable</th><th>Leak guard</th><th>Changed</th></tr></thead><tbody>
 ${rows || `<tr><td colspan="8" class="note">No advisor configured: all on the current architecture.</td></tr>`}
 </tbody></table></div>
@@ -81,19 +81,8 @@ ${costs || `<tr><td colspan="4" class="note">None.</td></tr>`}
 </tbody></table></div></section>`;
 }
 
-export function renderOpsPage(report: Report, opts: { days: number; recorded: boolean; foundations?: FoundationsView }): string {
-  const r = report;
-  const tabs = [1, 7, 30]
-    .map((d) => `<a href="?days=${d}" class="${d === opts.days ? "on" : ""}">${d === 1 ? "24 hours" : `${d} days`}</a>`)
-    .join("");
-  const perRequest = r.usage.requests ? (r.cost.modelUsd + (r.cost.smsUsd ?? 0)) / r.usage.requests : null;
-  const missingIn = r.measurement.days.reduce((n, d) => n + Math.max(0, (d.twilioIn ?? 0) - d.recordedIn), 0);
-  const missingOut = r.measurement.days.reduce((n, d) => n + Math.max(0, (d.twilioOut ?? 0) - d.recordedOut), 0);
-  const measurementOk = r.measurement.twilioReachable && missingIn === 0 && missingOut === 0 && r.measurement.deliveryReportsMissing === 0;
-
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex"><title>Cinq Operations</title>${HOME_SCREEN_TAGS}
-<style>
+/** The dashboard's styles, shared with the foundations panel. */
+export const OPS_STYLE = `<style>
 :root{--bg:#f5f6f4;--card:#fff;--fg:#1d2422;--muted:#5d6763;--line:#dce1de;--accent:#235f57;--ok:#2d6a3a;--warn:#8a5b10;--bad:#9a2f2c;color-scheme:light}
 @media (prefers-color-scheme:dark){:root{--bg:#121715;--card:#1a201e;--fg:#e3e8e5;--muted:#9aa5a0;--line:#2c3532;--accent:#7cc3b7;--ok:#8fd09c;--warn:#e3b56b;--bad:#ec9b96;color-scheme:dark}}
 body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
@@ -112,7 +101,21 @@ table{border-collapse:collapse;width:100%;min-width:520px;font-variant-numeric:t
 .note{color:var(--muted);font-size:13px}.banner{background:var(--card);border:1px solid var(--bad);border-radius:10px;padding:12px 14px}
 .bad-text{color:var(--bad);font-weight:600}.ok-text{color:var(--ok);font-weight:600}
 p{margin:6px 0;max-width:78ch}details{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 16px}summary{cursor:pointer;font-weight:600}
-</style></head><body><main>
+</style>`;
+
+export function renderOpsPage(report: Report, opts: { days: number; recorded: boolean; foundations?: FoundationsView }): string {
+  const r = report;
+  const tabs = [1, 7, 30]
+    .map((d) => `<a href="?days=${d}" class="${d === opts.days ? "on" : ""}">${d === 1 ? "24 hours" : `${d} days`}</a>`)
+    .join("");
+  const perRequest = r.usage.requests ? (r.cost.modelUsd + (r.cost.smsUsd ?? 0)) / r.usage.requests : null;
+  const missingIn = r.measurement.days.reduce((n, d) => n + Math.max(0, (d.twilioIn ?? 0) - d.recordedIn), 0);
+  const missingOut = r.measurement.days.reduce((n, d) => n + Math.max(0, (d.twilioOut ?? 0) - d.recordedOut), 0);
+  const measurementOk = r.measurement.twilioReachable && missingIn === 0 && missingOut === 0 && r.measurement.deliveryReportsMissing === 0;
+
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex"><title>Cinq Operations</title>${HOME_SCREEN_TAGS}
+${OPS_STYLE}</head><body><main>
 <div class="top"><div><h1>Cinq Operations</h1><div class="note">Cinq by text · ${esc(day(r.from))} to ${esc(day(r.to))} (UTC) · records since ${esc(day(r.recordsSince))} · aggregates only: no words, photos or phone numbers</div></div><nav class="tabs">${tabs}<a href="?signout=1">Sign out</a></nav></div>
 ${opts.recorded ? "" : `<div class="banner"><b>No records yet.</b> Either the measurement tables haven't been created, or no one texted in this period.</div>`}
 

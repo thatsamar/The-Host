@@ -79,7 +79,7 @@ export async function GET(request: Request): Promise<Response> {
     // Retention: expired records go whenever the dashboard is opened, too.
     new SupabaseMetricsSink(admin).prune(),
     // Each advisor's architecture and its last day's fallbacks (docs/foundations.md): never any text.
-    admin.from("advisor_active").select("advisor_id, architecture, identity_version, foundation_version, layer2_version, updated_by, updated_at, last_loaded_at"),
+    admin.from("advisor_active").select("advisor_id, architecture, identity_version, foundation_version, layer2_version, audience, fallback_test_until, updated_by, updated_at, last_loaded_at"),
     admin.from("advisor_events").select("advisor_id, at, kind, reason").gte("at", new Date(to.getTime() - 24 * 60 * 60 * 1000).toISOString()).limit(MAX_ROWS),
   ]);
   const recorded = !requests.error && (requests.data ?? []).some((r) => (r as { received_at: string }).received_at >= from.toISOString());

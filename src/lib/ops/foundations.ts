@@ -12,6 +12,9 @@ export interface ActiveConfig {
   identity_version: number | null;
   foundation_version: number | null;
   layer2_version: number | null;
+  /** Who gets C2 (20261128000001). */
+  audience?: "owner" | "everyone";
+  fallback_test_until?: string | null;
   updated_by: string;
   updated_at: string;
   last_loaded_at: string | null;
@@ -27,6 +30,9 @@ export interface AdvisorEvent {
 export interface ArchitectureRow {
   advisor: string;
   architecture: string;
+  /** "owner only" while C2 is being rehearsed; empty otherwise. */
+  audience: string;
+  fallbackTest: boolean;
   versions: string;
   updated: string;
   lastLoaded: string | null;
@@ -67,6 +73,8 @@ export function buildFoundationsView(input: { active: ActiveConfig[] | null; eve
     return {
       advisor: a.advisor_id,
       architecture: a.architecture,
+      audience: a.architecture === "c2" && a.audience === "owner" ? "owner only" : "",
+      fallbackTest: !!a.fallback_test_until && Date.parse(a.fallback_test_until) > input.now.getTime(),
       versions: a.architecture === "c2" ? `identity v${a.identity_version}, foundation v${a.foundation_version}${a.layer2_version ? `, layer 2 v${a.layer2_version}` : ", layer 2 off"}` : "",
       updated: `${a.updated_at.slice(0, 16).replace("T", " ")} by ${a.updated_by}`,
       lastLoaded: a.last_loaded_at ? a.last_loaded_at.slice(0, 16).replace("T", " ") : null,

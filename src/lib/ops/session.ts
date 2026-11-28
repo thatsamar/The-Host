@@ -65,6 +65,21 @@ export function signOutHeaders(): [string, string][] {
   ];
 }
 
+/**
+ * That a form post came from a page on this deployment (the browser's Origin,
+ * else its Referer), so another site can't submit the owner's forms.
+ */
+export function sameOrigin(request: Request): boolean {
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? new URL(request.url).host;
+  const source = request.headers.get("origin") ?? request.headers.get("referer");
+  if (!source || source === "null") return false;
+  try {
+    return new URL(source).host === host;
+  } catch {
+    return false;
+  }
+}
+
 /** The sign-in page: a password field a phone's password manager can fill and remember. */
 export function signInPage(error = false): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
