@@ -14,6 +14,7 @@ import { errorClass, safeToken } from "@/lib/diagnostics";
 import type { FailureInfo } from "@/lib/ai/types";
 import { architectureLog, foundationLoader, photoNoteEnabled, recordLeakGuard } from "@/lib/foundations/loader";
 import { leakIndexFor } from "@/lib/foundations/leak-guard";
+import { isOwnerRequest } from "@/lib/foundations/owner";
 import { continuationTurns, screenAnswer, type ScreenStats } from "@/lib/foundations/screen";
 
 // Long answers with web search can take a while.
@@ -99,7 +100,8 @@ async function answer(request: Request): Promise<Response> {
   }
 
   // The advisor's architecture, once per answer (docs/foundations.md). Off, or on the current architecture, this changes nothing.
-  const resolved = foundationLoader().quick() ?? (await foundationLoader().resolve(companion.id));
+  // With C2 rolled out to the owner only, the owner is whoever carries this deployment's /ops sign-in (never logged).
+  const resolved = foundationLoader().quick() ?? (await foundationLoader().resolve(companion.id, { owner: isOwnerRequest(request) }));
   if (resolved.kind === "unavailable") return Response.json({ error: unavailable(companion.name) }, { status: 503 });
   const shape = {
     architecture: resolved.kind === "c2" ? resolved : undefined,

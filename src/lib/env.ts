@@ -51,6 +51,8 @@ function foundationsShape() {
     FOUNDATION_FALLBACK_MAX_MINUTES: z.coerce.number().int().min(1).max(24 * 60).default(60),
     // The photo note (off until approved).
     PHOTO_NOTE_ENABLED: flag,
+    // The owner's number, for C2 rolled out to the owner only (by text). Never logged.
+    OWNER_PHONE: z.string().trim().max(32).optional(),
   };
 }
 

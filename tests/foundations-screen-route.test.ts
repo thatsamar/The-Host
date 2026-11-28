@@ -18,6 +18,7 @@ const state = vi.hoisted(() => ({
   background: [] as Promise<unknown>[],
   relay: [] as { text: string; done: boolean; error?: string }[],
   leakHits: 0,
+  requesters: [] as unknown[],
 }));
 vi.mock("next/server", () => ({ after: (task: () => unknown) => state.background.push(Promise.resolve(task())) }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({}), getUserId: async () => "u1" }));
@@ -27,7 +28,7 @@ vi.mock("@vercel/functions", () => ({
   getCache: () => ({ get: async () => null, set: async (_k: string, value: { text: string; done: boolean; error?: string }) => void state.relay.push(value) }),
 }));
 vi.mock("@/lib/foundations/loader", () => ({
-  foundationLoader: () => ({ quick: () => null, resolve: async () => state.resolved }),
+  foundationLoader: () => ({ quick: () => null, resolve: async (_a: string, requester: unknown) => (state.requesters.push(requester), state.resolved) }),
   photoNoteEnabled: () => false,
   recordLeakGuard: () => void state.leakHits++,
   architectureLog: (r: { kind: string; loadMs: number }) => ({ architecture: r.kind, foundationLoadMs: r.loadMs }),
@@ -55,6 +56,22 @@ const isContinuation = (req: ChatRequest) => JSON.stringify(req.messages.at(-1))
 const post = (body: unknown) => POST(new Request("http://localhost/api/ask", { method: "POST", body: JSON.stringify(body) }));
 const textOf = (events: { type: string; text?: string }[]) => events.flatMap((e) => (e.type === "text" ? [e.text!] : [])).join("");
 const finished = () => JSON.parse(logged.find((l) => l.startsWith("Answer finished"))!.slice("Answer finished ".length));
+
+describe("the owner, on the website", () => {
+  it("is whoever carries this deployment's /ops sign-in", async () => {
+    const { newSession } = await import("@/lib/ops/session");
+    process.env.OPS_PASSWORD = "right-horse";
+    state.requesters = [];
+    state.provider = new ScriptedProvider(replyWith("Go at dusk."));
+    const ask = (cookie?: string) =>
+      POST(new Request("http://localhost/api/ask", { method: "POST", body: JSON.stringify({ turns: [{ role: "user", text: "When?" }] }), headers: cookie ? { Cookie: cookie } : {} }));
+    await collect(readNdjson((await ask(`cinq_ops=${newSession("right-horse").value}`)).body!));
+    await collect(readNdjson((await ask()).body!));
+    await collect(readNdjson((await ask("cinq_ops=9999999999.forged")).body!));
+    expect(state.requesters).toEqual([{ owner: true }, { owner: false }, { owner: false }]);
+    delete process.env.OPS_PASSWORD;
+  });
+});
 
 describe("pre-release screening, through the website's route", () => {
   it("never sends a matching span to the page or the relay, and continues once", async () => {

@@ -151,3 +151,53 @@ describe("the foundation loader", () => {
     expect(await loader.resolve("tony")).toMatchObject({ kind: "unavailable" });
   });
 });
+
+describe("staged rollout", () => {
+  it("gives C2 rolled out to the owner only to the owner; everyone else gets the current architecture, uncounted", async () => {
+    const { store, loader, logs } = setup();
+    store.row!.audience = "owner";
+    expect(await loader.resolve("tony")).toEqual({ kind: "legacy", loadMs: expect.any(Number) });
+    expect(await loader.resolve("tony", { owner: true })).toMatchObject({ kind: "c2", identity: IDENTITY });
+    expect(store.events).toEqual([]);
+    expect(logs.filter(([m]) => m === "Foundation fallback")).toEqual([]);
+    // For everyone, the owner included.
+    store.row!.audience = "everyone";
+    loader.invalidate("tony");
+    expect(await loader.resolve("tony")).toMatchObject({ kind: "c2" });
+  });
+
+  it("never falls back a non-owner to old C2 material, or counts them unavailable, while C2 is the owner's only", async () => {
+    const { store, loader, advance } = setup();
+    store.row!.audience = "owner";
+    await loader.resolve("tony", { owner: true });
+    store.down = true;
+    advance(CACHE_TTL_MS + 1);
+    expect(await loader.resolve("tony")).toEqual({ kind: "legacy", loadMs: expect.any(Number) });
+    expect(store.events).toEqual([]);
+    advance(3 * 60 * 60_000);
+    expect((await loader.resolve("tony")).kind).toBe("legacy");
+  });
+
+  it("reads the configuration fresh for the owner, so a change shows at once, and keeps decrypted versions", async () => {
+    const { store, loader } = setup();
+    await loader.resolve("tony");
+    store.row = { ...store.row!, architecture: "legacy", identity_version: null, foundation_version: null };
+    // Everyone else: the cached configuration until it expires (or is invalidated on this instance).
+    expect((await loader.resolve("tony")).kind).toBe("c2");
+    expect((await loader.resolve("tony", { owner: true })).kind).toBe("legacy");
+    // The owner's fresh read refreshed this instance for everyone.
+    expect((await loader.resolve("tony")).kind).toBe("legacy");
+  });
+
+  it("makes the owner's loads fail on purpose during the fallback test, counted, then recovers by itself", async () => {
+    const { store, loader, logs, advance } = setup();
+    store.row!.fallback_test_until = new Date(Date.parse("2026-11-27T12:10:00Z")).toISOString();
+    expect(await loader.resolve("tony", { owner: true })).toMatchObject({ kind: "legacy", fallback: "fallback_test" });
+    expect(store.events.at(-1)).toEqual(["tony", "fallback", "fallback_test"]);
+    expect(logs.at(-1)).toEqual(["Foundation fallback", expect.objectContaining({ code: "FOUNDATION_FALLBACK", reason: "fallback_test" })]);
+    // Nobody else is affected.
+    expect((await loader.resolve("tony")).kind).toBe("c2");
+    advance(11 * 60_000);
+    expect((await loader.resolve("tony", { owner: true })).kind).toBe("c2");
+  });
+});

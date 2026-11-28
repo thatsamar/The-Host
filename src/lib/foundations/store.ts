@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { SealedLayer } from "./crypto";
-import type { ArchitectureId, FoundationLayer } from "./types";
+import type { ArchitectureId, Audience, FoundationLayer } from "./types";
 
 /** An advisor's active configuration (advisor_active). Never any text. */
 export interface ActiveRow {
@@ -11,6 +11,10 @@ export interface ActiveRow {
   foundation_version: number | null;
   layer2_version: number | null;
   last_loaded_at: string | null;
+  /** Who gets C2 (20261128000001); a row from before it means everyone. */
+  audience?: Audience;
+  /** While in the future, the owner's loads fail on purpose (the /ops fallback test). */
+  fallback_test_until?: string | null;
 }
 
 export type AdvisorEventKind = "fallback" | "unavailable" | "leak_guard";
@@ -25,7 +29,7 @@ export interface FoundationStore {
   event(advisorId: string, kind: AdvisorEventKind, reason?: string): Promise<void>;
 }
 
-/** The tables: supabase/migrations/20261127000001_advisor_foundations.sql. */
+/** The tables: supabase/migrations/20261127000001_advisor_foundations.sql and 20261128000001_advisor_audience.sql. */
 const QUERY_TIMEOUT_MS = 3_000;
 
 export class SupabaseFoundationStore implements FoundationStore {
@@ -34,7 +38,7 @@ export class SupabaseFoundationStore implements FoundationStore {
   async active(advisorId: string): Promise<ActiveRow | null> {
     const { data, error } = await this.client
       .from("advisor_active")
-      .select("advisor_id, architecture, identity_version, foundation_version, layer2_version, last_loaded_at")
+      .select("advisor_id, architecture, identity_version, foundation_version, layer2_version, last_loaded_at, audience, fallback_test_until")
       .eq("advisor_id", advisorId)
       .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
       .maybeSingle();

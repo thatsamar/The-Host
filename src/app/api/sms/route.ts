@@ -21,6 +21,7 @@ import { numberKey, PRUNE_ONE_IN, RequestMeasure, usageCounts, type ModelCall, t
 import { SupabaseMetricsSink } from "@/lib/sms/supabase-metrics";
 import { foundationLoader, photoNoteEnabled, recordLeakGuard } from "@/lib/foundations/loader";
 import { checkLeak, LEAK_REWRITE_PROMPT, leakIndexFor, sentencesOf } from "@/lib/foundations/leak-guard";
+import { isOwnerPhone } from "@/lib/foundations/owner";
 
 // Answers can take a while; the webhook itself answers immediately (below)
 // and the replies go out through the REST API after the handler finishes.
@@ -156,7 +157,8 @@ export async function POST(request: Request): Promise<Response> {
               const companion = COMPANIONS[advisorId as CompanionId];
               const provider = getChatProvider(companion);
               // The advisor's architecture, once per answer (docs/foundations.md); off or current, nothing changes.
-              const resolved = foundationLoader().quick() ?? (await foundationLoader().resolve(advisorId));
+              // With C2 rolled out to the owner only, the owner is the sender whose number is OWNER_PHONE (never logged).
+              const resolved = foundationLoader().quick() ?? (await foundationLoader().resolve(advisorId, { owner: isOwnerPhone(from) }));
               note({
                 architecture: resolved.kind === "c2" ? "c2" : "legacy",
                 foundation_ms: resolved.loadMs,

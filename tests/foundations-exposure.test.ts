@@ -81,7 +81,7 @@ const files = (dir: string): string[] =>
 
 describe("the private foundation in the code", () => {
   it("is handled only by server-only modules", () => {
-    for (const f of ["crypto", "store", "loader", "leak-guard"]) {
+    for (const f of ["crypto", "store", "loader", "leak-guard", "screen", "owner"]) {
       expect(readFileSync(`src/lib/foundations/${f}.ts`, "utf8").startsWith('import "server-only";')).toBe(true);
     }
   });

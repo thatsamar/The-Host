@@ -3,6 +3,9 @@
 
 export type ArchitectureId = "legacy" | "c2";
 
+/** Who gets an advisor's C2: only the owner (staged rollout), or everyone. */
+export type Audience = "owner" | "everyone";
+
 export type FoundationLayer = "identity" | "foundation" | "foundation_l2";
 
 export interface FoundationVersions {
@@ -19,7 +22,9 @@ export type FallbackReason =
   | "key_missing"
   | "layer_missing"
   | "decrypt_failed"
-  | "checksum_mismatch";
+  | "checksum_mismatch"
+  /** The owner's fallback test (/ops): the owner's loads fail on purpose until it ends. */
+  | "fallback_test";
 
 export type ResolvedArchitecture =
   /** The current architecture: the companion's own prompt and capabilities. `fallback` is set when C2 was configured but couldn't be loaded. */

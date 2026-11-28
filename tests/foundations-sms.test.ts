@@ -14,6 +14,7 @@ const state = vi.hoisted(() => ({
   rewrite: "Evening is when lamps show what they can do.",
   finished: [] as Record<string, unknown>[],
   rewrites: 0,
+  requesters: [] as unknown[],
 }));
 
 vi.mock("next/server", () => ({ after: (fn: () => Promise<unknown>) => state.pending.push(fn()) }));
@@ -46,7 +47,7 @@ vi.mock("@/lib/sms/supabase-metrics", () => ({
 vi.mock("@/lib/foundations/loader", () => ({
   foundationLoader: () => ({
     quick: () => null,
-    resolve: async () => ({ kind: "c2", identity: "STAND-IN IDENTITY.", foundation: FOUNDATION, versions: { identity: 1, foundation: 2, layer2: null }, loadMs: 3 }),
+    resolve: async (_advisor: string, requester: { owner?: boolean }) => (state.requesters.push(requester), { kind: "c2", identity: "STAND-IN IDENTITY.", foundation: FOUNDATION, versions: { identity: 1, foundation: 2, layer2: null }, loadMs: 3 }),
   }),
   photoNoteEnabled: () => false,
   recordLeakGuard: () => {},
@@ -88,7 +89,19 @@ describe("Cinq by text with an advisor on C2", () => {
     state.deps = [];
     state.finished = [];
     state.rewrites = 0;
+    state.requesters = [];
     state.answer = "Go at dusk.";
+  });
+
+  it("recognises the owner by OWNER_PHONE, however it is written, and no one else", async () => {
+    process.env.OWNER_PHONE = "(555) 000-1111";
+    await text("Amar");
+    await text("When should I go?");
+    expect(state.requesters.at(-1)).toEqual({ owner: true });
+    process.env.OWNER_PHONE = "+15550002222";
+    await text("And after that?");
+    expect(state.requesters.at(-1)).toEqual({ owner: false });
+    delete process.env.OWNER_PHONE;
   });
 
   it("acknowledges, answers, and gives the answer its architecture", async () => {

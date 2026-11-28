@@ -5,7 +5,7 @@ import { buildFoundationsView, type ActiveConfig, type AdvisorEvent } from "@/li
 import { completeDays, twilioDailyCounts } from "@/lib/ops/twilio-counts";
 import { RETENTION_DAYS } from "@/lib/sms/metrics";
 import { SupabaseMetricsSink } from "@/lib/sms/supabase-metrics";
-import { newSession, passwordMatches, sessionCookie, sessionHeader, signInPage, validSession } from "@/lib/ops/session";
+import { newSession, passwordMatches, sessionCookie, sessionHeader, signInPage, signOutHeaders, validSession } from "@/lib/ops/session";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +48,7 @@ export async function GET(request: Request): Promise<Response> {
   if (!password) return new Response("Not found", { status: 404 });
   const url = new URL(request.url);
   if (url.searchParams.has("signout")) {
-    return new Response(null, { status: 303, headers: { Location: "/ops", "Set-Cookie": sessionHeader("", 0), ...noStore } });
+    return new Response(null, { status: 303, headers: [["Location", "/ops"], ...signOutHeaders(), ...Object.entries(noStore)] });
   }
   // Signed in on this device, or a password sent the older way (Basic auth); otherwise the sign-in page.
   const basic = basicPassword(request);

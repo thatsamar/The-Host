@@ -171,6 +171,22 @@ begin
   update public.advisor_layers set status = 'retired' where advisor_id = 'tony';
 end $$;
 
+-- Staged rollout (20261128000001): the audience and the fallback test are recorded with their action and note; only 'owner' or 'everyone'.
+update public.advisor_active set architecture = 'c2', audience = 'owner', last_action = 'activate', note = 'rehearsal', updated_at = now() + interval '1 second' where advisor_id = 'tony';
+update public.advisor_active set fallback_test_until = now() + interval '10 minutes', last_action = 'fallback_test_on', updated_at = now() + interval '2 seconds' where advisor_id = 'tony';
+update public.advisor_active set last_loaded_at = now() where advisor_id = 'tony';
+do $$
+begin
+  assert (select count(*) from public.advisor_active_history) = 4, 'history keeps the audience and fallback test changes, not load times';
+  assert (select audience from public.advisor_active_history where action = 'activate') = 'owner', 'history keeps the audience';
+  assert (select note from public.advisor_active_history where action = 'activate') = 'rehearsal', 'history keeps the note';
+  begin
+    update public.advisor_active set audience = 'friends' where advisor_id = 'tony';
+    raise exception 'an unknown audience was accepted';
+  exception when check_violation then null;
+  end;
+end $$;
+
 set role anon;
 do $$
 begin
